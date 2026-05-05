@@ -20,30 +20,6 @@ export function homeRouteFor(roles) {
   return null
 }
 
-const PERFIL_TIMEOUT_MS = 10_000
-
-// Race entre la query y un timeout. Si gana el timeout devolvemos un error
-// marcado con __timeout para distinguirlo de errores reales (RLS, validación).
-function withTimeout(promise, ms) {
-  const timeout = new Promise(resolve =>
-    setTimeout(
-      () => resolve({ data: null, error: { message: 'timeout', __timeout: true } }),
-      ms,
-    ),
-  )
-  return Promise.race([promise, timeout])
-}
-
-// Ejecuta una query y la reintenta una vez si la primera vez salió por timeout.
-async function tryQuery(queryFn, label) {
-  let result = await withTimeout(queryFn(), PERFIL_TIMEOUT_MS)
-  if (result.error?.__timeout) {
-    console.warn(`[AuthContext] ${label} timeout, reintentando una vez...`)
-    result = await withTimeout(queryFn(), PERFIL_TIMEOUT_MS)
-  }
-  return result
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [perfil, setPerfil]   = useState(null)
@@ -52,43 +28,31 @@ export function AuthProvider({ children }) {
   const [sessionExpired, setSessionExpired] = useState(false)
 
   const fetchPerfil = useCallback(async (userId) => {
-    // Query 1: perfil base sin JOIN. El JOIN embebido a municipios bajo RLS
-    // resultaba lento (cada fila joineada se evalúa contra las policies del
-    // target), causando timeouts. Hacemos dos queries simples en su lugar.
-    const { data: perfilData, error: perfilError } = await tryQuery(
-      () =>
-        supabase
-          .from('usuarios')
-          .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo')
-          .eq('id', userId)
-          .maybeSingle(),
-      'fetchPerfil(usuarios)',
-    )
+    // Query 1: perfil base, sin joins. Sin envoltorio de timeout —
+    // Supabase maneja sus propios reintentos sobre el fetch global.
+    const { data: perfilData, error: perfilError } = await supabase
+      .from('usuarios')
+      .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo')
+      .eq('id', userId)
+      .single()
 
     if (perfilError) {
       console.error('[AuthContext] Error cargando perfil:', perfilError)
       return null
     }
-    if (!perfilData) return null
 
-    // Query 2: municipio. Sólo si el usuario tiene uno asignado.
-    // Superadmin tiene municipio_id = null por diseño y debe poder
-    // entrar igual.
+    // Query 2: municipio. Sólo si el usuario tiene uno asignado
+    // (superadmin tiene municipio_id = null por diseño).
     let municipio = null
     if (perfilData.municipio_id) {
-      const { data: municipioData, error: municipioError } = await tryQuery(
-        () =>
-          supabase
-            .from('municipios')
-            .select('id, nombre, slug')
-            .eq('id', perfilData.municipio_id)
-            .maybeSingle(),
-        'fetchPerfil(municipios)',
-      )
+      const { data: municipioData, error: municipioError } = await supabase
+        .from('municipios')
+        .select('id, nombre, slug')
+        .eq('id', perfilData.municipio_id)
+        .single()
 
       if (municipioError) {
-        // No abortamos el perfil entero si falla el municipio: el usuario
-        // puede seguir usando la app aunque le falte el nombre del municipio.
+        // No abortamos el perfil si falla el municipio — el usuario entra igual.
         console.warn('[AuthContext] No se pudo cargar el municipio (perfil OK):', municipioError)
       } else {
         municipio = municipioData
@@ -115,7 +79,7 @@ export function AuthProvider({ children }) {
           setPerfil(null)
         }
       } catch (e) {
-        console.error('AuthContext init error:', e)
+        console.error('[AuthContext] init error:', e)
       } finally {
         if (!cancelled) setLoading(false)
       }
