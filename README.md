@@ -1,16 +1,64 @@
-# React + Vite
+# COMUNAS
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+CRM/ERP municipal para comisiones de **Santiago del Estero, Argentina**.
 
-Currently, two official plugins are available:
+Plataforma única para administrar vecinos (CRM), historia clínica del CAPS (HC), turnos y notificaciones por SMS.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Stack
 
-## React Compiler
+- React 19 + Vite
+- Supabase (Postgres, Auth, Storage)
+- Tailwind CSS (paleta COMUNAS — navy / gold / cream, fuente Sora)
+- React Router v7
+- TanStack Query
+- Despliegue en Vercel
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Paleta
 
-## Expanding the ESLint configuration
+- Primary: `#0F1C35` (navy)
+- Accent: `#C9A84C` (gold)
+- Background: `#F5F4EF` (cream)
+- Border: `#DDE0EC`
+- OK / activo: `#1D4ED8` (azul, **NUNCA verde**)
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+> Regla: cero verde en toda la aplicación. Estados de éxito o "activo" usan azul.
+
+## Estructura
+
+```
+src/
+  pages/
+    admin/        # Panel de la comuna (admin_comuna, operador)
+    portal/       # Portal del vecino (vecino)
+    superadmin/   # Gestión global (superadmin)
+    auth/         # Login, Register
+  components/
+    crm/          # Vecinos, contactos, etiquetas
+    hc/           # Historia clínica del CAPS
+    turnos/       # Agenda y reservas
+    sms/          # Notificaciones Twilio
+    layout/       # AppShell, Sidebar, Topbar
+    guards/       # AuthGuard, RoleGuard
+    ui/           # Button, Card, Input, Spinner, Badge
+  context/        # AuthContext (Supabase)
+  lib/            # supabase client, utils
+```
+
+## Roles
+
+- `superadmin` — gestión global de comisiones
+- `admin_comuna` — admin de una comisión municipal
+- `operador` — usuario operativo de la comisión
+- `vecino` — usuario final del portal
+
+## Setup local
+
+```bash
+npm install
+cp .env.example .env.local   # completá las variables
+npm run dev
+```
+
+## Variables de entorno
+
+Ver `.env.example`. Incluye Supabase, Twilio (SMS), Google OAuth, Plan B y Anthropic Claude.

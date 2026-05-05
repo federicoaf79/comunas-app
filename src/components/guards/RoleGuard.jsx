@@ -7,7 +7,7 @@ export default function RoleGuard({ roles }) {
   if (loading) return null
 
   if (!roles.includes(role)) {
-    return <Navigate to="/app" replace />
+    return <Navigate to="/" replace />
   }
 
   return <Outlet />

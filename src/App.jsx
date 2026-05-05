@@ -2,115 +2,52 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './context/AuthContext'
 
-// Guards & Layout
-import AuthGuard   from './components/guards/AuthGuard'
-import RoleGuard   from './components/guards/RoleGuard'
-import AppShell    from './components/layout/AppShell'
+import AuthGuard  from './components/guards/AuthGuard'
+import RoleGuard  from './components/guards/RoleGuard'
+import AppShell   from './components/layout/AppShell'
 
-// Pages — public
-import Landing       from './pages/Landing'
-import About         from './pages/About'
-import Contact       from './pages/Contact'
-import Login         from './pages/auth/Login'
-import Register      from './pages/auth/Register'
-import NotFound      from './pages/NotFound'
+import Landing  from './pages/Landing'
+import NotFound from './pages/NotFound'
+import Login    from './pages/auth/Login'
+import Register from './pages/auth/Register'
 
-// Pages — protected app
-import Dashboard    from './pages/app/Dashboard'
-import Campaigns        from './pages/app/Campaigns'
-import Certifications       from './pages/app/Certifications'
-import CertificationDetail from './pages/app/CertificationDetail'
-import Inventory    from './pages/app/Inventory'
-import Proposals    from './pages/app/Proposals'
-import ProposalNew  from './pages/app/ProposalNew'
-import Reports      from './pages/app/Reports'
-import Contacts     from './pages/app/Contacts'
-import Team         from './pages/app/Team'
-import Settings     from './pages/app/Settings'
-import InventorySettings from './pages/app/InventorySettings'
-import Support      from './pages/app/Support'
-import Billing      from './pages/app/Billing'
-import ZoneEditor   from './pages/app/ZoneEditor'
-import FAQ          from './pages/app/FAQ'
-
-// Pages — admin panel
-import AdminLayout          from './pages/admin/AdminLayout'
-import AdminDashboard       from './pages/admin/AdminDashboard'
-import AdminEmpresas        from './pages/admin/AdminEmpresas'
-import AdminEmpresaDetalle  from './pages/admin/AdminEmpresaDetalle'
-import AdminNuevoCliente    from './pages/admin/AdminNuevoCliente'
-import AdminPlanes          from './pages/admin/AdminPlanes'
-import AdminAdmins          from './pages/admin/AdminAdmins'
-import AdminTickets         from './pages/admin/AdminTickets'
-import AdminFacturacion     from './pages/admin/AdminFacturacion'
+import AdminDashboard      from './pages/admin/AdminDashboard'
+import PortalDashboard     from './pages/portal/PortalDashboard'
+import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
-  },
+  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 })
 
 const router = createBrowserRouter([
   { path: '/',         element: <Landing /> },
   { path: '/login',    element: <Login /> },
-  { path: '/about',    element: <About /> },
-  { path: '/contact',  element: <Contact /> },
   { path: '/register', element: <Register /> },
 
-  // Protected: all authenticated routes
   {
     element: <AuthGuard />,
     children: [
-      // ── App routes ──
       {
         element: <AppShell />,
         children: [
-          { path: '/app',                      element: <Dashboard /> },
-          { path: '/app/campaigns',            element: <Campaigns /> },
-          { path: '/app/certifications',        element: <Certifications /> },
-          { path: '/app/certifications/:id',    element: <CertificationDetail /> },
-          { path: '/app/proposals',            element: <Proposals /> },
-          { path: '/app/proposals/new',        element: <ProposalNew /> },
-          { path: '/app/proposals/:id/edit',   element: <ProposalNew /> },
-          { path: '/app/contacts',             element: <Contacts /> },
-          { path: '/app/settings',             element: <Settings /> },
-          { path: '/app/support',              element: <Support /> },
-          { path: '/app/billing',              element: <Billing /> },
-          { path: '/app/faq',                  element: <FAQ /> },
-
-          // manager + owner only
           {
-            element: <RoleGuard roles={['owner', 'manager']} />,
+            element: <RoleGuard roles={['admin_comuna', 'operador']} />,
             children: [
-              { path: '/app/inventory',          element: <Inventory /> },
-              { path: '/app/inventory-settings', element: <InventorySettings /> },
-              { path: '/app/reports',            element: <Reports /> },
-              { path: '/app/zone-editor',        element: <ZoneEditor /> },
+              { path: '/admin', element: <AdminDashboard /> },
             ],
           },
-
-          // owner only
           {
-            element: <RoleGuard roles={['owner']} />,
+            element: <RoleGuard roles={['vecino']} />,
             children: [
-              { path: '/app/team', element: <Team /> },
+              { path: '/portal', element: <PortalDashboard /> },
             ],
           },
-        ],
-      },
-
-      // ── Admin routes (access checked inside AdminLayout) ──
-      {
-        element: <AdminLayout />,
-        children: [
-          { path: '/admin',                  element: <AdminDashboard /> },
-          { path: '/admin/empresas',         element: <AdminEmpresas /> },
-          { path: '/admin/empresas/nueva',   element: <AdminNuevoCliente /> },
-          { path: '/admin/empresas/:id',     element: <AdminEmpresaDetalle /> },
-          { path: '/admin/planes',           element: <AdminPlanes /> },
-          { path: '/admin/admins',           element: <AdminAdmins /> },
-          { path: '/admin/tickets',          element: <AdminTickets /> },
-          { path: '/admin/facturacion',      element: <AdminFacturacion /> },
+          {
+            element: <RoleGuard roles={['superadmin']} />,
+            children: [
+              { path: '/superadmin', element: <SuperadminDashboard /> },
+            ],
+          },
         ],
       },
     ],

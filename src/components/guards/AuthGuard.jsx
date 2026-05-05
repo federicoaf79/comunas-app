@@ -8,7 +8,7 @@ export default function AuthGuard() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-surface-900">
+      <div className="flex h-screen items-center justify-center bg-background">
         <Spinner size="lg" />
       </div>
     )

@@ -4,13 +4,13 @@ export default function Input({ label, error, className, ...props }) {
   return (
     <div className="flex flex-col gap-1.5">
       {label && (
-        <label className="text-sm font-medium text-slate-300">{label}</label>
+        <label className="text-sm font-medium text-primary-700">{label}</label>
       )}
       <input
-        className={cn('input-field', error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20', className)}
+        className={cn('input-field', error && 'border-danger focus:border-danger focus:ring-danger/20', className)}
         {...props}
       />
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-danger">{error}</p>}
     </div>
   )
 }
