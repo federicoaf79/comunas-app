@@ -3,6 +3,23 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
+// Orden de prioridad: el primer rol que matchea define la ruta destino.
+// `superadmin` no requiere municipio_id (gestión global).
+const ROLE_HOME = [
+  ['superadmin',   '/superadmin'],
+  ['admin_comuna', '/admin'],
+  ['operador',     '/admin'],
+  ['vecino',       '/portal'],
+]
+
+export function homeRouteFor(roles) {
+  if (!Array.isArray(roles) || roles.length === 0) return null
+  for (const [role, path] of ROLE_HOME) {
+    if (roles.includes(role)) return path
+  }
+  return null
+}
+
 const PERFIL_SELECT = `
   id,
   municipio_id,
@@ -141,6 +158,7 @@ export function AuthProvider({ children }) {
     user,
     perfil,
     municipio: perfil?.municipios ?? null,
+    homeRoute: homeRouteFor(perfil?.roles),
     loading,
     sessionExpired,
     signIn,

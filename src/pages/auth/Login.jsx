@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth, homeRouteFor } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
@@ -19,13 +20,60 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await signIn({ email, password })
-    setLoading(false)
-    if (error) {
-      setError(error.message)
+
+    const { data, error: signInError } = await signIn({ email, password })
+    if (signInError) {
+      setLoading(false)
+      setError(signInError.message)
       return
     }
-    navigate('/', { replace: true })
+
+    // Resolver destino según el rol antes de navegar.
+    // Hacemos el fetch acá (en vez de esperar al state del context) para
+    // poder validar inmediatamente y mostrar el error correcto.
+    const userId = data?.user?.id
+    if (!userId) {
+      setLoading(false)
+      setError('No se pudo iniciar sesión.')
+      return
+    }
+
+    const { data: u, error: perfilError } = await supabase
+      .from('usuarios')
+      .select('roles, activo')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (perfilError) {
+      setLoading(false)
+      setError('No pudimos cargar tu perfil. Probá de nuevo.')
+      return
+    }
+
+    if (!u) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setError('Tu cuenta aún no fue habilitada en el sistema. Contactá al administrador de tu comuna.')
+      return
+    }
+
+    if (u.activo === false) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setError('Tu cuenta está deshabilitada. Contactá al administrador.')
+      return
+    }
+
+    const route = homeRouteFor(u.roles)
+    if (!route) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setError('Tu cuenta no tiene un rol asignado. Contactá al administrador.')
+      return
+    }
+
+    setLoading(false)
+    navigate(route, { replace: true })
   }
 
   return (
