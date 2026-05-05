@@ -1,5 +1,6 @@
 import { vecinoById, dependenciaById } from '../../lib/mockData'
 import Avatar from '../ui/Avatar'
+import CanalBadge from './CanalBadge'
 
 const ESTADO = {
   reservado:  'badge-neutral',
@@ -27,7 +28,10 @@ export default function TurnoItem({ turno, showDependencia = false }) {
           {dep ? ` · ${dep.nombre}` : ''}
         </p>
       </div>
-      <span className={ESTADO[turno.estado] ?? 'badge-neutral'}>{turno.estado}</span>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className={ESTADO[turno.estado] ?? 'badge-neutral'}>{turno.estado}</span>
+        {turno.canal && <CanalBadge canal={turno.canal} />}
+      </div>
     </li>
   )
 }

@@ -40,6 +40,24 @@ const NAV = [
       </svg>
     ),
   },
+  {
+    to: '/admin/sala',
+    label: 'Sala',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+      </svg>
+    ),
+  },
+  {
+    to: '/admin/noticias',
+    label: 'Portal Web',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
+      </svg>
+    ),
+  },
 ]
 
 export default function AdminLayout() {

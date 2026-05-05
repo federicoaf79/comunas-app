@@ -52,19 +52,21 @@ export const hcConsultas = [
 
 const TODAY = '2026-05-05'
 
+// Canal de origen del turno: web (autogestión vecino), sms, whatsapp,
+// presencial (lo cargó el operador en la dependencia).
 export const turnos = [
-  { id: 't1',  vecino_id: 'v1',  dependencia_id: 'dep-caps',     medico: 'Dra. Ramírez', fecha: TODAY, hora: '08:30', estado: 'confirmado', motivo: 'Control' },
-  { id: 't2',  vecino_id: 'v3',  dependencia_id: 'dep-caps',     medico: 'Dr. Soria',    fecha: TODAY, hora: '09:00', estado: 'reservado',  motivo: 'Receta crónica' },
-  { id: 't3',  vecino_id: 'v5',  dependencia_id: 'dep-caps',     medico: 'Dra. Ramírez', fecha: TODAY, hora: '09:30', estado: 'confirmado', motivo: 'Control glucemia' },
-  { id: 't4',  vecino_id: 'v7',  dependencia_id: 'dep-caps',     medico: 'Dr. Soria',    fecha: TODAY, hora: '10:00', estado: 'atendido',   motivo: 'Curaciones' },
-  { id: 't5',  vecino_id: 'v9',  dependencia_id: 'dep-caps',     medico: 'Dra. Ramírez', fecha: TODAY, hora: '10:30', estado: 'reservado',  motivo: 'Control prenatal' },
-  { id: 't6',  vecino_id: 'v2',  dependencia_id: 'dep-juzgado',  medico: null,           fecha: TODAY, hora: '09:00', estado: 'confirmado', motivo: 'Mediación vecinal' },
-  { id: 't7',  vecino_id: 'v4',  dependencia_id: 'dep-juzgado',  medico: null,           fecha: TODAY, hora: '11:00', estado: 'reservado',  motivo: 'Certificación de firma' },
-  { id: 't8',  vecino_id: 'v8',  dependencia_id: 'dep-catastro', medico: null,           fecha: TODAY, hora: '08:30', estado: 'confirmado', motivo: 'Plano de mensura' },
-  { id: 't9',  vecino_id: 'v12', dependencia_id: 'dep-catastro', medico: null,           fecha: TODAY, hora: '10:00', estado: 'cancelado',  motivo: 'Inscripción de boleto' },
-  { id: 't10', vecino_id: 'v15', dependencia_id: 'dep-bromato',  medico: null,           fecha: TODAY, hora: '09:00', estado: 'confirmado', motivo: 'Habilitación local' },
-  { id: 't11', vecino_id: 'v18', dependencia_id: 'dep-bromato',  medico: null,           fecha: TODAY, hora: '11:30', estado: 'reservado',  motivo: 'Renovación carnet manipulador' },
-  { id: 't12', vecino_id: 'v11', dependencia_id: 'dep-intendencia', medico: null,        fecha: TODAY, hora: '10:00', estado: 'confirmado', motivo: 'Reunión presupuesto barrial' },
+  { id: 't1',  vecino_id: 'v1',  dependencia_id: 'dep-caps',        medico: 'Dra. Ramírez', fecha: TODAY, hora: '08:30', estado: 'confirmado', motivo: 'Control',                       canal: 'web' },
+  { id: 't2',  vecino_id: 'v3',  dependencia_id: 'dep-caps',        medico: 'Dr. Soria',    fecha: TODAY, hora: '09:00', estado: 'reservado',  motivo: 'Receta crónica',                canal: 'presencial' },
+  { id: 't3',  vecino_id: 'v5',  dependencia_id: 'dep-caps',        medico: 'Dra. Ramírez', fecha: TODAY, hora: '09:30', estado: 'confirmado', motivo: 'Control glucemia',              canal: 'sms' },
+  { id: 't4',  vecino_id: 'v7',  dependencia_id: 'dep-caps',        medico: 'Dr. Soria',    fecha: TODAY, hora: '10:00', estado: 'atendido',   motivo: 'Curaciones',                    canal: 'presencial' },
+  { id: 't5',  vecino_id: 'v9',  dependencia_id: 'dep-caps',        medico: 'Dra. Ramírez', fecha: TODAY, hora: '10:30', estado: 'reservado',  motivo: 'Control prenatal',              canal: 'web' },
+  { id: 't6',  vecino_id: 'v2',  dependencia_id: 'dep-juzgado',     medico: null,           fecha: TODAY, hora: '09:00', estado: 'confirmado', motivo: 'Mediación vecinal',             canal: 'presencial' },
+  { id: 't7',  vecino_id: 'v4',  dependencia_id: 'dep-juzgado',     medico: null,           fecha: TODAY, hora: '11:00', estado: 'reservado',  motivo: 'Certificación de firma',        canal: 'web' },
+  { id: 't8',  vecino_id: 'v8',  dependencia_id: 'dep-catastro',    medico: null,           fecha: TODAY, hora: '08:30', estado: 'confirmado', motivo: 'Plano de mensura',              canal: 'presencial' },
+  { id: 't9',  vecino_id: 'v12', dependencia_id: 'dep-catastro',    medico: null,           fecha: TODAY, hora: '10:00', estado: 'cancelado',  motivo: 'Inscripción de boleto',         canal: 'sms' },
+  { id: 't10', vecino_id: 'v15', dependencia_id: 'dep-bromato',     medico: null,           fecha: TODAY, hora: '09:00', estado: 'confirmado', motivo: 'Habilitación local',            canal: 'web' },
+  { id: 't11', vecino_id: 'v18', dependencia_id: 'dep-bromato',     medico: null,           fecha: TODAY, hora: '11:30', estado: 'reservado',  motivo: 'Renovación carnet manipulador', canal: 'whatsapp' },
+  { id: 't12', vecino_id: 'v11', dependencia_id: 'dep-intendencia', medico: null,           fecha: TODAY, hora: '10:00', estado: 'confirmado', motivo: 'Reunión presupuesto barrial',   canal: 'presencial' },
 ]
 
 export const mensajes = [
@@ -91,6 +93,82 @@ export const denuncias = [
   { id: 'dn6', vecino_id: 'v10', tipo: 'residuos',        asunto: 'Microbasural en esquina',         estado: 'resuelta',   fecha: '2026-04-28' },
 ]
 
+// ============================================================
+// Sala de Primeros Auxilios
+// ============================================================
+
+export const medicoGuardia = {
+  nombre:        'Dra. Laura Ramírez',
+  matricula:     'MN 28471',
+  especialidad:  'Medicina general',
+  telefono:      '+543854110001',
+  desde:         '08:00',
+  hasta:         '20:00',
+}
+
+// Mapa vecino_id -> array de alergias / alertas médicas relevantes.
+// Vecinos no presentes acá no tienen alergias registradas.
+export const alergiasVecino = {
+  v1: ['Penicilina'],
+  v3: ['AINEs (ibuprofeno, naproxeno)'],
+  v5: ['Sulfas'],
+  v7: ['Maní', 'Mariscos'],
+  v9: ['Dipirona', 'Látex'],
+}
+
+export const recetas = [
+  { id: 'r1', vecino_id: 'v1', medico: 'Dra. Ramírez', medicamento: 'Amlodipina 5mg',   posologia: '1 comprimido por día',     fecha: '2026-05-04T11:30', foto_url: '' },
+  { id: 'r2', vecino_id: 'v7', medico: 'Dr. Soria',    medicamento: 'Diclofenac 50mg',  posologia: '1 cada 12hs por 5 días',   fecha: '2026-05-03T15:00', foto_url: '' },
+  { id: 'r3', vecino_id: 'v3', medico: 'Dra. Ramírez', medicamento: 'Amoxicilina 500mg', posologia: '1 cada 8hs por 7 días',   fecha: '2026-04-20T11:15', foto_url: '' },
+]
+
+// ============================================================
+// Portal web — noticias
+// ============================================================
+
+export const noticias = [
+  {
+    id: 'n1',
+    titulo: 'Apertura de la Sala de Primeros Auxilios los sábados',
+    resumen: 'Desde el sábado 10 de mayo la Sala atiende en horario ampliado.',
+    contenido: 'A partir del próximo sábado, la Sala de Primeros Auxilios de Real Sayana atenderá los sábados de 9 a 14. Esta ampliación del horario busca cubrir la demanda creciente de los vecinos del cordón rural.',
+    imagen_url: '',
+    publicado: true,
+    fecha_publicacion: '2026-05-02',
+    autor: 'Intendencia',
+  },
+  {
+    id: 'n2',
+    titulo: 'Calendario de vacunación antigripal 2026',
+    resumen: 'Mayores de 65 y embarazadas pueden vacunarse en el CAPS desde el lunes.',
+    contenido: 'El CAPS Real Sayana inicia la campaña de vacunación antigripal el lunes 6 de mayo. Inscripción en mesa de entrada o por WhatsApp al 3854-110001.',
+    imagen_url: '',
+    publicado: true,
+    fecha_publicacion: '2026-05-04',
+    autor: 'CAPS',
+  },
+  {
+    id: 'n3',
+    titulo: 'Reunión del Concejo de Vecinos',
+    resumen: '',
+    contenido: 'Borrador en revisión.',
+    imagen_url: '',
+    publicado: false,
+    fecha_publicacion: null,
+    autor: 'Intendencia',
+  },
+  {
+    id: 'n4',
+    titulo: 'Cierre temporal de calle Mitre por obras',
+    resumen: 'Del 8 al 12 de mayo no habrá circulación entre Belgrano y Sarmiento.',
+    contenido: 'Se realizarán trabajos de bacheo y nuevo pavimento. Se solicita a los vecinos circular por calles paralelas y respetar la señalización.',
+    imagen_url: '',
+    publicado: true,
+    fecha_publicacion: '2026-05-03',
+    autor: 'Obras Públicas',
+  },
+]
+
 // Helpers
 export function vecinoById(id)        { return vecinos.find(v => v.id === id) }
 export function dependenciaById(id)   { return dependencias.find(d => d.id === id) }
@@ -98,5 +176,9 @@ export function consultasByVecino(id) { return hcConsultas.filter(c => c.vecino_
 export function turnosByVecino(id)    { return turnos.filter(t => t.vecino_id === id) }
 export function mensajesByVecino(id)  { return mensajes.filter(m => m.vecino_id === id) }
 export function turnosHoy()           { return turnos }
+export function turnosCAPSHoy()       { return turnos.filter(t => t.dependencia_id === 'dep-caps') }
 export function mensajesDelMes()      { return mensajes }
 export function denunciasAbiertas()   { return denuncias.filter(d => d.estado === 'abierta') }
+export function alergiasOf(vecinoId)        { return alergiasVecino[vecinoId] ?? [] }
+export function vecinoTieneAlergias(vId)    { return alergiasOf(vId).length > 0 }
+export function recetasByVecino(id)         { return recetas.filter(r => r.vecino_id === id) }

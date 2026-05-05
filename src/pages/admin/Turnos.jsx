@@ -3,20 +3,29 @@ import { dependencias, turnos } from '../../lib/mockData'
 import Select from '../../components/ui/Select'
 import TurnoItem from '../../components/turnos/TurnoItem'
 
+const CANAL_OPTS = [
+  { value: 'web',        label: 'Web' },
+  { value: 'sms',        label: 'SMS' },
+  { value: 'whatsapp',   label: 'WhatsApp' },
+  { value: 'presencial', label: 'Presencial' },
+]
+
 export default function TurnosDia() {
-  const [filtro, setFiltro] = useState('')
+  const [filtroDep, setFiltroDep]     = useState('')
+  const [filtroCanal, setFiltroCanal] = useState('')
 
   const grupos = useMemo(() => {
-    const deps = filtro ? dependencias.filter(d => d.id === filtro) : dependencias
+    const deps = filtroDep ? dependencias.filter(d => d.id === filtroDep) : dependencias
     return deps
       .map(dep => ({
         dep,
         turnos: turnos
           .filter(t => t.dependencia_id === dep.id)
+          .filter(t => !filtroCanal || t.canal === filtroCanal)
           .sort((a, b) => a.hora.localeCompare(b.hora)),
       }))
       .filter(g => g.turnos.length > 0)
-  }, [filtro])
+  }, [filtroDep, filtroCanal])
 
   const total = grupos.reduce((sum, g) => sum + g.turnos.length, 0)
 
@@ -29,13 +38,22 @@ export default function TurnosDia() {
             Hoy · {total} turnos · {grupos.length} dependencia{grupos.length === 1 ? '' : 's'}
           </p>
         </div>
-        <Select
-          value={filtro}
-          onChange={setFiltro}
-          placeholder="Todas las dependencias"
-          options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
-          className="min-w-[260px]"
-        />
+        <div className="flex flex-wrap gap-2">
+          <Select
+            value={filtroDep}
+            onChange={setFiltroDep}
+            placeholder="Todas las dependencias"
+            options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+            className="min-w-[220px]"
+          />
+          <Select
+            value={filtroCanal}
+            onChange={setFiltroCanal}
+            placeholder="Todos los canales"
+            options={CANAL_OPTS}
+            className="min-w-[180px]"
+          />
+        </div>
       </header>
 
       {grupos.length === 0 ? (
