@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import Spinner from '../ui/Spinner'
 
 export default function AuthGuard() {
-  const { session, loading, sessionExpired } = useAuth()
+  const { user, loading, sessionExpired } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -14,7 +14,7 @@ export default function AuthGuard() {
     )
   }
 
-  if (!session) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location, expired: sessionExpired }} replace />
   }
 

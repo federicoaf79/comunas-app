@@ -2,11 +2,11 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 export default function RoleGuard({ roles }) {
-  const { role, loading } = useAuth()
+  const { hasRole, loading } = useAuth()
 
   if (loading) return null
 
-  if (!roles.includes(role)) {
+  if (!hasRole(roles)) {
     return <Navigate to="/" replace />
   }
 

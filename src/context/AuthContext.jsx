@@ -1,51 +1,64 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [sessionExpired, setSessionExpired] = useState(false)
-  const intentionalSignOut = useRef(false)
+const PERFIL_SELECT = `
+  id,
+  municipio_id,
+  roles,
+  dependencias_ids,
+  nombre,
+  email,
+  activo,
+  municipios:municipio_id ( id, nombre, slug, provincia, activo )
+`
 
-  async function fetchProfile(userId) {
+export function AuthProvider({ children }) {
+  const [user, setUser]       = useState(null)
+  const [perfil, setPerfil]   = useState(null)
+  const [loading, setLoading] = useState(true)
+  const intentionalSignOut    = useRef(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
+
+  const fetchPerfil = useCallback(async (userId) => {
     const timeout = new Promise(resolve =>
-      setTimeout(() => resolve({ data: null, error: new Error('fetchProfile timeout') }), 6000)
+      setTimeout(() => resolve({ data: null, error: new Error('fetchPerfil timeout') }), 6000)
     )
     const query = supabase
-      .from('profiles')
-      .select('id, full_name, email, role, comuna_id, comunas(id, nombre, slug)')
+      .from('usuarios')
+      .select(PERFIL_SELECT)
       .eq('id', userId)
-      .single()
+      .maybeSingle()
 
     const { data, error } = await Promise.race([query, timeout])
     if (error) {
-      console.error('Error fetching profile:', error.message)
+      console.error('Error cargando perfil:', error.message)
       return null
     }
     return data
-  }
+  }, [])
 
   useEffect(() => {
-    let done = false
+    let cancelled = false
 
     async function init() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        if (done) return
+        if (cancelled) return
+
         if (session?.user) {
-          setSession(session)
-          const p = await fetchProfile(session.user.id)
-          if (!done && p) setProfile(p)
+          setUser(session.user)
+          const p = await fetchPerfil(session.user.id)
+          if (!cancelled) setPerfil(p)
         } else {
-          setSession(null)
+          setUser(null)
+          setPerfil(null)
         }
       } catch (e) {
         console.error('AuthContext init error:', e)
       } finally {
-        if (!done) setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
@@ -54,73 +67,89 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_OUT') {
-          setSession(null)
-          setProfile(null)
+          setUser(null)
+          setPerfil(null)
           if (!intentionalSignOut.current) setSessionExpired(true)
           intentionalSignOut.current = false
           setLoading(false)
           return
         }
+
         if (event === 'SIGNED_IN' && session?.user) {
-          setSession(session)
-          const p = await fetchProfile(session.user.id)
-          if (p) setProfile(p)
+          setUser(session.user)
+          const p = await fetchPerfil(session.user.id)
+          setPerfil(p)
           setLoading(false)
           return
         }
-        if (event === 'TOKEN_REFRESHED') {
-          setSession(session)
+
+        if (event === 'TOKEN_REFRESHED' && session?.user) {
+          setUser(session.user)
+        }
+
+        if (event === 'USER_UPDATED' && session?.user) {
+          setUser(session.user)
+          const p = await fetchPerfil(session.user.id)
+          setPerfil(p)
         }
       }
     )
 
     return () => {
-      done = true
+      cancelled = true
       subscription.unsubscribe()
     }
+  }, [fetchPerfil])
+
+  const signIn = useCallback(async ({ email, password }) => {
+    return supabase.auth.signInWithPassword({ email, password })
   }, [])
 
-  async function signIn({ email, password }) {
-    return supabase.auth.signInWithPassword({ email, password })
-  }
-
-  async function signUp({ email, password, fullName }) {
+  const signUp = useCallback(async ({ email, password, nombre }) => {
     return supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { data: { nombre } },
     })
-  }
+  }, [])
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     intentionalSignOut.current = true
     await supabase.auth.signOut()
-  }
+  }, [])
 
-  async function refreshProfile() {
-    if (session?.user) {
-      const p = await fetchProfile(session.user.id)
-      setProfile(p)
+  const refreshPerfil = useCallback(async () => {
+    if (user?.id) {
+      const p = await fetchPerfil(user.id)
+      setPerfil(p)
     }
-  }
+  }, [user, fetchPerfil])
 
-  const value = {
-    session,
-    user:    session?.user ?? null,
-    profile,
+  const hasRole = useCallback((role) => {
+    if (!perfil?.roles) return false
+    return Array.isArray(role)
+      ? role.some(r => perfil.roles.includes(r))
+      : perfil.roles.includes(role)
+  }, [perfil])
+
+  const hasDep = useCallback((depId) => {
+    if (!perfil?.dependencias_ids) return false
+    return perfil.dependencias_ids.includes(depId)
+  }, [perfil])
+
+  const value = useMemo(() => ({
+    user,
+    perfil,
+    municipio: perfil?.municipios ?? null,
     loading,
     sessionExpired,
-    role:    profile?.role ?? null,
-    comuna:  profile?.comunas ?? null,
-    isSuperadmin:   profile?.role === 'superadmin',
-    isAdminComuna:  profile?.role === 'admin_comuna',
-    isOperador:     profile?.role === 'operador',
-    isVecino:       profile?.role === 'vecino',
     signIn,
     signUp,
     signOut,
-    refreshProfile,
-  }
+    refreshPerfil,
+    hasRole,
+    hasDep,
+  }), [user, perfil, loading, sessionExpired, signIn, signUp, signOut, refreshPerfil, hasRole, hasDep])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

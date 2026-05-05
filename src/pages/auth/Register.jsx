@@ -7,7 +7,7 @@ import Button from '../../components/ui/Button'
 export default function Register() {
   const { signUp } = useAuth()
   const navigate = useNavigate()
-  const [fullName, setFullName] = useState('')
+  const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,7 +17,7 @@ export default function Register() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await signUp({ email, password, fullName })
+    const { error } = await signUp({ email, password, nombre })
     setLoading(false)
     if (error) {
       setError(error.message)
@@ -35,7 +35,7 @@ export default function Register() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input label="Nombre completo" value={fullName} onChange={e => setFullName(e.target.value)} required />
+          <Input label="Nombre completo" value={nombre} onChange={e => setNombre(e.target.value)} required />
           <Input label="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
           <Input label="Contraseña" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
           {error && <p className="text-xs text-danger">{error}</p>}
