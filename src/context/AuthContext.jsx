@@ -39,18 +39,29 @@ export function AuthProvider({ children }) {
   const [sessionExpired, setSessionExpired] = useState(false)
 
   const fetchPerfil = useCallback(async (userId) => {
-    const timeout = new Promise(resolve =>
-      setTimeout(() => resolve({ data: null, error: new Error('fetchPerfil timeout') }), 6000)
-    )
-    const query = supabase
-      .from('usuarios')
-      .select(PERFIL_SELECT)
-      .eq('id', userId)
-      .maybeSingle()
+    const PERFIL_TIMEOUT_MS = 10_000
 
-    const { data, error } = await Promise.race([query, timeout])
+    async function attempt() {
+      const timeout = new Promise(resolve =>
+        setTimeout(() => resolve({ data: null, error: { message: 'fetchPerfil timeout', __timeout: true } }), PERFIL_TIMEOUT_MS)
+      )
+      const query = supabase
+        .from('usuarios')
+        .select(PERFIL_SELECT)
+        .eq('id', userId)
+        .maybeSingle()
+      return Promise.race([query, timeout])
+    }
+
+    let { data, error } = await attempt()
+
+    if (error?.__timeout) {
+      console.warn('[AuthContext] fetchPerfil timeout, reintentando una vez...')
+      ;({ data, error } = await attempt())
+    }
+
     if (error) {
-      console.error('Error cargando perfil:', error.message)
+      console.error('[AuthContext] Error cargando perfil:', error)
       return null
     }
     return data
