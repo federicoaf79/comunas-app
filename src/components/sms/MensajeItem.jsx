@@ -1,28 +1,26 @@
 import { vecinoById } from '../../lib/mockData'
+import CanalBadge from '../turnos/CanalBadge'
 
-const ESTADO = {
-  queued:    'badge-neutral',
-  sent:      'badge-neutral',
-  delivered: 'badge-ok',
-  received:  'badge-ok',
-  failed:    'badge-danger',
+// Clases en src/index.css — paleta unificada para accesibilidad
+// daltónica. Cero verde.
+const ESTADO_CLASS = {
+  queued:    'msg-queued',
+  sent:      'msg-sent',
+  delivered: 'msg-delivered',
+  received:  'msg-received',
+  failed:    'msg-failed',
+  // alias por si llega 'undelivered' del provider
+  undelivered: 'msg-failed',
 }
 
 export default function MensajeItem({ mensaje, showVecino = true }) {
   const v = showVecino ? vecinoById(mensaje.vecino_id) : null
-  const isWA = mensaje.canal === 'whatsapp'
 
   return (
     <li className="px-5 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded px-2 py-0.5 text-xs font-medium ${
-              isWA ? 'bg-accent-50 text-accent-700' : 'bg-primary-50 text-primary'
-            }`}
-          >
-            {isWA ? 'WhatsApp' : 'SMS'}
-          </span>
+          <CanalBadge canal={mensaje.canal} />
           <span className="text-xs text-primary-400">
             {mensaje.direction === 'in' ? 'Entrante' : 'Saliente'}
           </span>
@@ -33,7 +31,9 @@ export default function MensajeItem({ mensaje, showVecino = true }) {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className={ESTADO[mensaje.estado] ?? 'badge-neutral'}>{mensaje.estado}</span>
+          <span className={ESTADO_CLASS[mensaje.estado] ?? 'msg-queued'}>
+            {mensaje.estado}
+          </span>
           <span className="text-xs text-primary-400">{mensaje.fecha.replace('T', ' · ')}</span>
         </div>
       </div>

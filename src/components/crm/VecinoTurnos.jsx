@@ -4,12 +4,16 @@ import { dateTimeOf } from '../../lib/datetime'
 import Spinner from '../ui/Spinner'
 import CanalBadge from '../turnos/CanalBadge'
 
+// Clases en src/index.css — paleta unificada (cero verde).
 const ESTADO_CLASS = {
-  pendiente:  'badge-neutral',
-  confirmado: 'badge-ok',
-  en_curso:   'badge-accent',
-  completado: 'badge-accent',
-  cancelado:  'badge-danger',
+  pendiente:  'estado-pendiente',
+  confirmado: 'estado-confirmado',
+  en_curso:   'estado-en-curso',
+  completado: 'estado-completado',
+  cancelado:  'estado-cancelado',
+  reservado:  'estado-pendiente',
+  atendido:   'estado-atendido',
+  ausente:    'estado-cancelado',
 }
 
 const ESTADO_LABEL = {
@@ -63,7 +67,7 @@ export default function VecinoTurnos() {
               </p>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-1">
-              <span className={ESTADO_CLASS[t.estado] ?? 'badge-neutral'}>
+              <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
                 {ESTADO_LABEL[t.estado] ?? t.estado}
               </span>
               {t.canal && <CanalBadge canal={t.canal} />}

@@ -13,11 +13,30 @@ const DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 // Mapeo profesional → especialidad → color.
 // Source priorizado: prof.especialidad (si la columna existe en la
 // DB en el futuro), luego prof.nombre como fallback.
+//
+// Accesibilidad daltónica: además del color, cada especialidad tiene
+// un marcador geométrico distintivo:
+//   - clinico_general: solo bg navy
+//   - cardiologo:      bg azul + borde IZQUIERDO 3px blanco
+//   - pediatra:        bg gold + borde SUPERIOR 3px blanco
+//   - otros:           bg gris + texto opacidad 80%
 const COLOR_BY_SPEC = {
-  clinico_general: { solid: 'bg-primary text-white',           dashed: 'border-primary text-primary' },
-  cardiologo:      { solid: 'bg-ok text-white',                dashed: 'border-ok text-ok' },
-  pediatra:        { solid: 'bg-accent text-primary-900',      dashed: 'border-accent-700 text-accent-700' },
-  otros:           { solid: 'bg-primary-200 text-primary-700', dashed: 'border-primary-400 text-primary-600' },
+  clinico_general: {
+    solid:  'bg-primary text-white',
+    dashed: 'bg-white border-2 border-dashed border-primary text-primary',
+  },
+  cardiologo: {
+    solid:  'bg-ok text-white border-l-[3px] border-l-white',
+    dashed: 'bg-white border-2 border-dashed border-ok text-ok',
+  },
+  pediatra: {
+    solid:  'bg-accent text-primary border-t-[3px] border-t-white',
+    dashed: 'bg-white border-2 border-dashed border-accent text-accent-700',
+  },
+  otros: {
+    solid:  'bg-gray-500 text-white/80',
+    dashed: 'bg-white border-2 border-dashed border-gray-500 text-gray-700',
+  },
 }
 
 const SPEC_LABEL = {
@@ -50,7 +69,7 @@ function specOf(prof) {
 function blockClasses(spec, estado) {
   const c = COLOR_BY_SPEC[spec] ?? COLOR_BY_SPEC.otros
   if (estado === 'cancelado') return `${c.solid} opacity-40 line-through`
-  if (estado === 'pendiente') return `bg-white border-2 border-dashed ${c.dashed}`
+  if (estado === 'pendiente') return c.dashed
   return c.solid
 }
 

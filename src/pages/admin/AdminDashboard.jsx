@@ -9,12 +9,16 @@ import {
   vecinoById,
 } from '../../lib/mockData'
 
+// Clases en src/index.css — paleta unificada (cero verde).
 const ESTADO = {
-  reservado:  'badge-neutral',
-  confirmado: 'badge-ok',
-  atendido:   'badge-accent',
-  ausente:    'badge-danger',
-  cancelado:  'badge-danger',
+  pendiente:  'estado-pendiente',
+  confirmado: 'estado-confirmado',
+  en_curso:   'estado-en-curso',
+  completado: 'estado-completado',
+  cancelado:  'estado-cancelado',
+  reservado:  'estado-pendiente',
+  atendido:   'estado-atendido',
+  ausente:    'estado-cancelado',
 }
 
 export default function AdminDashboard() {
@@ -61,7 +65,7 @@ export default function AdminDashboard() {
                       {t.hora} · {dep?.nombre}
                     </p>
                   </div>
-                  <span className={ESTADO[t.estado] ?? 'badge-neutral'}>{t.estado}</span>
+                  <span className={ESTADO[t.estado] ?? 'estado-pendiente'}>{t.estado}</span>
                 </li>
               )
             })}

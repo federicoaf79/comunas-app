@@ -2,12 +2,18 @@ import Avatar from '../ui/Avatar'
 import CanalBadge from './CanalBadge'
 import { timeOf } from '../../lib/datetime'
 
+// Clases definidas en src/index.css — paleta unificada para
+// accesibilidad daltónica. Cero verde.
 const ESTADO_CLASS = {
-  pendiente:  'badge-neutral',
-  confirmado: 'badge-ok',
-  en_curso:   'badge-accent',
-  completado: 'badge-accent',
-  cancelado:  'badge-danger',
+  pendiente:  'estado-pendiente',
+  confirmado: 'estado-confirmado',
+  en_curso:   'estado-en-curso',
+  completado: 'estado-completado',
+  cancelado:  'estado-cancelado',
+  // Aliases legacy del mock data:
+  reservado:  'estado-pendiente',
+  atendido:   'estado-atendido',
+  ausente:    'estado-cancelado',
 }
 
 const ESTADO_LABEL = {
@@ -69,7 +75,7 @@ export default function TurnoItem({ turno, showDependencia = false, onConfirmar,
         )}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className={ESTADO_CLASS[turno.estado] ?? 'badge-neutral'}>
+        <span className={ESTADO_CLASS[turno.estado] ?? 'estado-pendiente'}>
           {ESTADO_LABEL[turno.estado] ?? turno.estado}
         </span>
         {turno.canal && <CanalBadge canal={turno.canal} />}

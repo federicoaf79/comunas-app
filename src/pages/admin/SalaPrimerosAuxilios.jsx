@@ -18,12 +18,16 @@ import CalendarioSemanal, {
   SPEC_LABEL,
 } from '../../components/turnos/CalendarioSemanal'
 
+// Clases en src/index.css — paleta unificada (cero verde).
 const ESTADO_DIA = {
-  reservado:  'badge-neutral',
-  confirmado: 'badge-ok',
-  atendido:   'badge-accent',
-  ausente:    'badge-danger',
-  cancelado:  'badge-danger',
+  pendiente:  'estado-pendiente',
+  confirmado: 'estado-confirmado',
+  en_curso:   'estado-en-curso',
+  completado: 'estado-completado',
+  cancelado:  'estado-cancelado',
+  reservado:  'estado-pendiente',
+  atendido:   'estado-atendido',
+  ausente:    'estado-cancelado',
 }
 
 // Lunes 00:00 local de la semana que contiene `date`.
@@ -163,7 +167,7 @@ export default function SalaPrimerosAuxilios() {
                             <div className="mt-2"><AlergiaBadge alergias={alergias} /></div>
                           )}
                         </div>
-                        <span className={ESTADO_DIA[t.estado] ?? 'badge-neutral'}>{t.estado}</span>
+                        <span className={ESTADO_DIA[t.estado] ?? 'estado-pendiente'}>{t.estado}</span>
                       </li>
                     )
                   })}
