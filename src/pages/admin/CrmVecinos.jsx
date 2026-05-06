@@ -39,11 +39,6 @@ export default function CrmVecinos() {
     rows, total, isLoading, isFetching, error, create,
   } = useVecinos({ search: debouncedQ, barrio, page: 0 })
 
-  // [DEBUG TEMPORAL]
-  console.log('[CrmVecinos] estado del hook', {
-    rowsLen: rows.length, total, isLoading, isFetching, hasError: !!error,
-  })
-
   const hasFilters  = !!debouncedQ.trim() || !!barrio
   const showRows    = !isLoading && !error
   const empty       = showRows && rows.length === 0

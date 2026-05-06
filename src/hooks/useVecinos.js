@@ -24,14 +24,8 @@ function escapeLike(s) {
 // Timeout de 8s: si el fetch no responde, el AbortController dispara
 // y la query falla con un error claro en lugar de quedar colgada.
 export async function fetchVecinos(municipioId, { search = '', barrio = '', page = 0 } = {}) {
-  // [DEBUG TEMPORAL — confirmar que fetchVecinos se ejecuta]
-  console.log('[useVecinos] fetchVecinos START', { municipioId, search, barrio, page })
-
   const controller = new AbortController()
-  const timeoutId  = setTimeout(() => {
-    console.warn(`[useVecinos] fetchVecinos TIMEOUT ${TIMEOUT_MS}ms — abortando`)
-    controller.abort()
-  }, TIMEOUT_MS)
+  const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
   let q = supabase
     .from('vecinos')
@@ -55,28 +49,19 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
   const to   = from + PAGE_SIZE - 1
   q = q.range(from, to)
 
-  // [DEBUG TEMPORAL] URL completa que se va a ejecutar.
-  // PostgrestBuilder expone la URL final en `q.url` (no documentado
-  // pero estable en supabase-js v2). Si el accessor cambia, no rompe
-  // la query — sólo deja el log en undefined.
-  try {
-    console.log('[useVecinos] fetchVecinos URL', q?.url?.toString?.() ?? '(no url accessor)')
-  } catch (_) { /* no-op */ }
-
   try {
     const { data, error, count } = await q
     clearTimeout(timeoutId)
     if (error) {
-      console.error('[useVecinos] fetchVecinos ERROR', error)
+      console.error('[useVecinos] fetchVecinos error:', error)
       throw error
     }
-    console.log('[useVecinos] fetchVecinos OK', { rows: data?.length ?? 0, total: count })
     return { rows: data ?? [], total: count ?? 0, page, pageSize: PAGE_SIZE }
   } catch (e) {
     clearTimeout(timeoutId)
     if (controller.signal.aborted || e?.name === 'AbortError' || /abort/i.test(e?.message ?? '')) {
       const err = new Error(`fetchVecinos timeout: la query no respondió en ${TIMEOUT_MS}ms`)
-      console.error('[useVecinos] fetchVecinos TIMEOUT', err.message)
+      console.error('[useVecinos] fetchVecinos timeout:', err.message)
       throw err
     }
     throw e
@@ -122,15 +107,6 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
   // fetchVecinos cuando municipioId es null).
   const enabled = !!perfil
 
-  // [DEBUG TEMPORAL]
-  console.log('[useVecinos] hook render', {
-    hasPerfil:   !!perfil,
-    perfilId:    perfil?.id,
-    municipioId,
-    enabled,
-    search, barrio, page,
-  })
-
   const query = useQuery({
     // Array de primitivos: TanStack puede comparar más rápido y
     // descartamos cualquier issue con object identity en la key.
@@ -138,21 +114,7 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
     // el key sea estable y no colisione con un uuid real.
     queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, page],
     queryFn:  () => fetchVecinos(municipioId, { search, barrio, page }),
-    // Disparamos en cuanto haya perfil. NO requerimos municipio:
-    // superadmin tiene municipio_id null y debe ver todos los vecinos.
     enabled,
-  })
-
-  // [DEBUG TEMPORAL]
-  console.log('[useVecinos] query state', {
-    status:      query.status,
-    fetchStatus: query.fetchStatus,
-    isLoading:   query.isLoading,
-    isPending:   query.isPending,
-    isFetching:  query.isFetching,
-    hasData:     query.data != null,
-    rows:        query.data?.rows?.length,
-    error:       query.error?.message,
   })
 
   const create = useMutation({
