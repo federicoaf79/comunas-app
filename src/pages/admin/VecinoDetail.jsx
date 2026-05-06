@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { turnosByVecino, mensajesByVecino } from '../../lib/mockData'
+import { mensajesByVecino } from '../../lib/mockData'
 import { useVecino } from '../../hooks/useVecinos'
 import Avatar from '../../components/ui/Avatar'
 import Button from '../../components/ui/Button'
@@ -64,15 +64,14 @@ export default function VecinoDetail() {
     )
   }
 
-  // HC se autoabastece via useHC(useParams). Turnos y SMS siguen
-  // con mock por ahora — se conectan en una iteración posterior.
-  const turnosV   = turnosByVecino(id)
+  // HC y Turnos se autoabastecen vía useParams. SMS sigue con mock
+  // por ahora — se conecta en una iteración posterior.
   const mensajesV = mensajesByVecino(id)
 
   const tabs = [
     { value: 'datos',    label: 'Datos' },
     { value: 'hc',       label: 'HC' },
-    { value: 'turnos',   label: 'Turnos', count: turnosV.length },
+    { value: 'turnos',   label: 'Turnos' },
     { value: 'mensajes', label: 'SMS',    count: mensajesV.length },
   ]
 
@@ -103,7 +102,7 @@ export default function VecinoDetail() {
       <div>
         {tab === 'datos'    && <VecinoDatos vecino={v} />}
         {tab === 'hc'       && <VecinoHC />}
-        {tab === 'turnos'   && <VecinoTurnos turnos={turnosV} />}
+        {tab === 'turnos'   && <VecinoTurnos />}
         {tab === 'mensajes' && <VecinoMensajes mensajes={mensajesV} />}
       </div>
     </div>

@@ -1,35 +1,82 @@
-import { vecinoById, dependenciaById } from '../../lib/mockData'
 import Avatar from '../ui/Avatar'
 import CanalBadge from './CanalBadge'
 
-const ESTADO = {
-  reservado:  'badge-neutral',
+const ESTADO_CLASS = {
+  pendiente:  'badge-neutral',
   confirmado: 'badge-ok',
-  atendido:   'badge-accent',
-  ausente:    'badge-danger',
+  en_curso:   'badge-accent',
+  completado: 'badge-accent',
   cancelado:  'badge-danger',
 }
 
-export default function TurnoItem({ turno, showDependencia = false }) {
-  const v = vecinoById(turno.vecino_id)
-  const dep = showDependencia ? dependenciaById(turno.dependencia_id) : null
+const ESTADO_LABEL = {
+  pendiente:  'Pendiente',
+  confirmado: 'Confirmado',
+  en_curso:   'En curso',
+  completado: 'Completado',
+  cancelado:  'Cancelado',
+}
+
+function timeFromIso(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  const pad = n => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function vecinoDisplay(v) {
+  if (!v) return 'Vecino'
+  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
+  return v.nombre_completo || v.apellido || v.nombre || 'Vecino'
+}
+
+function vecinoAvatar(v) {
+  if (!v) return '?'
+  if (v.nombre && v.apellido) return `${v.nombre} ${v.apellido}`
+  return v.nombre_completo || v.apellido || v.nombre || '?'
+}
+
+export default function TurnoItem({ turno, showDependencia = false, onConfirmar, onCancelar }) {
+  const v   = turno.vecino
+  const dep = showDependencia ? (turno.dependencia_nombre ?? null) : null
+  const hora = timeFromIso(turno.fecha_hora)
+  const profesional = turno.profesional_nombre ?? turno.profesional?.nombre ?? null
+
+  const meta = [
+    turno.numero_turno ? `Turno #${turno.numero_turno}` : null,
+    profesional,
+    dep,
+  ].filter(Boolean).join(' · ')
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <span className="w-12 shrink-0 text-sm font-semibold text-primary">{turno.hora}</span>
-      <Avatar name={`${v?.nombre} ${v?.apellido}`} size="sm" />
+    <li className="flex items-start gap-3 px-4 py-3">
+      <span className="w-12 shrink-0 text-sm font-semibold text-primary">{hora || '—'}</span>
+      <Avatar name={vecinoAvatar(v)} size="sm" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-primary-700">
-          {v?.apellido}, {v?.nombre}
+          {vecinoDisplay(v)}
         </p>
-        <p className="truncate text-xs text-primary-400">
-          {turno.motivo}
-          {turno.medico ? ` · ${turno.medico}` : ''}
-          {dep ? ` · ${dep.nombre}` : ''}
-        </p>
+        {meta && <p className="truncate text-xs text-primary-400">{meta}</p>}
+        {(onConfirmar || onCancelar) && (
+          <div className="mt-2 flex gap-3 text-xs font-medium">
+            {onConfirmar && (
+              <button onClick={onConfirmar} className="text-ok hover:underline">
+                Confirmar
+              </button>
+            )}
+            {onCancelar && (
+              <button onClick={onCancelar} className="text-danger hover:underline">
+                Cancelar
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className={ESTADO[turno.estado] ?? 'badge-neutral'}>{turno.estado}</span>
+        <span className={ESTADO_CLASS[turno.estado] ?? 'badge-neutral'}>
+          {ESTADO_LABEL[turno.estado] ?? turno.estado}
+        </span>
         {turno.canal && <CanalBadge canal={turno.canal} />}
       </div>
     </li>
