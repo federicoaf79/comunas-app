@@ -17,6 +17,9 @@ function escapeLike(s) {
 // trae todos los vecinos del sistema. La RLS (`vecinos staff lee
 // municipio` con cláusula `is_superadmin()`) habilita ese acceso.
 export async function fetchVecinos(municipioId, { search = '', barrio = '', page = 0 } = {}) {
+  // [DEBUG TEMPORAL — confirmar que fetchVecinos se ejecuta]
+  console.log('[useVecinos] fetchVecinos START', { municipioId, search, barrio, page })
+
   let q = supabase
     .from('vecinos')
     .select(COLS, { count: 'exact' })
@@ -39,7 +42,11 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
   q = q.range(from, to)
 
   const { data, error, count } = await q
-  if (error) throw error
+  if (error) {
+    console.error('[useVecinos] fetchVecinos ERROR', error)
+    throw error
+  }
+  console.log('[useVecinos] fetchVecinos OK', { rows: data?.length ?? 0, total: count })
   return { rows: data ?? [], total: count ?? 0, page, pageSize: PAGE_SIZE }
 }
 
@@ -75,14 +82,39 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
   // Tomamos el campo tal cual viene del perfil; null acá significa
   // explícitamente "todos los municipios" (caso superadmin).
   const municipioId = perfil?.municipio_id ?? null
+  const enabled = !!perfil
+
+  // [DEBUG TEMPORAL]
+  console.log('[useVecinos] hook render', {
+    hasPerfil:   !!perfil,
+    perfilId:    perfil?.id,
+    municipioId,
+    enabled,
+    search, barrio, page,
+  })
 
   const query = useQuery({
-    queryKey: ['vecinos', { municipioId, search, barrio, page }],
+    // Array de primitivos: TanStack puede comparar más rápido y
+    // descartamos cualquier issue con object identity en la key.
+    // Para municipioId null usamos el sentinel '__ALL__' para que
+    // el key sea estable y no colisione con un uuid real.
+    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, page],
     queryFn:  () => fetchVecinos(municipioId, { search, barrio, page }),
     // Disparamos en cuanto haya perfil. NO requerimos municipio:
     // superadmin tiene municipio_id null y debe ver todos los vecinos.
-    enabled:  !!perfil,
-    placeholderData: (prev) => prev, // mantiene la página anterior mientras carga la nueva
+    enabled,
+  })
+
+  // [DEBUG TEMPORAL]
+  console.log('[useVecinos] query state', {
+    status:      query.status,
+    fetchStatus: query.fetchStatus,
+    isLoading:   query.isLoading,
+    isPending:   query.isPending,
+    isFetching:  query.isFetching,
+    hasData:     query.data != null,
+    rows:        query.data?.rows?.length,
+    error:       query.error?.message,
   })
 
   const create = useMutation({
