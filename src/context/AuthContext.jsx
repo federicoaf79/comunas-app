@@ -90,6 +90,20 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false
 
+    // Fire-and-forget: refresca el perfil contra Supabase y actualiza
+    // el cache. NUNCA bloquea el render — si el fetch falla o cuelga,
+    // el usuario sigue trabajando con el cache. Cualquier error se
+    // ignora silenciosamente.
+    function refreshPerfilInBackground(userId) {
+      fetchPerfil(userId)
+        .then(fresh => {
+          if (cancelled || !fresh) return
+          setPerfil(fresh)
+          saveCachedPerfil(fresh)
+        })
+        .catch(() => { /* silenciar — el cache se mantiene */ })
+    }
+
     async function init() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -104,27 +118,28 @@ export function AuthProvider({ children }) {
 
         setUser(session.user)
 
-        // Hidratar desde sessionStorage si el cache pertenece a este
-        // usuario. Permite que el router siga inmediatamente sin
-        // esperar al round-trip a Supabase.
+        // sessionStorage es la fuente de verdad para el render.
+        // Si hay cache válido para este usuario, lo usamos
+        // INMEDIATAMENTE y disparamos un refresh en background sin
+        // bloquear la UI.
         const cached = loadCachedPerfil()
-        const cacheMatches = cached && cached.id === session.user.id
-        if (cacheMatches) {
+        if (cached && cached.id === session.user.id) {
           setPerfil(cached)
-          setLoading(false)
+          refreshPerfilInBackground(session.user.id)
+          return
         }
 
-        // Fetch real para refrescar (incluso si había cache).
+        // Sin cache: no nos queda otra que esperar el fetch antes
+        // de poder mostrar contenido (típicamente primer login en
+        // la pestaña, post-signOut, o cache fue invalidado).
         const fresh = await fetchPerfil(session.user.id)
         if (cancelled) return
         if (fresh) {
           setPerfil(fresh)
           saveCachedPerfil(fresh)
-        } else if (!cacheMatches) {
-          // No había cache utilizable y el fetch falló: queda en null.
+        } else {
           setPerfil(null)
         }
-        // Si fetch falló pero teníamos cache, lo dejamos en pantalla.
       } catch (e) {
         console.error('[AuthContext] init error:', e)
       } finally {
@@ -148,6 +163,17 @@ export function AuthProvider({ children }) {
 
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
+
+          // Mismo patrón: cache primero, fetch en background.
+          const cached = loadCachedPerfil()
+          if (cached && cached.id === session.user.id) {
+            setPerfil(cached)
+            setLoading(false)
+            refreshPerfilInBackground(session.user.id)
+            return
+          }
+
+          // Login fresco sin cache — esperamos el fetch.
           const p = await fetchPerfil(session.user.id)
           if (p) {
             setPerfil(p)
@@ -166,11 +192,9 @@ export function AuthProvider({ children }) {
 
         if (event === 'USER_UPDATED' && session?.user) {
           setUser(session.user)
-          const p = await fetchPerfil(session.user.id)
-          if (p) {
-            setPerfil(p)
-            saveCachedPerfil(p)
-          }
+          // USER_UPDATED siempre en background — el usuario ya está
+          // viendo la app, no debería congelarse esperando la query.
+          refreshPerfilInBackground(session.user.id)
         }
       }
     )
