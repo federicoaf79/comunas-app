@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE  = 50
+const TIMEOUT_MS = 8000
 
-// `nombre_completo` se incluye en el select porque algunas filas
-// tienen sólo ese campo cargado (no apellido/nombre separados).
-// Los componentes muestran apellido+nombre cuando existen y caen
-// a nombre_completo como fallback.
-const COLS = 'id, municipio_id, dni, apellido, nombre, nombre_completo, telefono, email, barrio, direccion, fecha_nac, sexo, localidad'
+// COLS mínimas para el listado del CRM. Si en algún momento se
+// necesitan campos adicionales en otra vista (detalle, edición),
+// se hace un select propio con sus columnas.
+const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono'
 
 // Escapa wildcards de ilike (% y _) para que no se interpreten como
 // comodines cuando el usuario los tipee en el buscador.
@@ -20,15 +20,25 @@ function escapeLike(s) {
 // sin municipio asignado) la query NO filtra por municipio_id —
 // trae todos los vecinos del sistema. La RLS (`vecinos staff lee
 // municipio` con cláusula `is_superadmin()`) habilita ese acceso.
+//
+// Timeout de 8s: si el fetch no responde, el AbortController dispara
+// y la query falla con un error claro en lugar de quedar colgada.
 export async function fetchVecinos(municipioId, { search = '', barrio = '', page = 0 } = {}) {
   // [DEBUG TEMPORAL — confirmar que fetchVecinos se ejecuta]
   console.log('[useVecinos] fetchVecinos START', { municipioId, search, barrio, page })
+
+  const controller = new AbortController()
+  const timeoutId  = setTimeout(() => {
+    console.warn(`[useVecinos] fetchVecinos TIMEOUT ${TIMEOUT_MS}ms — abortando`)
+    controller.abort()
+  }, TIMEOUT_MS)
 
   let q = supabase
     .from('vecinos')
     .select(COLS, { count: 'exact' })
     .order('apellido', { ascending: true })
     .order('nombre',   { ascending: true })
+    .abortSignal(controller.signal)
 
   // Filtro por municipio sólo si hay uno asignado. Para superadmin
   // (municipioId null) NO agregamos .eq y la query devuelve TODOS
@@ -45,13 +55,32 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
   const to   = from + PAGE_SIZE - 1
   q = q.range(from, to)
 
-  const { data, error, count } = await q
-  if (error) {
-    console.error('[useVecinos] fetchVecinos ERROR', error)
-    throw error
+  // [DEBUG TEMPORAL] URL completa que se va a ejecutar.
+  // PostgrestBuilder expone la URL final en `q.url` (no documentado
+  // pero estable en supabase-js v2). Si el accessor cambia, no rompe
+  // la query — sólo deja el log en undefined.
+  try {
+    console.log('[useVecinos] fetchVecinos URL', q?.url?.toString?.() ?? '(no url accessor)')
+  } catch (_) { /* no-op */ }
+
+  try {
+    const { data, error, count } = await q
+    clearTimeout(timeoutId)
+    if (error) {
+      console.error('[useVecinos] fetchVecinos ERROR', error)
+      throw error
+    }
+    console.log('[useVecinos] fetchVecinos OK', { rows: data?.length ?? 0, total: count })
+    return { rows: data ?? [], total: count ?? 0, page, pageSize: PAGE_SIZE }
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (controller.signal.aborted || e?.name === 'AbortError' || /abort/i.test(e?.message ?? '')) {
+      const err = new Error(`fetchVecinos timeout: la query no respondió en ${TIMEOUT_MS}ms`)
+      console.error('[useVecinos] fetchVecinos TIMEOUT', err.message)
+      throw err
+    }
+    throw e
   }
-  console.log('[useVecinos] fetchVecinos OK', { rows: data?.length ?? 0, total: count })
-  return { rows: data ?? [], total: count ?? 0, page, pageSize: PAGE_SIZE }
 }
 
 export async function createVecino(data) {
