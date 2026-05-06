@@ -86,7 +86,7 @@ export default function CrmVecinos() {
           ) : (
             <>
               <p className="text-sm text-primary-500">
-                Aún no hay vecinos cargados en el padrón.
+                Sin vecinos cargados aún.
               </p>
               <Button onClick={() => setOpen(true)} className="mt-4">
                 Cargar el primero

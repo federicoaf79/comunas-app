@@ -12,8 +12,10 @@ function escapeLike(s) {
   return s.replace(/[%_\\]/g, m => `\\${m}`)
 }
 
-// Lista vecinos. Si municipioId es null (caso superadmin sin municipio),
-// devuelve todos los vecinos del sistema.
+// Lista vecinos. Si municipioId es null/undefined (caso superadmin
+// sin municipio asignado) la query NO filtra por municipio_id —
+// trae todos los vecinos del sistema. La RLS (`vecinos staff lee
+// municipio` con cláusula `is_superadmin()`) habilita ese acceso.
 export async function fetchVecinos(municipioId, { search = '', barrio = '', page = 0 } = {}) {
   let q = supabase
     .from('vecinos')
@@ -21,8 +23,11 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
     .order('apellido', { ascending: true })
     .order('nombre',   { ascending: true })
 
-  if (municipioId) q = q.eq('municipio_id', municipioId)
-  if (barrio)      q = q.eq('barrio', barrio)
+  // Filtro por municipio sólo si hay uno asignado. Para superadmin
+  // (municipioId null) NO agregamos .eq y la query devuelve TODOS
+  // los vecinos de TODOS los municipios.
+  if (municipioId != null) q = q.eq('municipio_id', municipioId)
+  if (barrio)              q = q.eq('barrio', barrio)
 
   if (search.trim()) {
     const pattern = `%${escapeLike(search.trim())}%`
@@ -61,14 +66,21 @@ export async function updateVecino(id, data) {
 
 // Hook React: encapsula el estado de carga, paginación y mutaciones.
 // El municipio_id se resuelve del perfil del usuario logueado.
+// - admin_comuna / operador: filtra por su municipio.
+// - superadmin (municipio_id null): trae todos los municipios.
 export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
+
+  // Tomamos el campo tal cual viene del perfil; null acá significa
+  // explícitamente "todos los municipios" (caso superadmin).
   const municipioId = perfil?.municipio_id ?? null
 
   const query = useQuery({
     queryKey: ['vecinos', { municipioId, search, barrio, page }],
     queryFn:  () => fetchVecinos(municipioId, { search, barrio, page }),
+    // Disparamos en cuanto haya perfil. NO requerimos municipio:
+    // superadmin tiene municipio_id null y debe ver todos los vecinos.
     enabled:  !!perfil,
     placeholderData: (prev) => prev, // mantiene la página anterior mientras carga la nueva
   })
@@ -93,7 +105,10 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
     total:      query.data?.total ?? 0,
     page:       query.data?.page ?? 0,
     pageSize:   query.data?.pageSize ?? PAGE_SIZE,
-    isLoading:  query.isPending,
+    // isLoading (no isPending): solo true mientras hay un fetch en
+    // vuelo. Cuando la query devuelve [] (tabla vacía), pasa a false
+    // y el consumidor puede mostrar el empty state en lugar de spinner.
+    isLoading:  query.isLoading,
     isFetching: query.isFetching,
     error:      query.error,
     refetch:    query.refetch,
