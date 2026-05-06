@@ -4,7 +4,11 @@ import { useAuth } from '../context/AuthContext'
 
 const PAGE_SIZE = 50
 
-const COLS = 'id, municipio_id, dni, apellido, nombre, telefono, email, barrio, direccion, fecha_nac, sexo, localidad'
+// `nombre_completo` se incluye en el select porque algunas filas
+// tienen sólo ese campo cargado (no apellido/nombre separados).
+// Los componentes muestran apellido+nombre cuando existen y caen
+// a nombre_completo como fallback.
+const COLS = 'id, municipio_id, dni, apellido, nombre, nombre_completo, telefono, email, barrio, direccion, fecha_nac, sexo, localidad'
 
 // Escapa wildcards de ilike (% y _) para que no se interpreten como
 // comodines cuando el usuario los tipee en el buscador.

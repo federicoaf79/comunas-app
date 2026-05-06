@@ -10,6 +10,18 @@ import Button from '../../components/ui/Button'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import VecinoFormModal from '../../components/crm/VecinoFormModal'
 
+// "Apellido, Nombre" si están separados; nombre_completo si no.
+function displayName(v) {
+  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
+  return v.nombre_completo || v.apellido || v.nombre || 'Sin nombre'
+}
+
+// "Nombre Apellido" para iniciales del Avatar; nombre_completo si no.
+function avatarName(v) {
+  if (v.nombre && v.apellido) return `${v.nombre} ${v.apellido}`
+  return v.nombre_completo || v.apellido || v.nombre || '?'
+}
+
 export default function CrmVecinos() {
   const navigate = useNavigate()
   const [q, setQ]               = useState('')
@@ -117,9 +129,9 @@ export default function CrmVecinos() {
               <Tr key={v.id} onClick={() => navigate(`/admin/crm/${v.id}`)}>
                 <Td>
                   <div className="flex items-center gap-3">
-                    <Avatar name={`${v.nombre} ${v.apellido}`} size="sm" />
+                    <Avatar name={avatarName(v)} size="sm" />
                     <span className="font-medium text-primary">
-                      {v.apellido}, {v.nombre}
+                      {displayName(v)}
                     </span>
                   </div>
                 </Td>
