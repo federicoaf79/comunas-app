@@ -82,6 +82,11 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
   // Tomamos el campo tal cual viene del perfil; null acá significa
   // explícitamente "todos los municipios" (caso superadmin).
   const municipioId = perfil?.municipio_id ?? null
+
+  // La query se dispara apenas haya perfil cargado. NO requiere
+  // municipio: superadmin con municipio_id = null debe ver todos
+  // los vecinos del sistema (filtro por municipio se omite en
+  // fetchVecinos cuando municipioId es null).
   const enabled = !!perfil
 
   // [DEBUG TEMPORAL]
