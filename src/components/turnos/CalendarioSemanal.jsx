@@ -10,36 +10,41 @@ const TOTAL_HEIGHT   = SLOTS_COUNT * SLOT_HEIGHT_PX
 
 const DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-// Mapeo profesional → "especialidad" → color. Hoy es heurístico
-// porque el schema de `usuarios` no tiene columna `especialidad`.
-// Cuando se agregue, reemplazar specOf por una lookup directa.
+// Mapeo profesional → especialidad → color.
+// Source priorizado: prof.especialidad (si la columna existe en la
+// DB en el futuro), luego prof.nombre como fallback.
 const COLOR_BY_SPEC = {
-  clinica:     { solid: 'bg-primary text-white',           dashed: 'border-primary text-primary' },
-  cardiologia: { solid: 'bg-ok text-white',                dashed: 'border-ok text-ok' },
-  pediatria:   { solid: 'bg-accent text-primary-900',      dashed: 'border-accent-700 text-accent-700' },
-  otros:       { solid: 'bg-primary-200 text-primary-700', dashed: 'border-primary-400 text-primary-600' },
+  clinico_general: { solid: 'bg-primary text-white',           dashed: 'border-primary text-primary' },
+  cardiologo:      { solid: 'bg-ok text-white',                dashed: 'border-ok text-ok' },
+  pediatra:        { solid: 'bg-accent text-primary-900',      dashed: 'border-accent-700 text-accent-700' },
+  otros:           { solid: 'bg-primary-200 text-primary-700', dashed: 'border-primary-400 text-primary-600' },
 }
 
 const SPEC_LABEL = {
-  clinica:     'Clínico general',
-  cardiologia: 'Cardiólogo',
-  pediatria:   'Pediatra',
-  otros:       'Otros',
+  clinico_general: 'Clínico general',
+  cardiologo:      'Cardiólogo',
+  pediatra:        'Pediatra',
+  otros:           'Otros',
 }
+
+// Patrones case-insensitive para detectar especialidad. Cubren las
+// variantes con/sin tilde y los términos sinónimos más comunes.
+// Orden importa: la primera regex que matchea define la especialidad.
+const SPEC_PATTERNS = [
+  ['cardiologo',      /cardi[oó]log|cardiolog[ií]a|cardio/i],
+  ['pediatra',        /pediatr[ií]a|pediatra|pediat/i],
+  ['clinico_general', /medicina\s*general|cl[ií]nic[oa](?:\s*general)?|m[eé]dic[oa]\s*general|cl[ií]nica?/i],
+]
 
 function specOf(prof) {
   if (!prof) return 'otros'
-  const n = (prof.nombre ?? '').toLowerCase()
-  if (/cardio/.test(n))                                      return 'cardiologia'
-  if (/pediat|niñ/.test(n))                                  return 'pediatria'
-  if (/clín|clini|general|familia|medicina/.test(n))         return 'clinica'
-  // Fallback determinístico: hash del id para que el mismo
-  // profesional siempre se pinte con el mismo color de la paleta.
-  const id = String(prof.id ?? prof.nombre ?? '')
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = ((h * 31 + id.charCodeAt(i)) >>> 0)
-  const palette = ['clinica', 'cardiologia', 'pediatria', 'otros']
-  return palette[h % palette.length]
+  // Buscamos primero en `especialidad` (si vino del join), luego en
+  // el nombre. Ambos en el mismo string para hacer un solo barrido.
+  const text = `${prof.especialidad ?? ''} ${prof.nombre ?? ''}`
+  for (const [key, pattern] of SPEC_PATTERNS) {
+    if (pattern.test(text)) return key
+  }
+  return 'otros'
 }
 
 function blockClasses(spec, estado) {
@@ -55,10 +60,14 @@ function vecinoLabel(v) {
   return v.nombre_completo || v.nombre || 'Vecino'
 }
 
-// Minutos desde el inicio del calendario (07:00) en hora Argentina,
-// o null si fuera del rango visible.
+// Minutos desde el inicio del calendario (07:00) en hora Argentina.
+// IMPORTANTE: usamos `timeOf()` (Intl con timeZone='America/Argentina/Buenos_Aires')
+// en vez de `new Date(...).getHours()` — Date.getHours devuelve la
+// hora local del browser, que puede ser UTC en servers de preview o
+// dev containers, y eso movía los bloques 3hs respecto al horario
+// real Argentina. timeOf garantiza la conversión correcta.
 function minutosDesdeInicio(iso) {
-  const hm = timeOf(iso)
+  const hm = timeOf(iso)              // "HH:MM" en TZ Argentina
   if (!hm) return null
   const [h, m] = hm.split(':').map(Number)
   return (h * 60 + m) - START_HOUR * 60
@@ -145,6 +154,7 @@ export default function CalendarioSemanal({ weekStart, turnos = [] }) {
 
             {/* Bloques de turno */}
             {turnosByDay[di].map(t => {
+              // Posición vertical: timeOf garantiza conversión a TZ Argentina.
               const startMin = minutosDesdeInicio(t.fecha_hora)
               if (startMin == null) return null
               const top = startMin * PX_PER_MIN
