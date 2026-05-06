@@ -20,6 +20,31 @@ export function homeRouteFor(roles) {
   return null
 }
 
+// Cache del perfil en sessionStorage. Hace que la navegación entre
+// rutas sea instantánea aún con hard reload: el perfil se hidrata
+// desde el cache mientras el fetch real corre en background para
+// refrescar.
+const PERFIL_CACHE_KEY = 'comunas_perfil'
+
+function loadCachedPerfil() {
+  try {
+    const raw = sessionStorage.getItem(PERFIL_CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function saveCachedPerfil(perfil) {
+  try {
+    if (perfil) sessionStorage.setItem(PERFIL_CACHE_KEY, JSON.stringify(perfil))
+  } catch { /* sessionStorage no disponible / cuota llena */ }
+}
+
+function clearCachedPerfil() {
+  try { sessionStorage.removeItem(PERFIL_CACHE_KEY) } catch { /* no-op */ }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [perfil, setPerfil]   = useState(null)
@@ -70,14 +95,36 @@ export function AuthProvider({ children }) {
         const { data: { session } } = await supabase.auth.getSession()
         if (cancelled) return
 
-        if (session?.user) {
-          setUser(session.user)
-          const p = await fetchPerfil(session.user.id)
-          if (!cancelled) setPerfil(p)
-        } else {
+        if (!session?.user) {
+          clearCachedPerfil()
           setUser(null)
           setPerfil(null)
+          return
         }
+
+        setUser(session.user)
+
+        // Hidratar desde sessionStorage si el cache pertenece a este
+        // usuario. Permite que el router siga inmediatamente sin
+        // esperar al round-trip a Supabase.
+        const cached = loadCachedPerfil()
+        const cacheMatches = cached && cached.id === session.user.id
+        if (cacheMatches) {
+          setPerfil(cached)
+          setLoading(false)
+        }
+
+        // Fetch real para refrescar (incluso si había cache).
+        const fresh = await fetchPerfil(session.user.id)
+        if (cancelled) return
+        if (fresh) {
+          setPerfil(fresh)
+          saveCachedPerfil(fresh)
+        } else if (!cacheMatches) {
+          // No había cache utilizable y el fetch falló: queda en null.
+          setPerfil(null)
+        }
+        // Si fetch falló pero teníamos cache, lo dejamos en pantalla.
       } catch (e) {
         console.error('[AuthContext] init error:', e)
       } finally {
@@ -90,6 +137,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_OUT') {
+          clearCachedPerfil()
           setUser(null)
           setPerfil(null)
           if (!intentionalSignOut.current) setSessionExpired(true)
@@ -101,7 +149,13 @@ export function AuthProvider({ children }) {
         if (event === 'SIGNED_IN' && session?.user) {
           setUser(session.user)
           const p = await fetchPerfil(session.user.id)
-          setPerfil(p)
+          if (p) {
+            setPerfil(p)
+            saveCachedPerfil(p)
+          } else {
+            setPerfil(null)
+            clearCachedPerfil()
+          }
           setLoading(false)
           return
         }
@@ -113,7 +167,10 @@ export function AuthProvider({ children }) {
         if (event === 'USER_UPDATED' && session?.user) {
           setUser(session.user)
           const p = await fetchPerfil(session.user.id)
-          setPerfil(p)
+          if (p) {
+            setPerfil(p)
+            saveCachedPerfil(p)
+          }
         }
       }
     )
@@ -138,13 +195,17 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     intentionalSignOut.current = true
+    clearCachedPerfil()
     await supabase.auth.signOut()
   }, [])
 
   const refreshPerfil = useCallback(async () => {
     if (user?.id) {
       const p = await fetchPerfil(user.id)
-      setPerfil(p)
+      if (p) {
+        setPerfil(p)
+        saveCachedPerfil(p)
+      }
     }
   }, [user, fetchPerfil])
 
