@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
@@ -8,13 +8,32 @@ import { barrios } from '../../lib/mockData'
 const EMPTY = { apellido: '', nombre: '', dni: '', telefono: '', email: '', barrio: '', direccion: '' }
 
 export default function VecinoFormModal({ open, onClose, onSubmit }) {
-  const [form, setForm] = useState(EMPTY)
+  const [form, setForm]     = useState(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
-  function handleSave() {
-    onSubmit?.(form)
-    setForm(EMPTY)
-    onClose()
+  // Reset al abrir.
+  useEffect(() => {
+    if (open) {
+      setForm(EMPTY)
+      setError('')
+      setSaving(false)
+    }
+  }, [open])
+
+  async function handleSave() {
+    if (saving) return
+    setSaving(true)
+    setError('')
+    try {
+      await onSubmit?.(form)
+      onClose()
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo guardar el vecino.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -25,9 +44,10 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
       size="lg"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
           <Button
             onClick={handleSave}
+            loading={saving}
             disabled={!form.apellido.trim() || !form.nombre.trim()}
           >
             Guardar
@@ -52,6 +72,11 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
           <Input label="Dirección" value={form.direccion} onChange={e => set('direccion', e.target.value)} />
         </div>
       </div>
+      {error && (
+        <p className="mt-4 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
     </Modal>
   )
 }
