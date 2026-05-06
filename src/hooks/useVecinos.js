@@ -10,6 +10,10 @@ const TIMEOUT_MS = 8000
 // se hace un select propio con sus columnas.
 const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono'
 
+// Columnas para la ficha de detalle del vecino — incluye datos
+// personales que el listado no necesita (email, dirección, sexo, etc.).
+const DETAIL_COLS = 'id, municipio_id, dni, nombre_completo, apellido, nombre, telefono, email, barrio, direccion, fecha_nac, sexo, localidad'
+
 // Escapa wildcards de ilike (% y _) para que no se interpreten como
 // comodines cuando el usuario los tipee en el buscador.
 function escapeLike(s) {
@@ -62,6 +66,38 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
     if (controller.signal.aborted || e?.name === 'AbortError' || /abort/i.test(e?.message ?? '')) {
       const err = new Error(`fetchVecinos timeout: la query no respondió en ${TIMEOUT_MS}ms`)
       console.error('[useVecinos] fetchVecinos timeout:', err.message)
+      throw err
+    }
+    throw e
+  }
+}
+
+// Trae un único vecino por id. Devuelve null si no existe (o si la
+// RLS niega el acceso). Mismo patrón de timeout que fetchVecinos.
+export async function fetchVecino(id) {
+  if (!id) return null
+
+  const controller = new AbortController()
+  const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const { data, error } = await supabase
+      .from('vecinos')
+      .select(DETAIL_COLS)
+      .eq('id', id)
+      .abortSignal(controller.signal)
+      .maybeSingle()
+    clearTimeout(timeoutId)
+    if (error) {
+      console.error('[useVecinos] fetchVecino error:', error)
+      throw error
+    }
+    return data
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (controller.signal.aborted || e?.name === 'AbortError' || /abort/i.test(e?.message ?? '')) {
+      const err = new Error(`fetchVecino timeout: la query no respondió en ${TIMEOUT_MS}ms`)
+      console.error('[useVecinos] fetchVecino timeout:', err.message)
       throw err
     }
     throw e
@@ -146,5 +182,26 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
     refetch:    query.refetch,
     create,
     update,
+  }
+}
+
+// Hook para una sola ficha de vecino. Usado por VecinoDetail.
+// Devuelve `vecino: null` si la fila no existe o la RLS niega.
+export function useVecino(id) {
+  const { perfil } = useAuth()
+  const enabled = !!perfil && !!id
+
+  const query = useQuery({
+    queryKey: ['vecino', id ?? '__none__'],
+    queryFn:  () => fetchVecino(id),
+    enabled,
+  })
+
+  return {
+    vecino:     query.data ?? null,
+    isLoading:  query.isLoading,
+    isFetching: query.isFetching,
+    error:      query.error,
+    refetch:    query.refetch,
   }
 }
