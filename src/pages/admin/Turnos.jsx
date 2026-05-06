@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { useTurnos } from '../../hooks/useTurnos'
+import { useTurnos, useDependencias } from '../../hooks/useTurnos'
+import { todayArgYMD } from '../../lib/datetime'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import TurnoItem from '../../components/turnos/TurnoItem'
@@ -12,16 +13,10 @@ const ESTADO_OPTS = [
   { value: 'cancelado',  label: 'Cancelado' },
 ]
 
-function todayLocalStr() {
-  const d = new Date()
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 export default function TurnosDia() {
   const [filtroDep, setFiltroDep]       = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
-  const [fecha] = useState(() => todayLocalStr())
+  const [fecha] = useState(() => todayArgYMD())
 
   const { turnos, isLoading, isFetching, error, updateEstado, cancel } = useTurnos({
     dependenciaId: filtroDep    || undefined,
@@ -29,38 +24,50 @@ export default function TurnosDia() {
     fecha,
   })
 
-  // Lista de dependencias para el filtro: derivada de los turnos
-  // cargados para no agregar otra query. Si una dependencia no tiene
-  // turnos hoy, no aparece en el dropdown — es esperado.
+  // Catálogo de dependencias del municipio (para el dropdown).
+  // Sirve también como fallback si el join de turnos no trae el nombre.
+  const { data: allDeps = [] } = useDependencias()
+  const depNameById = useMemo(
+    () => new Map(allDeps.map(d => [d.id, d.nombre])),
+    [allDeps],
+  )
+
+  // Opciones del dropdown — preferimos el catálogo entero; si está
+  // vacío caemos a las dependencias presentes en los turnos del día.
   const dependenciasOpts = useMemo(() => {
+    if (allDeps.length > 0) {
+      return allDeps.map(d => ({ value: d.id, label: d.nombre }))
+    }
     const seen = new Map()
     for (const t of turnos) {
       if (t.dependencia_id && !seen.has(t.dependencia_id)) {
         seen.set(t.dependencia_id, {
           value: t.dependencia_id,
-          label: t.dependencia_nombre ?? t.dependencia_id,
+          label: t.dependencia_nombre ?? t.dependencia?.nombre ?? t.dependencia_id,
         })
       }
     }
     return Array.from(seen.values())
-  }, [turnos])
+  }, [allDeps, turnos])
 
-  // Agrupar turnos por dependencia.
+  // Agrupar turnos por dependencia, leyendo el nombre con cadena
+  // de fallbacks (alias join → table-name join → catálogo de deps).
   const grupos = useMemo(() => {
     const map = new Map()
     for (const t of turnos) {
       const key = t.dependencia_id ?? 'sin-dep'
+      const nombre =
+        t.dependencia_nombre ??
+        t.dependencia?.nombre ??
+        depNameById.get(t.dependencia_id) ??
+        'Sin dependencia'
       if (!map.has(key)) {
-        map.set(key, {
-          id:     key,
-          nombre: t.dependencia_nombre ?? 'Sin dependencia',
-          turnos: [],
-        })
+        map.set(key, { id: key, nombre, turnos: [] })
       }
       map.get(key).turnos.push(t)
     }
     return Array.from(map.values())
-  }, [turnos])
+  }, [turnos, depNameById])
 
   async function handleConfirmar(id) {
     try {

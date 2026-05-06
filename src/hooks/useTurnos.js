@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { ARG_OFFSET } from '../lib/datetime'
 import { createCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar'
 
 const TIMEOUT_MS = 8000
@@ -19,20 +20,33 @@ const TURNO_SELECT = `
 `
 
 function normalizeTurno(t) {
+  // Tolerante con la respuesta de PostgREST: si el alias no aparece,
+  // probamos la versión table-name (plural) por si el server resolvió
+  // el embed con ese key.
+  const dep  = t.dependencia ?? t.dependencias ?? null
+  const prof = t.profesional ?? null
+  const vec  = t.vecino      ?? t.vecinos      ?? null
   return {
     ...t,
-    profesional_nombre: t.profesional?.nombre ?? null,
-    dependencia_nombre: t.dependencia?.nombre ?? null,
+    dependencia:        dep,
+    profesional:        prof,
+    vecino:             vec,
+    profesional_nombre: prof?.nombre ?? null,
+    dependencia_nombre: dep?.nombre  ?? null,
   }
 }
 
 // =============================================================
-// Funciones puras (sin React) — usables desde cualquier callsite
+// Funciones puras (sin React)
 // =============================================================
 
-// fetchTurnos({ municipioId, dependenciaId, fecha, estado })
-// `fecha` formato 'YYYY-MM-DD' (filtra todo el día en TZ del cliente).
-export async function fetchTurnos({ municipioId, dependenciaId, fecha, estado } = {}) {
+// fetchTurnos({ municipioId, dependenciaId, fecha, fechaFrom, fechaTo, estado })
+// Las fechas son YYYY-MM-DD en horario Argentina. Se convierten al
+// rango UTC equivalente con offset -03:00 explícito para que el
+// timestamptz se compare correctamente.
+export async function fetchTurnos({
+  municipioId, dependenciaId, fecha, fechaFrom, fechaTo, estado,
+} = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
@@ -46,11 +60,16 @@ export async function fetchTurnos({ municipioId, dependenciaId, fecha, estado } 
     if (municipioId)   q = q.eq('municipio_id', municipioId)
     if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
     if (estado)        q = q.eq('estado', estado)
+
+    // Filtro por día único (Argentina).
     if (fecha) {
-      const start = `${fecha}T00:00:00`
-      const end   = `${fecha}T23:59:59.999`
-      q = q.gte('fecha_hora', start).lte('fecha_hora', end)
+      q = q
+        .gte('fecha_hora', `${fecha}T00:00:00${ARG_OFFSET}`)
+        .lte('fecha_hora', `${fecha}T23:59:59.999${ARG_OFFSET}`)
     }
+    // Filtro por rango (Argentina).
+    if (fechaFrom) q = q.gte('fecha_hora', `${fechaFrom}T00:00:00${ARG_OFFSET}`)
+    if (fechaTo)   q = q.lte('fecha_hora', `${fechaTo}T23:59:59.999${ARG_OFFSET}`)
 
     const { data, error } = await q
     clearTimeout(timeoutId)
@@ -99,9 +118,6 @@ export async function fetchTurnosByVecino(vecinoId) {
   }
 }
 
-// createTurno: inserta y, si el calendar está habilitado, sincroniza.
-// Si no está habilitado, createCalendarEvent devuelve null y no se
-// modifica nada extra.
 export async function createTurno(data) {
   const { data: row, error } = await supabase
     .from('turnos')
@@ -114,9 +130,7 @@ export async function createTurno(data) {
   }
   const turno = normalizeTurno(row)
 
-  // Sincronización con Google Calendar (placeholder — hoy es no-op).
-  // Cuando se active y devuelva un eventId, lo persistimos en
-  // turnos.calendar_event_id para poder borrarlo en cancelarTurno.
+  // Sync con Google Calendar — placeholder, hoy no-op.
   try {
     const eventId = await createCalendarEvent(turno, turno.profesional)
     if (eventId) {
@@ -169,7 +183,6 @@ export async function cancelarTurno(id) {
     throw error
   }
 
-  // Placeholder Calendar — borra el evento si existe (hoy no-op).
   try {
     await deleteCalendarEvent(existing?.calendar_event_id)
   } catch (e) {
@@ -179,11 +192,26 @@ export async function cancelarTurno(id) {
   return normalizeTurno(row)
 }
 
+// fetchDependencias — fallback cuando el embed de turnos no trae
+// el nombre (RLS o falta de FK). Cacheado por TanStack vía useDependencias.
+export async function fetchDependencias(municipioId) {
+  let q = supabase.from('dependencias').select('id, nombre, municipio_id')
+  if (municipioId) q = q.eq('municipio_id', municipioId)
+  const { data, error } = await q
+  if (error) {
+    console.warn('[useTurnos] fetchDependencias warning:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
 // =============================================================
 // Hooks React
 // =============================================================
 
-export function useTurnos({ dependenciaId, fecha, estado } = {}) {
+export function useTurnos({
+  dependenciaId, fecha, fechaFrom, fechaTo, estado,
+} = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
   const municipioId = perfil?.municipio_id ?? null
@@ -195,9 +223,13 @@ export function useTurnos({ dependenciaId, fecha, estado } = {}) {
       municipioId   ?? '__ALL__',
       dependenciaId ?? '__ALL__',
       fecha         ?? '__ALL__',
+      fechaFrom     ?? '__ALL__',
+      fechaTo       ?? '__ALL__',
       estado        ?? '__ALL__',
     ],
-    queryFn:  () => fetchTurnos({ municipioId, dependenciaId, fecha, estado }),
+    queryFn: () => fetchTurnos({
+      municipioId, dependenciaId, fecha, fechaFrom, fechaTo, estado,
+    }),
     enabled,
   })
 
@@ -248,4 +280,16 @@ export function useTurnosByVecino(vecinoId) {
     error:      query.error,
     refetch:    query.refetch,
   }
+}
+
+export function useDependencias() {
+  const { perfil } = useAuth()
+  const municipioId = perfil?.municipio_id ?? null
+  const enabled = !!perfil
+
+  return useQuery({
+    queryKey: ['dependencias', municipioId ?? '__ALL__'],
+    queryFn:  () => fetchDependencias(municipioId),
+    enabled,
+  })
 }

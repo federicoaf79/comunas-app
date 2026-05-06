@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useTurnosByVecino } from '../../hooks/useTurnos'
+import { dateTimeOf } from '../../lib/datetime'
 import Spinner from '../ui/Spinner'
 import CanalBadge from '../turnos/CanalBadge'
 
@@ -17,14 +18,6 @@ const ESTADO_LABEL = {
   en_curso:   'En curso',
   completado: 'Completado',
   cancelado:  'Cancelado',
-}
-
-function formatFechaHora(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (isNaN(d)) return String(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} · ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export default function VecinoTurnos() {
@@ -54,26 +47,30 @@ export default function VecinoTurnos() {
   }
   return (
     <div className="card divide-y divide-border p-0">
-      {turnos.map(t => (
-        <div key={t.id} className="flex items-start justify-between gap-3 p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-primary">
-              {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
-            </p>
-            <p className="mt-1 text-xs text-primary-400">
-              {formatFechaHora(t.fecha_hora)}
-              {t.dependencia_nombre ? ` · ${t.dependencia_nombre}` : ''}
-              {t.profesional_nombre ? ` · ${t.profesional_nombre}` : ''}
-            </p>
+      {turnos.map(t => {
+        const dependenciaNombre = t.dependencia_nombre ?? t.dependencia?.nombre
+        const profesionalNombre = t.profesional_nombre ?? t.profesional?.nombre
+        return (
+          <div key={t.id} className="flex items-start justify-between gap-3 p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-primary">
+                {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
+              </p>
+              <p className="mt-1 text-xs text-primary-400">
+                {dateTimeOf(t.fecha_hora)}
+                {dependenciaNombre ? ` · ${dependenciaNombre}` : ''}
+                {profesionalNombre ? ` · ${profesionalNombre}` : ''}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <span className={ESTADO_CLASS[t.estado] ?? 'badge-neutral'}>
+                {ESTADO_LABEL[t.estado] ?? t.estado}
+              </span>
+              {t.canal && <CanalBadge canal={t.canal} />}
+            </div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <span className={ESTADO_CLASS[t.estado] ?? 'badge-neutral'}>
-              {ESTADO_LABEL[t.estado] ?? t.estado}
-            </span>
-            {t.canal && <CanalBadge canal={t.canal} />}
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

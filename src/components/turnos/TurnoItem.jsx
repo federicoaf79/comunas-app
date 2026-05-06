@@ -1,5 +1,6 @@
 import Avatar from '../ui/Avatar'
 import CanalBadge from './CanalBadge'
+import { timeOf } from '../../lib/datetime'
 
 const ESTADO_CLASS = {
   pendiente:  'badge-neutral',
@@ -17,14 +18,6 @@ const ESTADO_LABEL = {
   cancelado:  'Cancelado',
 }
 
-function timeFromIso(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (isNaN(d)) return ''
-  const pad = n => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 function vecinoDisplay(v) {
   if (!v) return 'Vecino'
   if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
@@ -39,8 +32,10 @@ function vecinoAvatar(v) {
 
 export default function TurnoItem({ turno, showDependencia = false, onConfirmar, onCancelar }) {
   const v   = turno.vecino
-  const dep = showDependencia ? (turno.dependencia_nombre ?? null) : null
-  const hora = timeFromIso(turno.fecha_hora)
+  const dep = showDependencia
+    ? (turno.dependencia_nombre ?? turno.dependencia?.nombre ?? null)
+    : null
+  const hora = timeOf(turno.fecha_hora)
   const profesional = turno.profesional_nombre ?? turno.profesional?.nombre ?? null
 
   const meta = [
