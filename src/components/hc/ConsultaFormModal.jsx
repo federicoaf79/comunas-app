@@ -3,7 +3,7 @@ import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 
-const EMPTY = { motivo: '', diagnostico: '', indicaciones: '' }
+const EMPTY = { motivo: '', diagnostico: '', receta: '' }
 
 export default function ConsultaFormModal({ open, onClose, onSubmit }) {
   const [form, setForm]     = useState(EMPTY)
@@ -74,11 +74,11 @@ export default function ConsultaFormModal({ open, onClose, onSubmit }) {
         </div>
         <div>
           <label className="mb-1.5 block text-sm font-medium text-primary-700">
-            Receta / indicaciones
+            Receta
           </label>
           <textarea
-            value={form.indicaciones}
-            onChange={e => set('indicaciones', e.target.value)}
+            value={form.receta}
+            onChange={e => set('receta', e.target.value)}
             rows={4}
             className="input-field resize-none"
             placeholder="Ej: Amlodipina 5mg, 1 comprimido por día"

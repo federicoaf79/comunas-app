@@ -8,9 +8,13 @@ const TIMEOUT_MS = 8000
 // en una sola ida. Se requieren policies de SELECT en `usuarios` y
 // `dependencias` para que las filas joineadas sean visibles; si el
 // caller no tiene acceso, el join devuelve null y mostramos '—'.
+//
+// hc_consultas en producción NO tiene `municipio_id` (la tenancy
+// se resuelve vía dependencia/vecino). El campo de prescripción
+// se llama `receta`, no `indicaciones`.
 const CONSULTA_SELECT = `
-  id, vecino_id, municipio_id, dependencia_id, medico_id, fecha,
-  motivo, diagnostico, indicaciones,
+  id, vecino_id, dependencia_id, medico_id, fecha,
+  motivo, diagnostico, receta,
   medico:medico_id ( id, nombre ),
   dependencia:dependencia_id ( id, nombre )
 `
@@ -147,8 +151,11 @@ export function useHC(vecinoId) {
   })
 
   const createConsultaMut = useMutation({
-    // formData: { motivo, diagnostico, indicaciones }
+    // formData: { motivo, diagnostico, receta }
     mutationFn: async (formData) => {
+      // Resolvemos municipio sólo para poder buscar la dependencia
+      // (CAPS) por defecto. NO se inserta en hc_consultas porque la
+      // tabla no tiene `municipio_id`.
       const municipio_id   = await resolveMunicipioForVecino(perfil, vecinoId)
       const dependencia_id = await resolveDependenciaForMunicipio(perfil, municipio_id)
       // medico_id hardcodeado al usuario actual (placeholder hasta que
@@ -157,12 +164,11 @@ export function useHC(vecinoId) {
 
       return createConsulta({
         vecino_id: vecinoId,
-        municipio_id,
         dependencia_id,
         medico_id,
-        motivo:       formData.motivo ?? null,
-        diagnostico:  formData.diagnostico ?? null,
-        indicaciones: formData.indicaciones ?? null,
+        motivo:      formData.motivo      ?? null,
+        diagnostico: formData.diagnostico ?? null,
+        receta:      formData.receta      ?? null,
       })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hc', 'consultas', vecinoId] }),

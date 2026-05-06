@@ -22,7 +22,7 @@ export default function ConsultaCard({ consulta }) {
         </div>
         <div>
           <p className="text-xs uppercase tracking-wide text-primary-400">Receta</p>
-          <p className="mt-1 text-primary-700">{consulta.indicaciones || '—'}</p>
+          <p className="mt-1 text-primary-700">{consulta.receta || '—'}</p>
         </div>
       </div>
     </div>
