@@ -19,7 +19,7 @@ import TurnosDia           from './pages/admin/Turnos'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
-import PortalDashboard     from './pages/portal/PortalDashboard'
+import PortalPublic        from './pages/portal/PortalPublic'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 
 const queryClient = new QueryClient({
@@ -27,10 +27,13 @@ const queryClient = new QueryClient({
 })
 
 const router = createBrowserRouter([
+  // Rutas públicas — sin AuthGuard.
   { path: '/',         element: <Landing /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
+  { path: '/portal',   element: <PortalPublic /> },
 
+  // Rutas protegidas.
   {
     element: <AuthGuard />,
     children: [
@@ -52,12 +55,6 @@ const router = createBrowserRouter([
                   { path: '/admin/noticias',   element: <Noticias /> },
                 ],
               },
-            ],
-          },
-          {
-            element: <RoleGuard roles={['vecino']} />,
-            children: [
-              { path: '/portal', element: <PortalDashboard /> },
             ],
           },
           {
