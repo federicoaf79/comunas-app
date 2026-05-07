@@ -135,11 +135,11 @@ export default function TurnosDia() {
       )}
 
       {!isLoading && !error && grupos.length > 0 && (
-        <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-2">
           {grupos.map(g => (
             <div key={g.id} className="card overflow-hidden p-0">
-              <header className="flex items-center justify-between border-b border-border bg-primary-50 px-4 py-3">
-                <h3 className="text-sm font-semibold text-primary">{g.nombre}</h3>
+              <header className="flex items-center justify-between border-b border-border bg-primary-50 px-5 py-3">
+                <h3 className="text-base font-semibold text-primary">{g.nombre}</h3>
                 <span className="text-xs text-primary-500">{g.turnos.length} turnos</span>
               </header>
               <ul className="divide-y divide-border">

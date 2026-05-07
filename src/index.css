@@ -57,24 +57,27 @@
   /* =====================================================================
      Estados de turnos — paleta unificada para accesibilidad daltónica.
      PROHIBIDO el verde. OK/activo siempre azul (#1D4ED8).
+     Tonos suaves para reducir saturación; rojo se mantiene fuerte
+     para "cancelado" porque tiene que ser visible siempre.
      ===================================================================== */
-  .estado-pendiente  { @apply inline-flex items-center rounded-full bg-gray-500 px-2.5 py-0.5 text-xs font-semibold text-white; }
-  .estado-confirmado { @apply inline-flex items-center rounded-full bg-ok-500 px-2.5 py-0.5 text-xs font-semibold text-white; }
-  .estado-en-curso   { @apply inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-primary; }
-  .estado-completado { @apply inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-white; }
+  .estado-pendiente  { @apply inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700; }
+  .estado-confirmado { @apply inline-flex items-center rounded-full bg-ok-100 px-2.5 py-0.5 text-xs font-semibold text-ok-700; }
+  .estado-en-curso   { @apply inline-flex items-center rounded-full bg-accent-100 px-2.5 py-0.5 text-xs font-semibold text-accent-700; }
+  .estado-completado { @apply inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700; }
   .estado-cancelado  { @apply inline-flex items-center rounded-full bg-danger px-2.5 py-0.5 text-xs font-semibold text-white; }
-  .estado-atendido   { @apply inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-semibold text-white; }
+  .estado-atendido   { @apply inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700; }
 
-  /* Canales de turnos / mensajería */
-  .canal-web        { @apply inline-flex items-center rounded border border-ok bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ok; }
-  .canal-sms        { @apply inline-flex items-center rounded bg-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white; }
-  .canal-whatsapp   { @apply inline-flex items-center rounded bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary; }
-  .canal-presencial { @apply inline-flex items-center rounded bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700; }
+  /* Canales de turnos / mensajería — tonos suaves */
+  .canal-web        { @apply inline-flex items-center rounded border border-ok-100 bg-ok-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ok-700; }
+  .canal-sms        { @apply inline-flex items-center rounded bg-primary-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-700; }
+  .canal-whatsapp   { @apply inline-flex items-center rounded bg-accent-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-700; }
+  .canal-presencial { @apply inline-flex items-center rounded bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-700; }
 
-  /* Estados de mensajes (entrega Twilio / WhatsApp) */
+  /* Estados de mensajes (entrega Twilio / WhatsApp) — todos suaves
+     salvo failed que se mantiene rojo fuerte para visibilidad. */
   .msg-queued    { @apply inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700; }
-  .msg-sent      { @apply inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-600; }
-  .msg-delivered { @apply inline-flex items-center rounded-full bg-ok-100 px-2.5 py-0.5 text-xs font-semibold text-ok-600; }
+  .msg-sent      { @apply inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700; }
+  .msg-delivered { @apply inline-flex items-center rounded-full bg-ok-100 px-2.5 py-0.5 text-xs font-semibold text-ok-700; }
   .msg-received  { @apply inline-flex items-center rounded-full bg-accent-100 px-2.5 py-0.5 text-xs font-semibold text-accent-700; }
   .msg-failed    { @apply inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-danger; }
 }

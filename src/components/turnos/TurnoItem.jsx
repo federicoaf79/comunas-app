@@ -44,25 +44,45 @@ export default function TurnoItem({ turno, showDependencia = false, onConfirmar,
   const hora = timeOf(turno.fecha_hora)
   const profesional = turno.profesional_nombre ?? turno.profesional?.nombre ?? null
 
-  const meta = [
-    turno.numero_turno ? `Turno #${turno.numero_turno}` : null,
-    profesional,
-    dep,
-  ].filter(Boolean).join(' · ')
-
   return (
-    <li className="flex items-start gap-3 px-4 py-3">
-      <span className="w-12 shrink-0 text-sm font-semibold text-primary">{hora || '—'}</span>
-      <Avatar name={vecinoAvatar(v)} size="sm" />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-primary-700">
-          {vecinoDisplay(v)}
-        </p>
-        {meta && <p className="truncate text-xs text-primary-400">{meta}</p>}
+    <li className="space-y-3 p-4">
+      {/* Línea principal: hora + vecino + datos */}
+      <div className="flex items-start gap-4">
+        <div className="shrink-0 text-right">
+          <p className="text-lg font-bold leading-none text-primary">{hora || '—'}</p>
+          {turno.numero_turno && (
+            <p className="mt-1 text-xs font-medium text-primary-400">
+              Turno #{turno.numero_turno}
+            </p>
+          )}
+        </div>
+
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <Avatar name={vecinoAvatar(v)} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="text-base font-semibold text-primary">
+              {vecinoDisplay(v)}
+            </p>
+            {profesional && (
+              <p className="mt-0.5 text-xs text-primary-400">{profesional}</p>
+            )}
+            {dep && (
+              <p className="text-xs text-primary-400">{dep}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Fila inferior: badges + acciones */}
+      <div className="flex flex-wrap items-center gap-2 pl-1">
+        <span className={ESTADO_CLASS[turno.estado] ?? 'estado-pendiente'}>
+          {ESTADO_LABEL[turno.estado] ?? turno.estado}
+        </span>
+        {turno.canal && <CanalBadge canal={turno.canal} />}
         {(onConfirmar || onCancelar) && (
-          <div className="mt-2 flex gap-3 text-xs font-medium">
+          <div className="ml-auto flex gap-3 text-xs font-medium">
             {onConfirmar && (
-              <button onClick={onConfirmar} className="text-ok hover:underline">
+              <button onClick={onConfirmar} className="text-ok-700 hover:underline">
                 Confirmar
               </button>
             )}
@@ -73,12 +93,6 @@ export default function TurnoItem({ turno, showDependencia = false, onConfirmar,
             )}
           </div>
         )}
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className={ESTADO_CLASS[turno.estado] ?? 'estado-pendiente'}>
-          {ESTADO_LABEL[turno.estado] ?? turno.estado}
-        </span>
-        {turno.canal && <CanalBadge canal={turno.canal} />}
       </div>
     </li>
   )

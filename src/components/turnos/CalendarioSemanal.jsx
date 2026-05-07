@@ -19,7 +19,8 @@ const DAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 //   - clinico_general: solo bg navy
 //   - cardiologo:      bg azul + borde IZQUIERDO 3px blanco
 //   - pediatra:        bg gold + borde SUPERIOR 3px blanco
-//   - otros:           bg gris + texto opacidad 80%
+//   - otros:           bg slate-400 (#94A3B8) — más suave que gray-500
+//                      para no competir visualmente con navy
 const COLOR_BY_SPEC = {
   clinico_general: {
     solid:  'bg-primary text-white',
@@ -34,8 +35,8 @@ const COLOR_BY_SPEC = {
     dashed: 'bg-white border-2 border-dashed border-accent text-accent-700',
   },
   otros: {
-    solid:  'bg-gray-500 text-white/80',
-    dashed: 'bg-white border-2 border-dashed border-gray-500 text-gray-700',
+    solid:  'bg-slate-400 text-white/90',
+    dashed: 'bg-white border-2 border-dashed border-slate-400 text-slate-700',
   },
 }
 
@@ -43,7 +44,7 @@ const SPEC_LABEL = {
   clinico_general: 'Clínico general',
   cardiologo:      'Cardiólogo',
   pediatra:        'Pediatra',
-  otros:           'Otros',
+  otros:           'Sin especialidad asignada',
 }
 
 // Patrones case-insensitive para detectar especialidad. Cubren las
@@ -182,6 +183,12 @@ export default function CalendarioSemanal({ weekStart, turnos = [] }) {
               const spec = specOf(t.profesional)
               const cls  = blockClasses(spec, t.estado)
               const profNombre = t.profesional?.nombre ?? t.profesional_nombre ?? ''
+              // Para bloques sin especialidad, el subtítulo da contexto:
+              // motivo del turno si existe en la fila, o "Sala PA" como
+              // default — evita que se vea solo como un cuadro gris vacío.
+              const subtext = spec === 'otros'
+                ? (t.motivo || 'Sala PA')
+                : profNombre
               const tooltip = [
                 timeOf(t.fecha_hora),
                 vecinoLabel(t.vecino),
@@ -199,6 +206,9 @@ export default function CalendarioSemanal({ weekStart, turnos = [] }) {
                   <p className="truncate font-semibold">
                     {timeOf(t.fecha_hora)} · {vecinoLabel(t.vecino)}
                   </p>
+                  {subtext && (
+                    <p className="truncate text-[9px] opacity-80">{subtext}</p>
+                  )}
                 </div>
               )
             })}
