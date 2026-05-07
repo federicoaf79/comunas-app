@@ -19,7 +19,7 @@ import TurnosDia           from './pages/admin/Turnos'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
-import PortalPublic        from './pages/portal/PortalPublic'
+import PortalPublico       from './pages/portal/PortalPublico'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 
 const queryClient = new QueryClient({
@@ -31,7 +31,7 @@ const router = createBrowserRouter([
   { path: '/',         element: <Landing /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
-  { path: '/portal',   element: <PortalPublic /> },
+  { path: '/portal',   element: <PortalPublico /> },
 
   // Rutas protegidas.
   {

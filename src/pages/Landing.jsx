@@ -42,7 +42,7 @@ export default function Landing() {
       <header className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
         <span className="text-xl font-bold text-primary">COMUNAS</span>
         <div className="flex flex-wrap gap-2">
-          <Link to="/portal" className="btn-ghost">Portal vecinal</Link>
+          <Link to="/portal" className="btn-ghost">Portal Ciudadano</Link>
           <Link to="/login" className="btn-secondary">Ingresar</Link>
         </div>
       </header>
@@ -56,7 +56,7 @@ export default function Landing() {
           Una plataforma única para administrar trámites, turnos, historia clínica y notificaciones de tu comisión municipal.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link to="/portal" className="btn-accent">Entrar al portal vecinal</Link>
+          <Link to="/portal" className="btn-accent">Entrar al Portal Ciudadano</Link>
           <Link to="/login" className="btn-primary">Ingresar al sistema</Link>
         </div>
       </main>
