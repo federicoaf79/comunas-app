@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useNoticias } from '../../hooks/useNoticias'
+import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import Spinner from '../../components/ui/Spinner'
 import NoticiaPortalCard           from '../../components/portal/NoticiaPortalCard'
 import SacarTurnoFormPortal        from '../../components/portal/SacarTurnoFormPortal'
@@ -18,12 +18,56 @@ const NAV_LINKS = [
   { href: '#mi-salud', label: 'Mi Salud' },
 ]
 
+// Accesos rápidos arriba del fold — texto grande, ícono gold, borde
+// navy. Ancla a las secciones del portal.
+const ACCESOS_RAPIDOS = [
+  {
+    href:  '#turnos',
+    label: 'Sacar turno',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="h-10 w-10 text-accent">
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path strokeLinecap="round" d="M3 9h18M8 3v4M16 3v4" />
+        <path strokeLinecap="round" d="M12 13v5M9.5 15.5h5" />
+      </svg>
+    ),
+  },
+  {
+    href:  '#mi-turno',
+    label: 'Mi turno',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="h-10 w-10 text-accent">
+        <circle cx="11" cy="11" r="7" />
+        <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
+      </svg>
+    ),
+  },
+  {
+    href:  '#mi-salud',
+    label: 'Mi Salud',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-10 w-10 text-accent">
+        <path d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
+      </svg>
+    ),
+  },
+  {
+    href:  '#noticias',
+    label: 'Noticias',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" className="h-10 w-10 text-accent">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
+      </svg>
+    ),
+  },
+]
+
 export default function PortalPublico() {
   const {
     data: noticias = [],
     isLoading: loadingNoticias,
     error: errNoticias,
-  } = useNoticias({ limit: 6 })
+  } = useNoticiasPublicas({ limit: 6 })
 
   return (
     <div className="min-h-svh bg-background">
@@ -70,6 +114,25 @@ export default function PortalPublico() {
       </section>
 
       <main className="mx-auto max-w-5xl space-y-12 px-4 py-10 sm:px-6 sm:py-12">
+        {/* Accesos rápidos */}
+        <section aria-labelledby="accesos-h2">
+          <h2 id="accesos-h2" className="sr-only">Accesos rápidos</h2>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {ACCESOS_RAPIDOS.map(a => (
+              <a
+                key={a.href}
+                href={a.href}
+                className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-primary bg-white p-5 text-center transition-colors hover:bg-primary-50 sm:p-6"
+              >
+                {a.icon}
+                <span className="text-base font-semibold text-primary sm:text-lg">
+                  {a.label}
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
+
         {/* Noticias */}
         <section id="noticias" aria-labelledby="noticias-h2" className="scroll-mt-20">
           <header className="mb-4">
