@@ -61,6 +61,16 @@ function iconForCategoria(categoria) {
   )
 }
 
+// Deriva un resumen corto. Prioriza `resumen` si está disponible
+// (legacy / opcional), si no toma los primeros 120 caracteres
+// de `cuerpo` y agrega elipsis cuando se trunca.
+function getResumen(noticia) {
+  if (noticia.resumen?.trim()) return noticia.resumen
+  const cuerpo = noticia.cuerpo?.trim()
+  if (!cuerpo) return null
+  return cuerpo.length > 120 ? `${cuerpo.slice(0, 120).trimEnd()}…` : cuerpo
+}
+
 function NoticiaPlaceholder({ categoria }) {
   const grad = gradientForCategoria(categoria)
   return (
@@ -71,6 +81,7 @@ function NoticiaPlaceholder({ categoria }) {
 }
 
 export default function NoticiaPortalCard({ noticia }) {
+  const resumen = getResumen(noticia)
   return (
     <article className="card flex h-full flex-col overflow-hidden p-0 transition-shadow hover:shadow-lg">
       {noticia.imagen_url ? (
@@ -93,16 +104,13 @@ export default function NoticiaPortalCard({ noticia }) {
               {dateOf(noticia.publicado_at)}
             </time>
           )}
-          {noticia.autor && (
-            <span className="text-primary-400">· {noticia.autor}</span>
-          )}
         </div>
         <h3 className="text-lg font-semibold leading-tight text-primary sm:text-xl">
           {noticia.titulo}
         </h3>
-        {noticia.resumen && (
+        {resumen && (
           <p className="line-clamp-2 text-sm leading-relaxed text-primary-500">
-            {noticia.resumen}
+            {resumen}
           </p>
         )}
       </div>

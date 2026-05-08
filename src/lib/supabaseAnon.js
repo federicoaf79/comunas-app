@@ -1,36 +1,15 @@
-import { createClient } from '@supabase/supabase-js'
-
-const url = import.meta.env.VITE_SUPABASE_URL
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!url || !key) {
-  throw new Error(
-    'Faltan variables de entorno de Supabase. Definí VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.'
-  )
-}
-
-// Cliente Supabase para flujos PÚBLICOS (Portal Ciudadano).
+// Re-exporta el cliente principal de Supabase como `supabaseAnon`.
 //
-// Diferencias con el cliente principal:
-// - persistSession=false / autoRefreshToken=false: no guarda ni
-//   renueva token de auth. Cada request usa la anon key.
-// - detectSessionInUrl=false: ignora callbacks de OAuth.
-// - lock=false: no toma el navigator lock que coordina refresh
-//   entre pestañas (no aplica con persistSession off).
+// Anteriormente este archivo creaba un segundo `createClient`
+// dedicado para flujos públicos del Portal Ciudadano. El problema:
+// Supabase v2 usa una instancia singleton de GoTrueClient por
+// localStorage key, así que crear dos clientes contra el mismo
+// proyecto dispara el warning "Multiple GoTrueClient instances
+// detected in the same browser context".
 //
-// Uso: portal público que debe comportarse igual para visitantes
-// anónimos y para usuarios logueados que pasan por la página pública.
-// Si usáramos el cliente principal, un usuario logueado mandaría su
-// JWT y la query se evaluaría bajo SU contexto de RLS (puede traer
-// borradores u otras sorpresas según las policies).
-export const supabaseAnon = createClient(url, key, {
-  auth: {
-    persistSession:    false,
-    autoRefreshToken:  false,
-    detectSessionInUrl: false,
-    lock: false,
-  },
-  global: {
-    fetch: (...args) => fetch(...args),
-  },
-})
+// La distinción anon vs autenticado la maneja el cliente principal
+// según haya o no sesión activa. Las policies RLS de tipo `to anon`
+// aplican cuando el JWT está ausente o cuando se está usando
+// directamente la anon key. Con un único cliente alcanza para
+// cubrir tanto el flujo público como el autenticado.
+export { supabase as supabaseAnon } from './supabase'

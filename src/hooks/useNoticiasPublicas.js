@@ -3,13 +3,16 @@ import { supabaseAnon } from '../lib/supabaseAnon'
 
 const TIMEOUT_MS = 8000
 
+// Columnas reales de la tabla `noticias` en producción.
+// El "resumen" se deriva en el frontend desde `cuerpo` (substring)
+// cuando no viene seteado de otra manera.
 const NOTICIA_SELECT =
-  'id, municipio_id, titulo, resumen, contenido, categoria, imagen_url, autor, publicado_at, estado'
+  'id, titulo, cuerpo, categoria, publicado_at, imagen_url, estado'
 
 // fetchNoticiasPublicas: lista pública de noticias en estado
 // 'publicada', orden DESC por publicado_at. Usa el cliente
-// supabaseAnon (sin JWT) para garantizar que el comportamiento
-// sea el mismo independientemente de si hay un usuario logueado.
+// supabaseAnon (que hoy re-exporta el cliente principal — la
+// distinción anon/auth la hace Supabase según la sesión).
 export async function fetchNoticiasPublicas({ limit = 20 } = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
