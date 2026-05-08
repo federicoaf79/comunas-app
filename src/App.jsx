@@ -22,6 +22,7 @@ import TurnosDia           from './pages/admin/Turnos'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
+import Administracion      from './pages/admin/Administracion'
 import PortalPublico       from './pages/portal/PortalPublico'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
@@ -81,6 +82,7 @@ const router = createBrowserRouter([
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/sala',       element: <SalaPrimerosAuxilios /> },
                   { path: '/admin/noticias',   element: <Noticias /> },
+                  { path: '/admin/administracion', element: <Administracion /> },
                 ],
               },
             ],

@@ -58,6 +58,18 @@ const NAV = [
       </svg>
     ),
   },
+  {
+    to: '/admin/administracion',
+    label: 'Administración',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h13M8 12h13M8 17h13M3 7h.01M3 12h.01M3 17h.01" />
+        <circle cx="3" cy="7"  r="0.6" fill="currentColor" />
+        <circle cx="3" cy="12" r="0.6" fill="currentColor" />
+        <circle cx="3" cy="17" r="0.6" fill="currentColor" />
+      </svg>
+    ),
+  },
 ]
 
 export default function AdminLayout() {
