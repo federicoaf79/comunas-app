@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
+import { useVecino } from '../../context/VecinoContext'
 import Spinner from '../../components/ui/Spinner'
 import NoticiaCardSmall    from '../../components/portal/NoticiaCardSmall'
 import CategoriaPlaceholder from '../../components/portal/CategoriaPlaceholder'
@@ -18,6 +19,16 @@ const NAV_LINKS = [
   { to:   '/portal/turno',    label: 'Turnos' },
   { href: '#contacto',        label: 'Contacto' },
 ]
+
+// Etiqueta corta para mostrar en el botón "Mi cuenta" del header
+// cuando el vecino ya entró — usa el primer nombre solamente para
+// no romper la grilla del nav en mobile.
+function firstName(vecino) {
+  if (!vecino) return ''
+  if (vecino.nombre) return vecino.nombre.split(' ')[0]
+  if (vecino.nombre_completo) return vecino.nombre_completo.split(' ')[0]
+  return ''
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Accesos rápidos — cada uno navega a una página dedicada del portal.
@@ -58,13 +69,13 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
-    href: '#noticias',
-    label: 'Ver noticias',
-    desc:  'Anuncios y novedades de la comuna',
+    to:    '/mi-cuenta/acceso',
+    label: 'Mi cuenta',
+    desc:  'Turnos, salud y datos personales',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h13a3 3 0 0 1 3 3v12a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V4zM4 4v14" />
-        <path strokeLinecap="round" d="M8 8h6M8 12h6M8 16h4" />
+        <circle cx="12" cy="8" r="4" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
       </svg>
     ),
   },
@@ -225,6 +236,22 @@ function NavItem({ link, onClick, mobile = false }) {
   return <a href={link.href} onClick={onClick} className={cls}>{link.label}</a>
 }
 
+function MiCuentaButton({ onClick, mobile = false }) {
+  const { vecinoSession, isVecinoLogued } = useVecino()
+  const target = isVecinoLogued ? '/mi-cuenta' : '/mi-cuenta/acceso'
+  const label  = isVecinoLogued
+    ? `Hola ${firstName(vecinoSession)} →`
+    : 'Mi cuenta'
+  const cls = mobile
+    ? 'mt-1 rounded-md border border-accent/60 bg-accent/10 px-3 py-2.5 text-left text-sm font-semibold text-accent hover:bg-accent/20'
+    : 'inline-flex items-center justify-center rounded-md border border-accent/60 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/20'
+  return (
+    <Link to={target} onClick={onClick} className={cls}>
+      {label}
+    </Link>
+  )
+}
+
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = () => setMenuOpen(false)
@@ -247,9 +274,10 @@ function Header() {
           {NAV_LINKS.map(l => (
             <NavItem key={l.to ?? l.href} link={l} />
           ))}
+          <MiCuentaButton />
           <Link
             to="/login"
-            className="ml-2 inline-flex items-center justify-center rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            className="ml-1 inline-flex items-center justify-center rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
           >
             Ingresar
           </Link>
@@ -279,6 +307,7 @@ function Header() {
               {NAV_LINKS.map(l => (
                 <NavItem key={l.to ?? l.href} link={l} onClick={closeMenu} mobile />
               ))}
+              <MiCuentaButton onClick={closeMenu} mobile />
               <Link
                 to="/portal/turno"
                 onClick={closeMenu}

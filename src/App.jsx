@@ -1,9 +1,11 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider } from './context/AuthContext'
+import { AuthProvider }   from './context/AuthContext'
+import { VecinoProvider } from './context/VecinoContext'
 
 import AuthGuard   from './components/guards/AuthGuard'
 import RoleGuard   from './components/guards/RoleGuard'
+import VecinoGuard from './components/guards/VecinoGuard'
 import AppShell    from './components/layout/AppShell'
 import AdminLayout from './components/layout/AdminLayout'
 
@@ -25,6 +27,8 @@ import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import SacarTurno          from './pages/portal/SacarTurno'
 import MiTurno             from './pages/portal/MiTurno'
 import MiSalud             from './pages/portal/MiSalud'
+import VecinoAcceso        from './pages/portal/VecinoAcceso'
+import VecinoDashboard     from './pages/portal/VecinoDashboard'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 
 const queryClient = new QueryClient({
@@ -44,6 +48,16 @@ const router = createBrowserRouter([
   { path: '/portal/turno',          element: <SacarTurno /> },
   { path: '/portal/mi-turno',       element: <MiTurno /> },
   { path: '/portal/mi-salud',       element: <MiSalud /> },
+
+  // Portal del Vecino — área personal con sesión propia (DNI + tel)
+  // independiente del auth de Supabase. La sesión vive en sessionStorage.
+  { path: '/mi-cuenta/acceso', element: <VecinoAcceso /> },
+  {
+    element: <VecinoGuard />,
+    children: [
+      { path: '/mi-cuenta', element: <VecinoDashboard /> },
+    ],
+  },
 
   // Rutas protegidas.
   {
@@ -87,7 +101,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <VecinoProvider>
+          <RouterProvider router={router} />
+        </VecinoProvider>
       </AuthProvider>
     </QueryClientProvider>
   )
