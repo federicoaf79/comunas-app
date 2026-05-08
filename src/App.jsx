@@ -20,6 +20,10 @@ import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
 import PortalPublico       from './pages/portal/PortalPublico'
+import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
+import SacarTurno          from './pages/portal/SacarTurno'
+import MiTurno             from './pages/portal/MiTurno'
+import MiSalud             from './pages/portal/MiSalud'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 
 const queryClient = new QueryClient({
@@ -31,7 +35,11 @@ const router = createBrowserRouter([
   { path: '/',         element: <Landing /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
-  { path: '/portal',   element: <PortalPublico /> },
+  { path: '/portal',                element: <PortalPublico /> },
+  { path: '/portal/noticias/:id',   element: <NoticiaDetalle /> },
+  { path: '/portal/turno',          element: <SacarTurno /> },
+  { path: '/portal/mi-turno',       element: <MiTurno /> },
+  { path: '/portal/mi-salud',       element: <MiSalud /> },
 
   // Rutas protegidas.
   {

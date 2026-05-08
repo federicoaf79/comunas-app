@@ -2,30 +2,27 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import Spinner from '../../components/ui/Spinner'
-import Modal   from '../../components/ui/Modal'
-import SacarTurnoFormPortal        from '../../components/portal/SacarTurnoFormPortal'
-import ConsultarTurnoFormPortal    from '../../components/portal/ConsultarTurnoFormPortal'
-import MiSaludForm                 from '../../components/portal/MiSaludForm'
 import { dateOf } from '../../lib/datetime'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 const PROVINCIA        = 'Santiago del Estero'
 
+// Nav del header. Los items con `to` navegan a otra ruta (router);
+// los que solo tienen `href` son anclas a secciones de esta misma página.
 const NAV_LINKS = [
-  { href: '#noticias',  label: 'Noticias' },
-  { href: '#servicios', label: 'Servicios' },
-  { href: '#turnos',    label: 'Turnos' },
-  { href: '#contacto',  label: 'Contacto' },
+  { href: '#noticias',     label: 'Noticias' },
+  { href: '#servicios',    label: 'Servicios' },
+  { to:   '/portal/turno', label: 'Turnos' },
+  { href: '#contacto',     label: 'Contacto' },
 ]
 
 // ─────────────────────────────────────────────────────────────────
-// Accesos rápidos — abren un modal con el formulario correspondiente
-// El protagonista visual es el contenido (noticias). Los formularios
-// quedan escondidos hasta que el ciudadano hace clic.
+// Accesos rápidos — cada uno navega a una página dedicada del portal.
+// Los formularios viven en /portal/turno · /portal/mi-turno · /portal/mi-salud.
 // ─────────────────────────────────────────────────────────────────
 const ACCESOS_RAPIDOS = [
   {
-    key:   'sacar-turno',
+    to:    '/portal/turno',
     label: 'Sacar turno',
     desc:  'Sala PA, Juez de Paz, SUM, Administración',
     icon: (
@@ -37,7 +34,7 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
-    key:   'mi-turno',
+    to:    '/portal/mi-turno',
     label: 'Consultar turno',
     desc:  'Verificá el estado de tu solicitud',
     icon: (
@@ -48,7 +45,7 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
-    key:   'mi-salud',
+    to:    '/portal/mi-salud',
     label: 'Mi Salud',
     desc:  'Resumen de tus atenciones en la Sala PA',
     icon: (
@@ -58,11 +55,9 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
-    key:   'noticias',
+    href: '#noticias',
     label: 'Ver noticias',
     desc:  'Anuncios y novedades de la comuna',
-    isAnchor: true,
-    href: '#noticias',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h13a3 3 0 0 1 3 3v12a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V4zM4 4v14" />
@@ -217,8 +212,19 @@ function AlertBar({ onClose }) {
   )
 }
 
-function Header({ onOpenForm }) {
+function NavItem({ link, onClick, mobile = false }) {
+  const cls = mobile
+    ? 'rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white'
+    : 'rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white'
+  if (link.to) {
+    return <Link to={link.to} onClick={onClick} className={cls}>{link.label}</Link>
+  }
+  return <a href={link.href} onClick={onClick} className={cls}>{link.label}</a>
+}
+
+function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const closeMenu = () => setMenuOpen(false)
   return (
     <header className="sticky top-0 z-40 border-b border-primary-900 bg-primary text-white shadow-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
@@ -236,13 +242,7 @@ function Header({ onOpenForm }) {
         {/* Nav desktop */}
         <nav aria-label="Secciones del portal" className="hidden items-center gap-1 lg:flex">
           {NAV_LINKS.map(l => (
-            <a
-              key={l.href}
-              href={l.href}
-              className="rounded-md px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              {l.label}
-            </a>
+            <NavItem key={l.to ?? l.href} link={l} />
           ))}
           <Link
             to="/login"
@@ -274,25 +274,18 @@ function Header({ onOpenForm }) {
           <div className="mx-auto max-w-6xl px-2 py-2 sm:px-4">
             <nav aria-label="Secciones del portal" className="flex flex-col">
               {NAV_LINKS.map(l => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setMenuOpen(false)}
-                  className="rounded-md px-3 py-2.5 text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white"
-                >
-                  {l.label}
-                </a>
+                <NavItem key={l.to ?? l.href} link={l} onClick={closeMenu} mobile />
               ))}
-              <button
-                type="button"
-                onClick={() => { setMenuOpen(false); onOpenForm('sacar-turno') }}
+              <Link
+                to="/portal/turno"
+                onClick={closeMenu}
                 className="mt-1 rounded-md bg-accent px-3 py-2.5 text-left text-sm font-semibold text-primary-900 hover:bg-accent-600 hover:text-white"
               >
                 Sacar turno
-              </button>
+              </Link>
               <Link
                 to="/login"
-                onClick={() => setMenuOpen(false)}
+                onClick={closeMenu}
                 className="mt-1 rounded-md border border-white/20 px-3 py-2.5 text-sm font-semibold text-white hover:bg-white/10"
               >
                 Ingresar al sistema
@@ -305,7 +298,7 @@ function Header({ onOpenForm }) {
   )
 }
 
-function Hero({ onOpenForm }) {
+function Hero() {
   return (
     <section
       className="relative overflow-hidden bg-primary text-white"
@@ -335,16 +328,15 @@ function Hero({ onOpenForm }) {
           Acceso ágil a los servicios municipales desde un solo lugar.
         </p>
         <div className="mt-3 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => onOpenForm('sacar-turno')}
+          <Link
+            to="/portal/turno"
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 text-base font-semibold text-primary-900 shadow-sm transition-all hover:bg-accent-600 hover:text-white active:scale-95"
           >
             Sacar turno
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
             </svg>
-          </button>
+          </Link>
           <a
             href="#noticias"
             className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-white/40 bg-transparent px-6 py-3 text-base font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
@@ -360,7 +352,7 @@ function Hero({ onOpenForm }) {
   )
 }
 
-function AccesosRapidos({ onOpenForm }) {
+function AccesosRapidos() {
   return (
     <section aria-labelledby="accesos-h2" className="border-b border-border bg-white">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
@@ -388,19 +380,14 @@ function AccesosRapidos({ onOpenForm }) {
             )
             const cardClasses =
               'group flex h-full flex-col gap-3 rounded-xl border border-border bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg sm:p-6'
-            return a.isAnchor ? (
-              <a key={a.key} href={a.href} className={cardClasses}>
+            return a.to ? (
+              <Link key={a.to} to={a.to} className={cardClasses}>
+                {inner}
+              </Link>
+            ) : (
+              <a key={a.href} href={a.href} className={cardClasses}>
                 {inner}
               </a>
-            ) : (
-              <button
-                key={a.key}
-                type="button"
-                onClick={() => onOpenForm(a.key)}
-                className={cardClasses}
-              >
-                {inner}
-              </button>
             )
           })}
         </div>
@@ -503,6 +490,10 @@ function CategoriaPlaceholder({ categoria, aspectClass, iconSize }) {
 function NoticiaFeatured({ noticia }) {
   const resumen = getResumen(noticia, 240)
   return (
+    <Link
+      to={`/portal/noticias/${noticia.id}`}
+      className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
     <article className="group relative grid overflow-hidden rounded-xl border border-border bg-white shadow-card transition-shadow hover:shadow-lg lg:grid-cols-2">
       <div className="relative">
         {noticia.imagen_url ? (
@@ -553,12 +544,17 @@ function NoticiaFeatured({ noticia }) {
         </span>
       </div>
     </article>
+    </Link>
   )
 }
 
 // ZONA B · Card chica — 4:3 image, badge, título, fecha (sin resumen).
 function NoticiaCardSmall({ noticia }) {
   return (
+    <Link
+      to={`/portal/noticias/${noticia.id}`}
+      className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
     <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg">
       <div className="relative">
         {noticia.imagen_url ? (
@@ -592,13 +588,18 @@ function NoticiaCardSmall({ noticia }) {
         )}
       </div>
     </article>
+    </Link>
   )
 }
 
 // ZONA C · Banner institucional navy/gold con ícono, título, copy y CTA.
-function BannerInstitucional({ icon, titulo, copy, cta, onClick, href }) {
-  const inner = (
-    <>
+// Navega a una ruta del portal — los CTAs apuntan a /portal/turno · /portal/mi-turno.
+function BannerInstitucional({ icon, titulo, copy, cta, to }) {
+  return (
+    <Link
+      to={to}
+      className="group relative flex h-full overflow-hidden rounded-xl border border-primary-700 bg-gradient-to-br from-primary via-primary-700 to-primary-900 text-white shadow-card transition-shadow hover:shadow-lg"
+    >
       <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
       <div className="absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
       <div className="relative flex h-full flex-col gap-3 p-6">
@@ -618,22 +619,11 @@ function BannerInstitucional({ icon, titulo, copy, cta, onClick, href }) {
           </svg>
         </span>
       </div>
-    </>
-  )
-  const cls =
-    'group relative flex h-full overflow-hidden rounded-xl border border-primary-700 bg-gradient-to-br from-primary via-primary-700 to-primary-900 text-white shadow-card transition-shadow hover:shadow-lg'
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`${cls} text-left w-full`}>
-      {inner}
-    </button>
-  ) : (
-    <a href={href} className={cls}>
-      {inner}
-    </a>
+    </Link>
   )
 }
 
-function NoticiasSection({ noticias, loading, error, onOpenForm }) {
+function NoticiasSection({ noticias, loading, error }) {
   return (
     <section id="noticias" aria-labelledby="noticias-h2" className="scroll-mt-20">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
@@ -717,14 +707,14 @@ function NoticiasSection({ noticias, loading, error, onOpenForm }) {
                         titulo="Trámites online"
                         copy="Gestioná desde tu celular sin moverte de tu casa."
                         cta="Ir a trámites"
-                        onClick={() => onOpenForm('sacar-turno')}
+                        to="/portal/turno"
                       />
                       <BannerInstitucional
                         icon="📱"
                         titulo="Alertas por SMS"
                         copy="Recibí novedades de la comuna directo en tu celular."
                         cta="Suscribirme"
-                        onClick={() => onOpenForm('mi-turno')}
+                        to="/portal/mi-turno"
                       />
                     </div>
                   </div>
@@ -877,67 +867,31 @@ function FooterSection() {
 // Página
 // ─────────────────────────────────────────────────────────────────
 
-const MODAL_TITLES = {
-  'sacar-turno': 'Sacar turno online',
-  'mi-turno':    'Consultar mi turno',
-  'mi-salud':    'Mi Salud',
-}
-
 export default function PortalPublico() {
   const [alertOpen, setAlertOpen] = useState(true)
-  const [activeModal, setActiveModal] = useState(null)
   const {
     data: noticias = [],
     isLoading: loadingNoticias,
     error: errNoticias,
   } = useNoticiasPublicas({ limit: 15 })
 
-  const closeModal = () => setActiveModal(null)
-
   return (
     <div className="min-h-svh bg-background">
       {alertOpen && <AlertBar onClose={() => setAlertOpen(false)} />}
-      <Header onOpenForm={setActiveModal} />
-      <Hero onOpenForm={setActiveModal} />
+      <Header />
+      <Hero />
 
       <main>
-        <AccesosRapidos onOpenForm={setActiveModal} />
+        <AccesosRapidos />
         <NoticiasSection
           noticias={noticias}
           loading={loadingNoticias}
           error={errNoticias}
-          onOpenForm={setActiveModal}
         />
         <ServiciosSection />
       </main>
 
       <FooterSection />
-
-      {/* Formularios — ocultos por defecto, se abren desde accesos rápidos */}
-      <Modal
-        open={activeModal === 'sacar-turno'}
-        onClose={closeModal}
-        title={MODAL_TITLES['sacar-turno']}
-        size="lg"
-      >
-        <SacarTurnoFormPortal />
-      </Modal>
-      <Modal
-        open={activeModal === 'mi-turno'}
-        onClose={closeModal}
-        title={MODAL_TITLES['mi-turno']}
-        size="md"
-      >
-        <ConsultarTurnoFormPortal />
-      </Modal>
-      <Modal
-        open={activeModal === 'mi-salud'}
-        onClose={closeModal}
-        title={MODAL_TITLES['mi-salud']}
-        size="lg"
-      >
-        <MiSaludForm />
-      </Modal>
     </div>
   )
 }

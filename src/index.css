@@ -81,3 +81,38 @@
   .msg-received  { @apply inline-flex items-center rounded-full bg-accent-100 px-2.5 py-0.5 text-xs font-semibold text-accent-700; }
   .msg-failed    { @apply inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-danger; }
 }
+
+/* =====================================================================
+   Portal Ciudadano — modo formulario senior-friendly
+   Las páginas /portal/turno · /portal/mi-turno · /portal/mi-salud
+   se renderizan con un wrapper .portal-form-page que aumenta el
+   tamaño tipográfico, la altura de los inputs (≥52px), el peso de
+   los labels y la prominencia del botón principal. font-size 16px
+   en inputs evita el auto-zoom de iOS al focar el campo.
+   ===================================================================== */
+.portal-form-page label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0F1C35;
+}
+.portal-form-page input,
+.portal-form-page select,
+.portal-form-page textarea {
+  font-size: 16px;
+  min-height: 52px;
+  padding: 14px 16px;
+  line-height: 1.4;
+}
+.portal-form-page textarea {
+  min-height: 120px;
+}
+.portal-form-page input[type="checkbox"],
+.portal-form-page input[type="radio"] {
+  min-height: 0;
+  padding: 0;
+}
+.portal-form-page button[type="submit"] {
+  min-height: 56px;
+  font-size: 1.0625rem;
+  width: 100%;
+}
