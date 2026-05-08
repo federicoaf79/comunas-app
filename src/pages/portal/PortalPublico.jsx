@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
-import NoticiaPortalCard           from '../../components/portal/NoticiaPortalCard'
 import SacarTurnoFormPortal        from '../../components/portal/SacarTurnoFormPortal'
 import ConsultarTurnoFormPortal    from '../../components/portal/ConsultarTurnoFormPortal'
 import MiSaludForm                 from '../../components/portal/MiSaludForm'
@@ -411,58 +410,71 @@ function AccesosRapidos({ onOpenForm }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Layout de noticias estilo diario — 1 grande + 2/3 chicas
+// Layout de noticias estilo diario digital
+//
+//   ZONA A · noticia destacada (ancho completo)
+//   ZONA B · grid 4 columnas × 2 filas (siguientes 8)
+//   ZONA C · noticias restantes (2/3) + banners institucionales (1/3)
+//
+// Adaptativo: <4 = grid simple, 4-8 = A+B, 9+ = A+B+C completo.
 // ─────────────────────────────────────────────────────────────────
 
-// Misma lógica de color que NoticiaPortalCard pero la duplicamos
-// localmente para tener variantes featured/secundaria con estilos
-// propios sin tocar el card original.
-function gradForCategoria(categoria) {
-  if (!categoria) return 'from-primary to-primary-700'
-  const c = categoria.toLowerCase()
-  if (/salud|caps|m[eé]dic/.test(c))     return 'from-ok-500 to-ok-700'
-  if (/obra|infra|catastro/.test(c))     return 'from-primary-500 to-primary-900'
-  if (/educ|escuel/.test(c))             return 'from-accent to-accent-700'
-  if (/evento|cultural|deport/.test(c))  return 'from-accent-500 to-accent-700'
-  if (/seguridad|polic/.test(c))         return 'from-primary-700 to-primary-900'
-  let h = 0
-  for (let i = 0; i < categoria.length; i++) h = (h * 31 + categoria.charCodeAt(i)) >>> 0
-  const palettes = [
-    'from-primary to-primary-700',
-    'from-accent to-accent-700',
-    'from-ok-500 to-ok-700',
-    'from-primary-500 to-primary-900',
-  ]
-  return palettes[h % palettes.length]
+// Mapa de categoría → color de fondo del placeholder. Tonos pastel
+// y suaves para mantener un look editorial sin ruido visual. Cero
+// verde — los matches a "deportes/sociales" caen a navy/cream.
+function bgColorForCategoria(categoria) {
+  const c = (categoria ?? '').toLowerCase()
+  if (/salud|caps|m[eé]dic/.test(c))         return '#DBEAFE' // azul claro
+  if (/educ|escuel/.test(c))                 return '#FEF3C7' // gold claro
+  if (/obra|infra|catastro/.test(c))         return '#E2E8F0' // slate
+  if (/deport/.test(c))                      return '#E0E7FF' // navy claro
+  if (/social|comunidad|familia/.test(c))    return '#F5F4EF' // cream
+  if (/servic|tr[aá]mite/.test(c))           return '#F1F5F9' // gris
+  if (/instituc|gobierno|comuna|gesti/.test(c)) return '#E8ECF5' // navy muy claro
+  return '#F5F4EF'
 }
 
+// Ícono representativo por categoría — SVG inline, navy sobre fondo claro.
 function iconForCategoria(categoria, sizeClass = 'h-12 w-12') {
   const c = (categoria ?? '').toLowerCase()
+  // Salud — cruz médica
   if (/salud|caps|m[eé]dic/.test(c)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={sizeClass}>
-        <path strokeLinecap="round" d="M12 8v8M8 12h8" /><circle cx="12" cy="12" r="9" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />
       </svg>
     )
   }
+  // Educación — libro abierto
+  if (/educ|escuel/.test(c)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 0 1 2-2h6v16H5a2 2 0 0 0-2 2V5zM21 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5z" />
+      </svg>
+    )
+  }
+  // Obras — engranaje
   if (/obra|infra|catastro/.test(c)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={sizeClass}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
+        <circle cx="12" cy="12" r="3.2" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
       </svg>
     )
   }
-  if (/evento|cultural|deport/.test(c)) {
+  // Deportes — pelota
+  if (/deport/.test(c)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={sizeClass}>
-        <rect x="3" y="5" width="18" height="16" rx="2" />
-        <path strokeLinecap="round" d="M3 9h18M8 3v4M16 3v4" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
+        <circle cx="12" cy="12" r="9" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5-3 4-3-4 3-5zM3 12l5 3 4-3-4-3-5 3zM21 12l-5 3-4-3 4-3 5 3zM12 21l-3-5 3-4 3 4-3 5z" />
       </svg>
     )
   }
+  // Default — megáfono
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={sizeClass}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v16H4zM4 9h16M9 4v16" />
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
     </svg>
   )
 }
@@ -474,23 +486,38 @@ function getResumen(noticia, max = 180) {
   return cuerpo.length > max ? `${cuerpo.slice(0, max).trimEnd()}…` : cuerpo
 }
 
-// Noticia destacada — formato grande con imagen prominente y bajada larga.
-function NoticiaFeatured({ noticia }) {
-  const resumen = getResumen(noticia, 220)
+// Placeholder de imagen — bloque de color sólido + ícono navy centrado.
+function CategoriaPlaceholder({ categoria, aspectClass, iconSize }) {
+  const bg = bgColorForCategoria(categoria)
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-card transition-shadow hover:shadow-lg">
-      <div className="relative aspect-[16/9] w-full overflow-hidden">
+    <div
+      className={`flex w-full items-center justify-center text-primary ${aspectClass}`}
+      style={{ backgroundColor: bg }}
+    >
+      {iconForCategoria(categoria, iconSize)}
+    </div>
+  )
+}
+
+// ZONA A · Noticia destacada de ancho completo
+function NoticiaFeatured({ noticia }) {
+  const resumen = getResumen(noticia, 240)
+  return (
+    <article className="group relative grid overflow-hidden rounded-xl border border-border bg-white shadow-card transition-shadow hover:shadow-lg lg:grid-cols-2">
+      <div className="relative">
         {noticia.imagen_url ? (
           <img
             src={noticia.imagen_url}
             alt=""
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            className="aspect-[16/9] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02] lg:h-full lg:aspect-auto"
             loading="lazy"
           />
         ) : (
-          <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradForCategoria(noticia.categoria)} text-white/85`}>
-            {iconForCategoria(noticia.categoria, 'h-20 w-20')}
-          </div>
+          <CategoriaPlaceholder
+            categoria={noticia.categoria}
+            aspectClass="aspect-[16/9] lg:aspect-auto lg:h-full"
+            iconSize="h-24 w-24"
+          />
         )}
         {noticia.categoria && (
           <span className="absolute left-4 top-4 inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-900 shadow-sm">
@@ -498,13 +525,19 @@ function NoticiaFeatured({ noticia }) {
           </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-3 p-6">
-        {noticia.publicado_at && (
-          <time className="text-xs font-medium uppercase tracking-wide text-primary-400" dateTime={noticia.publicado_at}>
-            {dateOf(noticia.publicado_at)}
-          </time>
-        )}
-        <h3 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl">
+      <div className="flex flex-col justify-center gap-3 p-6 sm:p-8">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-accent-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
+            Destacada
+          </span>
+          {noticia.publicado_at && (
+            <time className="text-xs font-medium uppercase tracking-wide text-primary-400" dateTime={noticia.publicado_at}>
+              · {dateOf(noticia.publicado_at)}
+            </time>
+          )}
+        </div>
+        <h3 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl lg:text-[28px]">
           {noticia.titulo}
         </h3>
         {resumen && (
@@ -523,66 +556,102 @@ function NoticiaFeatured({ noticia }) {
   )
 }
 
-// Noticia secundaria — formato horizontal compacto, ícono lateral.
-function NoticiaSecondary({ noticia }) {
-  const resumen = getResumen(noticia, 100)
+// ZONA B · Card chica — 4:3 image, badge, título, fecha (sin resumen).
+function NoticiaCardSmall({ noticia }) {
   return (
-    <article className="group flex gap-3 rounded-xl border border-border bg-white p-3 shadow-card transition-shadow hover:shadow-lg sm:p-4">
-      <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-lg sm:h-28 sm:w-32">
+    <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg">
+      <div className="relative">
         {noticia.imagen_url ? (
           <img
             src={noticia.imagen_url}
             alt=""
-            className="h-full w-full object-cover"
+            className="aspect-[4/3] w-full object-cover"
             loading="lazy"
           />
         ) : (
-          <div className={`flex h-full w-full items-center justify-center bg-gradient-to-br ${gradForCategoria(noticia.categoria)} text-white/85`}>
-            {iconForCategoria(noticia.categoria, 'h-9 w-9')}
-          </div>
+          <CategoriaPlaceholder
+            categoria={noticia.categoria}
+            aspectClass="aspect-[4/3]"
+            iconSize="h-12 w-12"
+          />
+        )}
+        {noticia.categoria && (
+          <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-white/95 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-900 shadow-sm ring-1 ring-inset ring-border">
+            {noticia.categoria}
+          </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          {noticia.categoria && (
-            <span className="inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-100">
-              {noticia.categoria}
-            </span>
-          )}
-          {noticia.publicado_at && (
-            <time className="font-medium uppercase tracking-wide text-primary-400" dateTime={noticia.publicado_at}>
-              {dateOf(noticia.publicado_at)}
-            </time>
-          )}
-        </div>
-        <h3 className="line-clamp-2 font-sora text-sm font-semibold leading-snug text-primary group-hover:text-primary-700 sm:text-base">
+      <div className="flex flex-1 flex-col gap-2 p-4">
+        <h3 className="line-clamp-3 font-sora text-sm font-semibold leading-snug text-primary group-hover:text-primary-700 sm:text-[15px]">
           {noticia.titulo}
         </h3>
-        {resumen && (
-          <p className="line-clamp-2 hidden text-xs leading-relaxed text-primary-500 sm:block">
-            {resumen}
-          </p>
+        {noticia.publicado_at && (
+          <time className="mt-auto text-[11px] font-medium uppercase tracking-wide text-primary-400" dateTime={noticia.publicado_at}>
+            {dateOf(noticia.publicado_at)}
+          </time>
         )}
       </div>
     </article>
   )
 }
 
-function NoticiasSection({ noticias, loading, error }) {
+// ZONA C · Banner institucional navy/gold con ícono, título, copy y CTA.
+function BannerInstitucional({ icon, titulo, copy, cta, onClick, href }) {
+  const inner = (
+    <>
+      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
+      <div className="absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
+      <div className="relative flex h-full flex-col gap-3 p-6">
+        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/15 text-3xl">
+          <span aria-hidden="true">{icon}</span>
+        </div>
+        <h3 className="font-sora text-lg font-bold leading-tight text-white sm:text-xl">
+          {titulo}
+        </h3>
+        <p className="text-sm leading-relaxed text-white/75">
+          {copy}
+        </p>
+        <span className="mt-auto inline-flex items-center gap-1.5 self-start rounded-md bg-accent px-3 py-2 text-sm font-semibold text-primary-900 transition-colors group-hover:bg-accent-600 group-hover:text-white">
+          {cta}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </span>
+      </div>
+    </>
+  )
+  const cls =
+    'group relative flex h-full overflow-hidden rounded-xl border border-primary-700 bg-gradient-to-br from-primary via-primary-700 to-primary-900 text-white shadow-card transition-shadow hover:shadow-lg'
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${cls} text-left w-full`}>
+      {inner}
+    </button>
+  ) : (
+    <a href={href} className={cls}>
+      {inner}
+    </a>
+  )
+}
+
+function NoticiasSection({ noticias, loading, error, onOpenForm }) {
   return (
     <section id="noticias" aria-labelledby="noticias-h2" className="scroll-mt-20">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b-2 border-primary pb-4 sm:mb-8">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-accent-700">
-              Sala de prensa
-            </p>
-            <h2 id="noticias-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
-              Noticias y anuncios
-            </h2>
+        {/* Encabezado de sección con línea decorativa gold */}
+        <header className="mb-8 sm:mb-10">
+          <div className="flex items-center gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
+                Sala de prensa
+              </p>
+              <h2 id="noticias-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
+                Noticias y anuncios
+              </h2>
+            </div>
+            <div className="hidden h-px flex-1 bg-gradient-to-r from-accent via-accent/60 to-transparent sm:block" aria-hidden="true" />
           </div>
-          <p className="text-sm text-primary-500">
-            Novedades, comunicados y actividades de la comuna.
+          <p className="mt-2 text-sm text-primary-500 sm:text-base">
+            Últimas novedades de la Comisión Municipal
           </p>
         </header>
 
@@ -606,42 +675,61 @@ function NoticiasSection({ noticias, loading, error }) {
 
         {!loading && !error && noticias.length > 0 && (
           (() => {
-            const featured  = noticias[0]
-            const secondary = noticias.slice(1, 4)
-            const rest      = noticias.slice(4, 7)
-            const useNewspaperLayout = secondary.length >= 2
+            const total = noticias.length
 
-            // Si hay menos de 3 noticias, fallback a grid simple.
-            if (!useNewspaperLayout) {
+            // < 4 noticias → grid simple 2 columnas
+            if (total < 4) {
               return (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {noticias.map(n => <NoticiaPortalCard key={n.id} noticia={n} />)}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {noticias.map(n => <NoticiaCardSmall key={n.id} noticia={n} />)}
                 </div>
               )
             }
 
-            return (
-              <>
-                <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
-                  {/* Destacada — 2/3 en desktop */}
-                  <div className="lg:col-span-2">
-                    <NoticiaFeatured noticia={featured} />
-                  </div>
-                  {/* Columna lateral — 1/3 en desktop */}
-                  <div className="flex flex-col gap-4">
-                    {secondary.map(n => (
-                      <NoticiaSecondary key={n.id} noticia={n} />
-                    ))}
-                  </div>
-                </div>
+            const featured = noticias[0]
+            const gridB    = noticias.slice(1, 9)   // hasta 8 noticias en zona B
+            const restC    = noticias.slice(9, 15)  // resto en zona C
+            const showZonaC = total >= 9
 
-                {/* Noticias adicionales en grid simple debajo */}
-                {rest.length > 0 && (
-                  <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {rest.map(n => <NoticiaPortalCard key={n.id} noticia={n} />)}
+            return (
+              <div className="space-y-10 sm:space-y-12">
+                {/* ZONA A · Destacada */}
+                <NoticiaFeatured noticia={featured} />
+
+                {/* ZONA B · Grid 4 columnas */}
+                {gridB.length > 0 && (
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                    {gridB.map(n => <NoticiaCardSmall key={n.id} noticia={n} />)}
                   </div>
                 )}
-              </>
+
+                {/* ZONA C · Restantes (2/3) + Banners institucionales (1/3) */}
+                {showZonaC && (
+                  <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
+                    {restC.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2">
+                        {restC.map(n => <NoticiaCardSmall key={n.id} noticia={n} />)}
+                      </div>
+                    ) : null}
+                    <div className={`flex flex-col gap-4 ${restC.length === 0 ? 'lg:col-span-3 lg:grid lg:grid-cols-2' : ''}`}>
+                      <BannerInstitucional
+                        icon="📋"
+                        titulo="Trámites online"
+                        copy="Gestioná desde tu celular sin moverte de tu casa."
+                        cta="Ir a trámites"
+                        onClick={() => onOpenForm('sacar-turno')}
+                      />
+                      <BannerInstitucional
+                        icon="📱"
+                        titulo="Alertas por SMS"
+                        copy="Recibí novedades de la comuna directo en tu celular."
+                        cta="Suscribirme"
+                        onClick={() => onOpenForm('mi-turno')}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             )
           })()
         )}
@@ -802,7 +890,7 @@ export default function PortalPublico() {
     data: noticias = [],
     isLoading: loadingNoticias,
     error: errNoticias,
-  } = useNoticiasPublicas({ limit: 7 })
+  } = useNoticiasPublicas({ limit: 15 })
 
   const closeModal = () => setActiveModal(null)
 
@@ -818,6 +906,7 @@ export default function PortalPublico() {
           noticias={noticias}
           loading={loadingNoticias}
           error={errNoticias}
+          onOpenForm={setActiveModal}
         />
         <ServiciosSection />
       </main>
