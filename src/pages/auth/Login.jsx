@@ -77,8 +77,22 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-background px-4">
-      <div className="card w-full max-w-md p-8">
+    <div className="flex min-h-svh items-center justify-center bg-background px-4 py-8">
+      <div className="flex w-full max-w-md flex-col gap-3">
+        {/* Link de retorno al portal — arriba a la izquierda del card,
+            mismo patrón que el botón Volver de las páginas del portal
+            pero en navy sobre fondo claro y sin subrayado en hover. */}
+        <Link
+          to="/portal"
+          className="inline-flex items-center gap-2 self-start rounded-md px-2 py-1 text-sm font-medium text-primary no-underline transition-colors hover:bg-primary-50 hover:text-primary-700"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+          </svg>
+          Volver al portal
+        </Link>
+
+        <div className="card w-full p-8">
         <div className="mb-6 text-center">
           <span className="text-2xl font-bold text-primary">COMUNAS</span>
           <p className="mt-1 text-sm text-primary-400">Ingresá al sistema</p>
@@ -115,6 +129,7 @@ export default function Login() {
         <p className="mt-6 text-center text-xs text-primary-400">
           ¿No tenés cuenta? <Link to="/register" className="font-semibold text-primary hover:underline">Registrate</Link>
         </p>
+        </div>
       </div>
     </div>
   )
