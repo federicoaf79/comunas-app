@@ -19,6 +19,7 @@ import AdminDashboard      from './pages/admin/AdminDashboard'
 import CrmVecinos          from './pages/admin/CrmVecinos'
 import VecinoDetail        from './pages/admin/VecinoDetail'
 import TurnosDia           from './pages/admin/Turnos'
+import TablazoCross        from './pages/admin/TablazoCross'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
@@ -79,6 +80,7 @@ const router = createBrowserRouter([
                   { path: '/admin/crm',        element: <CrmVecinos /> },
                   { path: '/admin/crm/:id',    element: <VecinoDetail /> },
                   { path: '/admin/turnos',     element: <TurnosDia /> },
+                  { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/sala',       element: <SalaPrimerosAuxilios /> },
                   { path: '/admin/noticias',   element: <Noticias /> },
