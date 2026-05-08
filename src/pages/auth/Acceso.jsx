@@ -9,8 +9,21 @@ import Button from '../../components/ui/Button'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
+// =============================================================
+// Acceso unificado — flujo progresivo de 3 pasos:
+//
+//   Paso 1 · Identificación: DNI + teléfono + email
+//            (busca el vecino en la tabla vecinos por DNI+tel)
+//   Paso 2 · Tipo de acceso: vecino o empleado municipal
+//   Paso 3 · Contraseña (sólo empleados municipales)
+//
+// Una sola ruta, una sola página, sin navegar entre rutas.
+// El email del paso 1 precarga el del paso 3 (editable).
+// La sesión efectiva se crea SOLO al finalizar — no en el paso 1.
+// =============================================================
+
 // ─────────────────────────────────────────────────────────────────
-// Header simple — alineado a /portal con escudo y botón Volver
+// Header simple
 // ─────────────────────────────────────────────────────────────────
 
 function Escudo({ className = 'h-9 w-9' }) {
@@ -65,157 +78,93 @@ function AccesoHeader() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Chooser — dos cards grandes "Soy vecino" / "Soy del municipio"
+// Indicador de pasos — muestra al usuario en qué etapa va
 // ─────────────────────────────────────────────────────────────────
 
-function ChooserCard({ icon, title, desc, onClick }) {
+function StepIndicator({ step, total = 3 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex flex-col items-start gap-3 rounded-xl border-2 border-border bg-white p-6 text-left transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-lg sm:p-7"
-    >
-      <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
-        {icon}
-      </div>
-      <div className="flex-1">
-        <p className="font-sora text-lg font-bold text-primary sm:text-xl">{title}</p>
-        <p className="mt-1 text-sm leading-relaxed text-primary-500 sm:text-base">{desc}</p>
-      </div>
-      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent-700 group-hover:text-accent-800">
-        Continuar
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-        </svg>
-      </span>
-    </button>
-  )
-}
-
-function ModeChooser({ onPick }) {
-  return (
-    <section className="animate-fade-in">
-      <h2 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-        ¿Cómo querés ingresar?
-      </h2>
-      <p className="mt-2 text-base text-primary-500 sm:text-lg">
-        Elegí la opción que corresponde a tu rol en la Comisión.
-      </p>
-
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 sm:gap-5">
-        <ChooserCard
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-8 w-8" aria-hidden="true">
-              <circle cx="12" cy="8" r="4" />
-              <path strokeLinecap="round" d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
-            </svg>
-          }
-          title="Soy vecino"
-          desc="Accedé con tu DNI y celular registrado."
-          onClick={() => onPick('vecino')}
-        />
-        <ChooserCard
-          icon={
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-8 w-8" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M8 11h.01M12 11h.01M16 11h.01" />
-            </svg>
-          }
-          title="Soy del municipio"
-          desc="Ingresá con tu usuario y contraseña."
-          onClick={() => onPick('admin')}
-        />
-      </div>
-
-      <p className="mt-8 text-center text-sm text-primary-500">
-        ¿Es la primera vez que usás el portal?{' '}
-        <Link to="/portal/turno" className="font-semibold text-accent-700 hover:text-accent-800">
-          Sacá un turno acá
-        </Link>
-      </p>
-    </section>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Form: Soy vecino — DNI + teléfono → sesión local
-// ─────────────────────────────────────────────────────────────────
-
-function VecinoForm({ onBack }) {
-  const navigate = useNavigate()
-  const { setVecinoSession } = useVecino()
-  const [dni, setDni] = useState('')
-  const [telefono, setTel] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setSubmitting(true)
-    try {
-      const vecino = await findVecinoByDniTelefono({ dni, telefono })
-      if (!vecino) {
-        setError(
-          'No encontramos tu cuenta. Verificá el DNI y el celular, ' +
-          'o registrate sacando un turno desde el portal.'
+    <ol className="mb-6 flex items-center gap-2" aria-label={`Paso ${step} de ${total}`}>
+      {Array.from({ length: total }, (_, i) => i + 1).map(n => {
+        const active = n === step
+        const done   = n < step
+        return (
+          <li key={n} className="flex items-center gap-2">
+            <span
+              className={
+                'flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ' +
+                (done
+                  ? 'bg-primary text-white'
+                  : active
+                  ? 'bg-accent text-primary-900'
+                  : 'bg-primary-50 text-primary-400 ring-1 ring-inset ring-border')
+              }
+            >
+              {done ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-3.5 w-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              ) : n}
+            </span>
+            {n < total && <span className="h-px w-6 bg-border" aria-hidden="true" />}
+          </li>
         )
-        return
-      }
-      setVecinoSession({
-        ...vecino,
-        telefono_login: telefono.replace(/[^0-9]/g, ''),
-      })
-      navigate('/mi-cuenta', { replace: true })
-    } catch (e) {
-      setError(e?.message ?? 'No pudimos verificar tu identidad. Probá de nuevo.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+      })}
+    </ol>
+  )
+}
 
-  const canSubmit = !!dni.trim() && !!telefono.trim()
+// ─────────────────────────────────────────────────────────────────
+// PASO 1 · Identificación común (DNI + teléfono + email)
+// ─────────────────────────────────────────────────────────────────
 
+function StepIdentificacion({
+  dni, telefono, email,
+  onChange,
+  submitting, error,
+  onSubmit,
+}) {
+  const canSubmit = dni.trim() && telefono.trim() && email.trim()
   return (
     <section className="animate-fade-in">
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 hover:text-primary"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-        </svg>
-        Cambiar opción
-      </button>
-
-      <h2 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-        Acceso del vecino
-      </h2>
+      <StepIndicator step={1} />
+      <h1 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl">
+        Identificate
+      </h1>
       <p className="mt-2 text-sm text-primary-500 sm:text-base">
-        Usá el DNI y el celular con el que te registraste en la Comisión.
+        Vamos a verificar tu identidad antes de seguir. Usá los datos con los que
+        te registraste en la Comisión Municipal.
       </p>
 
-      <form onSubmit={handleSubmit} className="portal-form-page mt-6 card flex flex-col gap-5 p-5 sm:p-6">
+      <form onSubmit={onSubmit} className="portal-form-page mt-6 card flex flex-col gap-5 p-5 sm:p-6">
         <Input
           label="DNI"
           value={dni}
-          onChange={e => setDni(e.target.value)}
+          onChange={e => onChange('dni', e.target.value)}
           required
           inputMode="numeric"
           type="text"
           autoComplete="off"
-          placeholder="Ej: 32145678"
           autoFocus
+          placeholder="Ej: 32145678"
         />
         <Input
           label="Teléfono celular"
           value={telefono}
-          onChange={e => setTel(e.target.value)}
+          onChange={e => onChange('telefono', e.target.value)}
           required
           inputMode="tel"
           type="tel"
           autoComplete="tel"
           placeholder="+54 9 ..."
+        />
+        <Input
+          label="Email"
+          value={email}
+          onChange={e => onChange('email', e.target.value)}
+          required
+          type="email"
+          autoComplete="email"
+          placeholder="tu@email.com"
         />
 
         {error && (
@@ -230,13 +179,14 @@ function VecinoForm({ onBack }) {
           disabled={!canSubmit}
           className="w-full"
         >
-          Ingresar a mi cuenta
+          Continuar
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
         </Button>
 
         <div className="border-t border-border pt-4 text-center">
-          <p className="text-sm text-primary-500">
-            ¿No tenés cuenta todavía?
-          </p>
+          <p className="text-sm text-primary-500">¿No tenés cuenta todavía?</p>
           <Link
             to="/portal/turno"
             className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-700 hover:text-accent-800"
@@ -253,75 +203,51 @@ function VecinoForm({ onBack }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Form: Soy del municipio — email + password (Supabase auth)
-// Mismo flujo que /login: signIn → verificar perfil → redirigir.
+// PASO 2 · Elegir tipo de acceso (vecino vs empleado municipal)
 // ─────────────────────────────────────────────────────────────────
 
-function MunicipioForm({ onBack }) {
-  const { signIn } = useAuth()
-  const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+function ChoiceCard({ icon, title, desc, primary = false, onClick }) {
+  const accent = primary
+    ? 'border-primary bg-primary text-white hover:bg-primary-600'
+    : 'border-border bg-white text-primary hover:border-primary hover:shadow-lg'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        'group flex flex-col items-start gap-3 rounded-xl border-2 p-5 text-left transition-all hover:-translate-y-0.5 sm:p-6 ' + accent
+      }
+    >
+      <div
+        className={
+          'flex h-12 w-12 items-center justify-center rounded-lg ' +
+          (primary ? 'bg-white/15 text-accent' : 'bg-primary text-accent group-hover:bg-primary-900')
+        }
+      >
+        {icon}
+      </div>
+      <div>
+        <p className="font-sora text-lg font-bold sm:text-xl">{title}</p>
+        <p className={'mt-1 text-sm leading-relaxed sm:text-base ' + (primary ? 'text-white/80' : 'text-primary-500')}>
+          {desc}
+        </p>
+      </div>
+      <span
+        className={
+          'mt-1 inline-flex items-center gap-1.5 text-sm font-semibold ' +
+          (primary ? 'text-accent' : 'text-accent-700 group-hover:text-accent-800')
+        }
+      >
+        Continuar
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+        </svg>
+      </span>
+    </button>
+  )
+}
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const { data, error: signInError } = await signIn({ email, password })
-    if (signInError) {
-      setLoading(false)
-      setError(signInError.message)
-      return
-    }
-
-    const userId = data?.user?.id
-    if (!userId) {
-      setLoading(false)
-      setError('No se pudo iniciar sesión.')
-      return
-    }
-
-    const { data: u, error: perfilError } = await supabase
-      .from('usuarios')
-      .select('roles, activo')
-      .eq('id', userId)
-      .maybeSingle()
-
-    if (perfilError) {
-      setLoading(false)
-      setError('No pudimos cargar tu perfil. Probá de nuevo.')
-      return
-    }
-
-    if (!u) {
-      await supabase.auth.signOut()
-      setLoading(false)
-      setError('Tu cuenta aún no fue habilitada en el sistema. Contactá al administrador de tu comuna.')
-      return
-    }
-
-    if (u.activo === false) {
-      await supabase.auth.signOut()
-      setLoading(false)
-      setError('Tu cuenta está deshabilitada. Contactá al administrador.')
-      return
-    }
-
-    const route = homeRouteFor(u.roles)
-    if (!route) {
-      await supabase.auth.signOut()
-      setLoading(false)
-      setError('Tu cuenta no tiene un rol asignado. Contactá al administrador.')
-      return
-    }
-
-    setLoading(false)
-    navigate(route, { replace: true })
-  }
-
+function StepTipo({ vecino, onPickVecino, onPickMunicipio, onBack }) {
   return (
     <section className="animate-fade-in">
       <button
@@ -332,68 +258,139 @@ function MunicipioForm({ onBack }) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
         </svg>
-        Cambiar opción
+        Volver
       </button>
 
-      <h2 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-        Acceso al sistema
-      </h2>
+      <StepIndicator step={2} />
+      <h1 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl">
+        Hola, {vecino?.nombre || 'vecino'}
+      </h1>
       <p className="mt-2 text-sm text-primary-500 sm:text-base">
-        Personal de la Comisión Municipal — usuario y contraseña.
+        ¿Sos empleado municipal?
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 card flex flex-col gap-4 p-6 sm:p-7">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 sm:gap-5">
+        <ChoiceCard
+          primary
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          }
+          title="Ingresar como vecino"
+          desc="Accedé a tus turnos, salud y datos."
+          onClick={onPickVecino}
+        />
+        <ChoiceCard
+          icon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6M8 11h.01M12 11h.01M16 11h.01" />
+            </svg>
+          }
+          title="Ingresar al sistema municipal"
+          desc="Para empleados de la Comisión."
+          onClick={onPickMunicipio}
+        />
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PASO 3 · Contraseña del empleado municipal
+// ─────────────────────────────────────────────────────────────────
+
+function StepMunicipio({
+  email, password,
+  onChange,
+  submitting, error,
+  onSubmit, onBack,
+}) {
+  const canSubmit = email.trim() && password.length > 0
+  return (
+    <section className="animate-fade-in">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 hover:text-primary"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+        </svg>
+        Volver
+      </button>
+
+      <StepIndicator step={3} />
+      <h1 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl">
+        Acceso al sistema municipal
+      </h1>
+      <p className="mt-2 text-sm text-primary-500 sm:text-base">
+        Ingresá tu contraseña para acceder al panel de gestión.
+      </p>
+
+      <form onSubmit={onSubmit} className="portal-form-page mt-6 card flex flex-col gap-5 p-5 sm:p-6">
         <Input
           label="Email"
-          type="email"
           value={email}
-          onChange={e => setEmail(e.target.value)}
+          onChange={e => onChange('email', e.target.value)}
           required
-          autoFocus
+          type="email"
           autoComplete="email"
         />
         <Input
           label="Contraseña"
-          type="password"
           value={password}
-          onChange={e => setPassword(e.target.value)}
+          onChange={e => onChange('password', e.target.value)}
           required
+          type="password"
           autoComplete="current-password"
+          autoFocus
         />
+
         {error && (
           <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
             {error}
           </div>
         )}
-        <Button type="submit" loading={loading} className="w-full">
-          Ingresar
+
+        <Button
+          type="submit"
+          loading={submitting}
+          disabled={!canSubmit}
+          className="w-full"
+        >
+          Ingresar al sistema
         </Button>
-        <p className="text-center text-xs text-primary-400">
-          ¿No tenés cuenta?{' '}
-          <Link to="/register" className="font-semibold text-primary hover:underline">
-            Registrate
-          </Link>
-        </p>
       </form>
     </section>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Página principal
+// Página principal — orquesta los 3 pasos
 // ─────────────────────────────────────────────────────────────────
 
 export default function Acceso() {
   const navigate = useNavigate()
-  const { perfil, loading: authLoading } = useAuth()
-  const { isVecinoLogued } = useVecino()
-  const [mode, setMode] = useState(null) // null | 'vecino' | 'admin'
+  const { signIn, perfil, loading: authLoading } = useAuth()
+  const { setVecinoSession, isVecinoLogued } = useVecino()
 
-  // Redirección automática si ya hay sesión activa.
-  // - Sesión admin (Supabase auth con perfil cargado): a /admin o /superadmin.
-  // - Sesión vecino (sessionStorage): a /mi-cuenta.
-  // El flag authLoading evita parpadeos en el primer render mientras
-  // el AuthContext hidrata el perfil desde el cache.
+  const [step, setStep] = useState(1)
+  const [form, setForm] = useState({
+    dni:      '',
+    telefono: '',
+    email:    '',
+    password: '',
+  })
+  const [vecino, setVecino] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  const setField = (k, v) => setForm(s => ({ ...s, [k]: v }))
+
+  // Auto-redirect si ya hay una sesión activa antes de empezar el flujo.
+  // Esperamos a que termine el auth bootstrap (cache → fetch perfil) para
+  // no parpadear con el formulario y después saltar a /admin.
   useEffect(() => {
     if (authLoading) return
     if (perfil?.roles) {
@@ -408,13 +405,136 @@ export default function Acceso() {
     }
   }, [authLoading, perfil, isVecinoLogued, navigate])
 
+  // Cada vez que el usuario cambia un campo, limpiamos errores
+  // anteriores. Evita que un error del paso anterior se vea
+  // mientras el usuario corrige.
+  function handleChange(field, value) {
+    setField(field, value)
+    if (error) setError('')
+  }
+
+  // PASO 1 → buscar vecino por DNI + teléfono.
+  async function handleStep1(e) {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const v = await findVecinoByDniTelefono({
+        dni:      form.dni,
+        telefono: form.telefono,
+      })
+      if (!v) {
+        setError(
+          'No encontramos tu cuenta. Registrate sacando un turno o ' +
+          'acercate a la Comisión Municipal.'
+        )
+        return
+      }
+      setVecino(v)
+      setStep(2)
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos verificar tu identidad. Probá de nuevo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // PASO 2 — Vecino: crear sesión y entrar al área personal.
+  function handleEntrarComoVecino() {
+    if (!vecino) return
+    setVecinoSession({
+      ...vecino,
+      telefono_login: form.telefono.replace(/[^0-9]/g, ''),
+    })
+    navigate('/mi-cuenta', { replace: true })
+  }
+
+  // PASO 3 — Empleado: signIn + verificación de perfil/activo/roles.
+  async function handleStep3(e) {
+    e.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      const { data, error: signInError } = await signIn({
+        email:    form.email,
+        password: form.password,
+      })
+      if (signInError) {
+        setError('Usuario o contraseña incorrectos.')
+        return
+      }
+      const userId = data?.user?.id
+      if (!userId) {
+        setError('No se pudo iniciar sesión.')
+        return
+      }
+      const { data: u, error: perfilError } = await supabase
+        .from('usuarios')
+        .select('roles, activo')
+        .eq('id', userId)
+        .maybeSingle()
+      if (perfilError) {
+        setError('No pudimos cargar tu perfil. Probá de nuevo.')
+        return
+      }
+      if (!u) {
+        await supabase.auth.signOut()
+        setError('Tu cuenta aún no fue habilitada en el sistema.')
+        return
+      }
+      if (u.activo === false) {
+        await supabase.auth.signOut()
+        setError('Tu cuenta está deshabilitada. Contactá al administrador.')
+        return
+      }
+      const route = homeRouteFor(u.roles)
+      if (!route) {
+        await supabase.auth.signOut()
+        setError('Tu cuenta no tiene un rol asignado.')
+        return
+      }
+      navigate(route, { replace: true })
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos iniciar sesión. Probá de nuevo.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-svh bg-background">
       <AccesoHeader />
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        {mode === null && <ModeChooser onPick={setMode} />}
-        {mode === 'vecino' && <VecinoForm onBack={() => setMode(null)} />}
-        {mode === 'admin'  && <MunicipioForm onBack={() => setMode(null)} />}
+      <main className="mx-auto max-w-[480px] px-4 py-8 sm:py-12">
+        {step === 1 && (
+          <StepIdentificacion
+            dni={form.dni}
+            telefono={form.telefono}
+            email={form.email}
+            onChange={handleChange}
+            submitting={submitting}
+            error={error}
+            onSubmit={handleStep1}
+          />
+        )}
+        {step === 2 && (
+          <StepTipo
+            vecino={vecino}
+            onPickVecino={handleEntrarComoVecino}
+            onPickMunicipio={() => { setError(''); setStep(3) }}
+            onBack={() => { setError(''); setStep(1) }}
+          />
+        )}
+        {step === 3 && (
+          <StepMunicipio
+            email={form.email}
+            password={form.password}
+            onChange={handleChange}
+            submitting={submitting}
+            error={error}
+            onSubmit={handleStep3}
+            onBack={() => { setError(''); setStep(2) }}
+          />
+        )}
       </main>
     </div>
   )
