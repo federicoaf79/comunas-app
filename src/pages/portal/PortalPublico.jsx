@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import { useVecino } from '../../context/VecinoContext'
+import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
 import NoticiaCardSmall    from '../../components/portal/NoticiaCardSmall'
 import CategoriaPlaceholder from '../../components/portal/CategoriaPlaceholder'
@@ -236,15 +237,30 @@ function NavItem({ link, onClick, mobile = false }) {
   return <a href={link.href} onClick={onClick} className={cls}>{link.label}</a>
 }
 
-function MiCuentaButton({ onClick, mobile = false }) {
+// Botón unificado de acceso al header. Tres estados:
+// - sesión admin (Supabase auth) → "Panel →" al dashboard del rol.
+// - sesión vecino (sessionStorage) → "Hola [nombre] →" a /mi-cuenta.
+// - sin sesión → "Ingresar" a /acceso (chooser unificado).
+function IngresarButton({ onClick, mobile = false }) {
+  const { perfil } = useAuth()
   const { vecinoSession, isVecinoLogued } = useVecino()
-  const target = isVecinoLogued ? '/mi-cuenta' : '/mi-cuenta/acceso'
-  const label  = isVecinoLogued
-    ? `Hola ${firstName(vecinoSession)} →`
-    : 'Mi cuenta'
+
+  const adminRoute = perfil?.roles ? homeRouteFor(perfil.roles) : null
+  let target, label
+  if (adminRoute) {
+    target = adminRoute
+    label  = 'Panel →'
+  } else if (isVecinoLogued) {
+    target = '/mi-cuenta'
+    label  = `Hola ${firstName(vecinoSession)} →`
+  } else {
+    target = '/acceso'
+    label  = 'Ingresar'
+  }
+
   const cls = mobile
     ? 'mt-1 rounded-md border border-accent/60 bg-accent/10 px-3 py-2.5 text-left text-sm font-semibold text-accent hover:bg-accent/20'
-    : 'inline-flex items-center justify-center rounded-md border border-accent/60 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/20'
+    : 'inline-flex items-center justify-center rounded-md border border-accent/60 bg-accent/10 px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/20'
   return (
     <Link to={target} onClick={onClick} className={cls}>
       {label}
@@ -274,13 +290,7 @@ function Header() {
           {NAV_LINKS.map(l => (
             <NavItem key={l.to ?? l.href} link={l} />
           ))}
-          <MiCuentaButton />
-          <Link
-            to="/login"
-            className="ml-1 inline-flex items-center justify-center rounded-md border border-white/20 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
-          >
-            Ingresar
-          </Link>
+          <IngresarButton />
         </nav>
 
         {/* Hamburguesa mobile */}
@@ -307,20 +317,13 @@ function Header() {
               {NAV_LINKS.map(l => (
                 <NavItem key={l.to ?? l.href} link={l} onClick={closeMenu} mobile />
               ))}
-              <MiCuentaButton onClick={closeMenu} mobile />
+              <IngresarButton onClick={closeMenu} mobile />
               <Link
                 to="/portal/turno"
                 onClick={closeMenu}
                 className="mt-1 rounded-md bg-accent px-3 py-2.5 text-left text-sm font-semibold text-primary-900 hover:bg-accent-600 hover:text-white"
               >
                 Sacar turno
-              </Link>
-              <Link
-                to="/login"
-                onClick={closeMenu}
-                className="mt-1 rounded-md border border-white/20 px-3 py-2.5 text-sm font-semibold text-white hover:bg-white/10"
-              >
-                Ingresar al sistema
               </Link>
             </nav>
           </div>

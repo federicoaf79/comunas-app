@@ -12,6 +12,7 @@ import AdminLayout from './components/layout/AdminLayout'
 import Landing  from './pages/Landing'
 import NotFound from './pages/NotFound'
 import Login    from './pages/auth/Login'
+import Acceso   from './pages/auth/Acceso'
 import Register from './pages/auth/Register'
 
 import AdminDashboard      from './pages/admin/AdminDashboard'
@@ -38,6 +39,7 @@ const queryClient = new QueryClient({
 const router = createBrowserRouter([
   // Rutas públicas — sin AuthGuard.
   { path: '/',         element: <Landing /> },
+  { path: '/acceso',   element: <Acceso /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/portal',                element: <PortalPublico /> },
