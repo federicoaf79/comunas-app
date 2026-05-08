@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import Spinner from '../../components/ui/Spinner'
+import NoticiaCardSmall    from '../../components/portal/NoticiaCardSmall'
+import CategoriaPlaceholder from '../../components/portal/CategoriaPlaceholder'
+import { getResumen } from '../../lib/noticiasCategoria'
 import { dateOf } from '../../lib/datetime'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
@@ -10,10 +13,10 @@ const PROVINCIA        = 'Santiago del Estero'
 // Nav del header. Los items con `to` navegan a otra ruta (router);
 // los que solo tienen `href` son anclas a secciones de esta misma página.
 const NAV_LINKS = [
-  { href: '#noticias',     label: 'Noticias' },
-  { href: '#servicios',    label: 'Servicios' },
-  { to:   '/portal/turno', label: 'Turnos' },
-  { href: '#contacto',     label: 'Contacto' },
+  { to:   '/portal/noticias', label: 'Noticias' },
+  { href: '#servicios',       label: 'Servicios' },
+  { to:   '/portal/turno',    label: 'Turnos' },
+  { href: '#contacto',        label: 'Contacto' },
 ]
 
 // ─────────────────────────────────────────────────────────────────
@@ -337,15 +340,15 @@ function Hero() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
             </svg>
           </Link>
-          <a
-            href="#noticias"
+          <Link
+            to="/portal/noticias"
             className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-white/40 bg-transparent px-6 py-3 text-base font-semibold text-white transition-all hover:bg-white/10 active:scale-95"
           >
             Ver noticias
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
             </svg>
-          </a>
+          </Link>
         </div>
       </div>
     </section>
@@ -406,86 +409,6 @@ function AccesosRapidos() {
 // Adaptativo: <4 = grid simple, 4-8 = A+B, 9+ = A+B+C completo.
 // ─────────────────────────────────────────────────────────────────
 
-// Mapa de categoría → color de fondo del placeholder. Tonos pastel
-// y suaves para mantener un look editorial sin ruido visual. Cero
-// verde — los matches a "deportes/sociales" caen a navy/cream.
-function bgColorForCategoria(categoria) {
-  const c = (categoria ?? '').toLowerCase()
-  if (/salud|caps|m[eé]dic/.test(c))         return '#DBEAFE' // azul claro
-  if (/educ|escuel/.test(c))                 return '#FEF3C7' // gold claro
-  if (/obra|infra|catastro/.test(c))         return '#E2E8F0' // slate
-  if (/deport/.test(c))                      return '#E0E7FF' // navy claro
-  if (/social|comunidad|familia/.test(c))    return '#F5F4EF' // cream
-  if (/servic|tr[aá]mite/.test(c))           return '#F1F5F9' // gris
-  if (/instituc|gobierno|comuna|gesti/.test(c)) return '#E8ECF5' // navy muy claro
-  return '#F5F4EF'
-}
-
-// Ícono representativo por categoría — SVG inline, navy sobre fondo claro.
-function iconForCategoria(categoria, sizeClass = 'h-12 w-12') {
-  const c = (categoria ?? '').toLowerCase()
-  // Salud — cruz médica
-  if (/salud|caps|m[eé]dic/.test(c)) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" />
-      </svg>
-    )
-  }
-  // Educación — libro abierto
-  if (/educ|escuel/.test(c)) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 0 1 2-2h6v16H5a2 2 0 0 0-2 2V5zM21 5a2 2 0 0 0-2-2h-6v16h6a2 2 0 0 1 2 2V5z" />
-      </svg>
-    )
-  }
-  // Obras — engranaje
-  if (/obra|infra|catastro/.test(c)) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
-        <circle cx="12" cy="12" r="3.2" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
-      </svg>
-    )
-  }
-  // Deportes — pelota
-  if (/deport/.test(c)) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
-        <circle cx="12" cy="12" r="9" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5-3 4-3-4 3-5zM3 12l5 3 4-3-4-3-5 3zM21 12l-5 3-4-3 4-3 5 3zM12 21l-3-5 3-4 3 4-3 5z" />
-      </svg>
-    )
-  }
-  // Default — megáfono
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={sizeClass}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
-    </svg>
-  )
-}
-
-function getResumen(noticia, max = 180) {
-  if (noticia.resumen?.trim()) return noticia.resumen
-  const cuerpo = noticia.cuerpo?.trim()
-  if (!cuerpo) return null
-  return cuerpo.length > max ? `${cuerpo.slice(0, max).trimEnd()}…` : cuerpo
-}
-
-// Placeholder de imagen — bloque de color sólido + ícono navy centrado.
-function CategoriaPlaceholder({ categoria, aspectClass, iconSize }) {
-  const bg = bgColorForCategoria(categoria)
-  return (
-    <div
-      className={`flex w-full items-center justify-center text-primary ${aspectClass}`}
-      style={{ backgroundColor: bg }}
-    >
-      {iconForCategoria(categoria, iconSize)}
-    </div>
-  )
-}
-
 // ZONA A · Noticia destacada de ancho completo
 function NoticiaFeatured({ noticia }) {
   const resumen = getResumen(noticia, 240)
@@ -542,50 +465,6 @@ function NoticiaFeatured({ noticia }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
           </svg>
         </span>
-      </div>
-    </article>
-    </Link>
-  )
-}
-
-// ZONA B · Card chica — 4:3 image, badge, título, fecha (sin resumen).
-function NoticiaCardSmall({ noticia }) {
-  return (
-    <Link
-      to={`/portal/noticias/${noticia.id}`}
-      className="block h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-    <article className="group flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg">
-      <div className="relative">
-        {noticia.imagen_url ? (
-          <img
-            src={noticia.imagen_url}
-            alt=""
-            className="aspect-[4/3] w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <CategoriaPlaceholder
-            categoria={noticia.categoria}
-            aspectClass="aspect-[4/3]"
-            iconSize="h-12 w-12"
-          />
-        )}
-        {noticia.categoria && (
-          <span className="absolute left-3 top-3 inline-flex items-center rounded-full bg-white/95 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-900 shadow-sm ring-1 ring-inset ring-border">
-            {noticia.categoria}
-          </span>
-        )}
-      </div>
-      <div className="flex flex-1 flex-col gap-2 p-4">
-        <h3 className="line-clamp-3 font-sora text-sm font-semibold leading-snug text-primary group-hover:text-primary-700 sm:text-[15px]">
-          {noticia.titulo}
-        </h3>
-        {noticia.publicado_at && (
-          <time className="mt-auto text-[11px] font-medium uppercase tracking-wide text-primary-400" dateTime={noticia.publicado_at}>
-            {dateOf(noticia.publicado_at)}
-          </time>
-        )}
       </div>
     </article>
     </Link>
@@ -722,6 +601,21 @@ function NoticiasSection({ noticias, loading, error }) {
               </div>
             )
           })()
+        )}
+
+        {/* Pie de la sección — link al listado completo */}
+        {!loading && !error && noticias.length > 0 && (
+          <div className="mt-10 flex justify-center sm:mt-12">
+            <Link
+              to="/portal/noticias"
+              className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-6 py-3 text-base font-semibold text-primary transition-colors hover:bg-primary hover:text-white active:scale-95"
+            >
+              Ver todas las noticias
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </Link>
+          </div>
         )}
       </div>
     </section>

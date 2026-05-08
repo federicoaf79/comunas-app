@@ -20,6 +20,7 @@ import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import Noticias            from './pages/admin/Noticias'
 import PortalPublico       from './pages/portal/PortalPublico'
+import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import SacarTurno          from './pages/portal/SacarTurno'
 import MiTurno             from './pages/portal/MiTurno'
@@ -36,6 +37,9 @@ const router = createBrowserRouter([
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/portal',                element: <PortalPublico /> },
+  // OJO: /portal/noticias va ANTES de /portal/noticias/:id para que
+  // el matcher prefiera la ruta estática sobre el segmento dinámico.
+  { path: '/portal/noticias',       element: <NoticiasListado /> },
   { path: '/portal/noticias/:id',   element: <NoticiaDetalle /> },
   { path: '/portal/turno',          element: <SacarTurno /> },
   { path: '/portal/mi-turno',       element: <MiTurno /> },

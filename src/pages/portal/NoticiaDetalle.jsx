@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabaseAnon } from '../../lib/supabaseAnon'
 import { dateOf } from '../../lib/datetime'
+import { bgColorForCategoria } from '../../lib/noticiasCategoria'
 import Spinner from '../../components/ui/Spinner'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
@@ -19,18 +20,6 @@ async function fetchNoticiaById(id) {
     .maybeSingle()
   if (error) throw error
   return data
-}
-
-function bgColorForCategoria(categoria) {
-  const c = (categoria ?? '').toLowerCase()
-  if (/salud|caps|m[eé]dic/.test(c))            return '#DBEAFE'
-  if (/educ|escuel/.test(c))                    return '#FEF3C7'
-  if (/obra|infra|catastro/.test(c))            return '#E2E8F0'
-  if (/deport/.test(c))                         return '#E0E7FF'
-  if (/social|comunidad|familia/.test(c))       return '#F5F4EF'
-  if (/servic|tr[aá]mite/.test(c))              return '#F1F5F9'
-  if (/instituc|gobierno|comuna|gesti/.test(c)) return '#E8ECF5'
-  return '#F5F4EF'
 }
 
 function Escudo({ className = 'h-9 w-9' }) {
