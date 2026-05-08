@@ -62,6 +62,24 @@ const NAV = [
     ),
   },
   {
+    to: '/admin/juez',
+    label: 'Juez de Paz',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
+      </svg>
+    ),
+  },
+  {
+    to: '/admin/sum',
+    label: 'SUM',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
+      </svg>
+    ),
+  },
+  {
     to: '/admin/noticias',
     label: 'Portal Web',
     icon: (

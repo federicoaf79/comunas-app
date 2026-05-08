@@ -22,6 +22,8 @@ import TurnosDia           from './pages/admin/Turnos'
 import TablazoCross        from './pages/admin/TablazoCross'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
+import JuezDePaz           from './pages/admin/JuezDePaz'
+import SUM                 from './pages/admin/SUM'
 import Noticias            from './pages/admin/Noticias'
 import Administracion      from './pages/admin/Administracion'
 import PortalPublico       from './pages/portal/PortalPublico'
@@ -83,6 +85,8 @@ const router = createBrowserRouter([
                   { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/sala',       element: <SalaPrimerosAuxilios /> },
+                  { path: '/admin/juez',       element: <JuezDePaz /> },
+                  { path: '/admin/sum',        element: <SUM /> },
                   { path: '/admin/noticias',   element: <Noticias /> },
                   { path: '/admin/administracion', element: <Administracion /> },
                 ],
