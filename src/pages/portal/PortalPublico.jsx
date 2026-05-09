@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
+import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { supabaseAnon } from '../../lib/supabaseAnon'
@@ -845,8 +846,38 @@ function ServiciosSection() {
   )
 }
 
+// Defaults hardcodeados — se usan si configuracion_portal no tiene
+// las claves persistidas todavía. Cuando el admin guarda algo en
+// /admin/config-general, esos valores tienen prioridad.
+const DEFAULT_FOOTER_DATOS = {
+  nombre_oficial: MUNICIPIO_NOMBRE,
+  direccion:      'Av. San Martín s/n',
+  telefono:       '(0385) 4-110-001',
+  email:          '',
+  horario:        'L-V 7:00 – 13:00 · Sala PA 8:00 – 20:00',
+}
+const DEFAULT_FOOTER_REDES = {
+  facebook:  '',
+  instagram: '',
+  whatsapp:  '+54 9 3854 110001',
+  twitter:   '',
+  youtube:   '',
+}
+
+// Convierte un número de teléfono libre ("+54 9 3854 110001") en
+// un link válido de wa.me — solo dígitos, sin "+" ni espacios.
+function whatsappLink(numero) {
+  const digits = (numero ?? '').replace(/[^0-9]/g, '')
+  return digits ? `https://wa.me/${digits}` : null
+}
+
 function FooterSection() {
   const { data: depData } = useDependenciasPublicas()
+  const { datos: cfgDatos, redes: cfgRedes } = useDatosMunicipio()
+  const datos = { ...DEFAULT_FOOTER_DATOS, ...(cfgDatos ?? {}) }
+  const redes = { ...DEFAULT_FOOTER_REDES, ...(cfgRedes ?? {}) }
+  const waUrl = whatsappLink(redes.whatsapp)
+
   const depList = (depData ?? []).filter(d => d.activa !== false)
   // Dedupe por nombre (case-insensitive) — protege contra filas
   // duplicadas en la DB hasta que se aplique la limpieza manual
@@ -867,7 +898,7 @@ function FooterSection() {
             <div className="flex items-center gap-3">
               <Escudo className="h-10 w-10" />
               <div>
-                <p className="font-sora text-base font-bold">{MUNICIPIO_NOMBRE}</p>
+                <p className="font-sora text-base font-bold">{datos.nombre_oficial}</p>
                 <p className="text-[11px] uppercase tracking-wide text-white/60">{PROVINCIA}</p>
               </div>
             </div>
@@ -875,33 +906,47 @@ function FooterSection() {
               Contacto
             </h3>
             <ul className="mt-3 space-y-1.5 text-sm text-white/80">
-              <li>Av. San Martín s/n</li>
+              {datos.direccion && <li>{datos.direccion}</li>}
               <li>Real Sayana, Santiago del Estero</li>
-              <li className="pt-2">Tel: (0385) 4-110-001</li>
-              <li>WhatsApp: +54 9 3854 110001</li>
+              {datos.telefono && <li className="pt-2">Tel: {datos.telefono}</li>}
+              {redes.whatsapp && <li>WhatsApp: {redes.whatsapp}</li>}
+              {datos.email && <li>{datos.email}</li>}
+              {datos.horario && <li className="pt-2 text-white/60">{datos.horario}</li>}
             </ul>
             <div className="mt-4 flex gap-2">
-              <a
-                href="#"
-                aria-label="Facebook"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
-              >
-                <SocialIcon kind="facebook" />
-              </a>
-              <a
-                href="#"
-                aria-label="Instagram"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
-              >
-                <SocialIcon kind="instagram" />
-              </a>
-              <a
-                href="https://wa.me/5493854110001"
-                aria-label="WhatsApp"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
-              >
-                <SocialIcon kind="whatsapp" />
-              </a>
+              {redes.facebook && (
+                <a
+                  href={redes.facebook}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
+                >
+                  <SocialIcon kind="facebook" />
+                </a>
+              )}
+              {redes.instagram && (
+                <a
+                  href={redes.instagram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
+                >
+                  <SocialIcon kind="instagram" />
+                </a>
+              )}
+              {waUrl && (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="WhatsApp"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-accent hover:text-primary"
+                >
+                  <SocialIcon kind="whatsapp" />
+                </a>
+              )}
             </div>
           </div>
 
@@ -948,7 +993,7 @@ function FooterSection() {
         </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-2 border-t border-white/10 pt-5 text-xs text-white/50 sm:flex-row">
-          <p>© {new Date().getFullYear()} {MUNICIPIO_NOMBRE}. Todos los derechos reservados.</p>
+          <p>© {new Date().getFullYear()} {datos.nombre_oficial}. Todos los derechos reservados.</p>
           <p>Portal oficial · Información pública</p>
         </div>
       </div>

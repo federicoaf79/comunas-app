@@ -110,6 +110,16 @@ const NAV = [
       </svg>
     ),
   },
+  {
+    to: '/admin/config-general',
+    label: 'Config. General',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+      </svg>
+    ),
+  },
 ]
 
 export default function AdminLayout() {
