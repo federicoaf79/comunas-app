@@ -848,7 +848,16 @@ function ServiciosSection() {
 function FooterSection() {
   const { data: depData } = useDependenciasPublicas()
   const depList = (depData ?? []).filter(d => d.activa !== false)
-  const footerDeps = depList.length > 0 ? depList : FALLBACK_SERVICIOS
+  // Dedupe por nombre (case-insensitive) — protege contra filas
+  // duplicadas en la DB hasta que se aplique la limpieza manual
+  // (ej: dos "Ayuda Social" sembradas en distintas migrations).
+  const seen = new Set()
+  const footerDeps = (depList.length > 0 ? depList : FALLBACK_SERVICIOS).filter(d => {
+    const k = (d.nombre ?? '').trim().toLowerCase()
+    if (!k || seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
   return (
     <footer id="contacto" className="bg-primary-900 text-white">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
@@ -902,14 +911,17 @@ function FooterSection() {
               Dependencias
             </h3>
             <ul className="mt-3 space-y-1.5 text-sm text-white/80">
-              {footerDeps.map(s => (
-                <li key={s.id ?? s.nombre} className="flex flex-col">
-                  <span className="font-medium text-white/90">{s.nombre}</span>
-                  <span className="text-xs text-white/60">
-                    {DEP_DESCRIPTOR[s.tipo]?.horario ?? '—'}
-                  </span>
-                </li>
-              ))}
+              {footerDeps.map(s => {
+                const horario = DEP_DESCRIPTOR[s.tipo]?.horario
+                return (
+                  <li key={s.id ?? s.nombre}>
+                    <span className="text-xs text-white/90">
+                      {s.nombre}
+                      {horario && <span className="text-white/50"> · {horario}</span>}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
 
