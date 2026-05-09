@@ -9,7 +9,7 @@ import Spinner from '../../components/ui/Spinner'
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
 const NOTICIA_SELECT =
-  'id, titulo, cuerpo, categoria, publicado_at, imagen_url, estado'
+  'id, titulo, cuerpo, categoria, publicado_at, imagen_url, estado, autor:autor_id ( id, nombre )'
 
 async function fetchNoticiaById(id) {
   const { data, error } = await supabaseAnon
@@ -126,37 +126,30 @@ export default function NoticiaDetalle() {
 
         {!isLoading && !error && noticia && (
           <article>
-            {/* Encabezado de la nota */}
-            <header className="mb-6">
-              {noticia.categoria && (
-                <span className="inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-900 shadow-sm">
-                  {noticia.categoria}
-                </span>
-              )}
-              <h1 className="mt-4 font-sora text-3xl font-bold leading-tight text-primary sm:text-4xl">
-                {noticia.titulo}
-              </h1>
-              {noticia.publicado_at && (
-                <p className="mt-3 text-sm font-medium uppercase tracking-wide text-primary-400">
-                  <time dateTime={noticia.publicado_at}>
-                    {dateOf(noticia.publicado_at)}
-                  </time>
-                </p>
-              )}
-            </header>
+            {/* Volver — arriba */}
+            <Link
+              to="/portal/noticias"
+              className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 hover:text-primary"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+              </svg>
+              Volver a noticias
+            </Link>
 
-            {/* Imagen destacada */}
+            {/* Hero image full width — arriba del título */}
             {noticia.imagen_url ? (
               <img
                 src={noticia.imagen_url}
                 alt=""
-                className="aspect-[16/9] w-full rounded-xl border border-border object-cover"
+                className="w-full rounded-xl border border-border object-cover"
+                style={{ maxHeight: 400 }}
                 loading="lazy"
               />
             ) : (
               <div
                 className="flex aspect-[16/9] w-full items-center justify-center rounded-xl border border-border text-primary"
-                style={{ backgroundColor: bgColorForCategoria(noticia.categoria) }}
+                style={{ backgroundColor: bgColorForCategoria(noticia.categoria), maxHeight: 400 }}
                 aria-hidden="true"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-20 w-20">
@@ -165,9 +158,36 @@ export default function NoticiaDetalle() {
               </div>
             )}
 
-            {/* Cuerpo */}
+            {/* Encabezado: título + metadata (badge / fecha / autor) */}
+            <header className="mt-6 sm:mt-8">
+              <h1 className="font-sora text-3xl font-bold leading-tight text-primary sm:text-4xl">
+                {noticia.titulo}
+              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                {noticia.categoria && (
+                  <span className="inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-900 shadow-sm">
+                    {noticia.categoria}
+                  </span>
+                )}
+                {noticia.publicado_at && (
+                  <time
+                    dateTime={noticia.publicado_at}
+                    className="text-sm font-medium uppercase tracking-wide text-primary-400"
+                  >
+                    {dateOf(noticia.publicado_at)}
+                  </time>
+                )}
+                {noticia.autor?.nombre && (
+                  <span className="text-sm text-primary-500">
+                    Por <strong className="font-semibold text-primary-700">{noticia.autor.nombre}</strong>
+                  </span>
+                )}
+              </div>
+            </header>
+
+            {/* Cuerpo — prose con tipografía grande para lectura cómoda */}
             {noticia.cuerpo?.trim() ? (
-              <div className="prose-portal mt-8 whitespace-pre-line text-base leading-relaxed text-primary-700 sm:text-lg">
+              <div className="prose-portal mt-8 whitespace-pre-line text-lg leading-relaxed text-primary-700">
                 {noticia.cuerpo}
               </div>
             ) : (
@@ -176,10 +196,10 @@ export default function NoticiaDetalle() {
               </p>
             )}
 
-            {/* Volver al final */}
+            {/* Volver — al final */}
             <div className="mt-12 border-t border-border pt-6">
               <Link
-                to="/portal#noticias"
+                to="/portal/noticias"
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-5 py-2.5 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-50"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">

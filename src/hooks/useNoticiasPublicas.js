@@ -6,8 +6,12 @@ const TIMEOUT_MS = 8000
 // Columnas reales de la tabla `noticias` en producción.
 // El "resumen" se deriva en el frontend desde `cuerpo` (substring)
 // cuando no viene seteado de otra manera.
+//
+// El join `autor:autor_id (id, nombre)` puede devolver null para
+// anon si la RLS de `usuarios` no expone esa fila — la UI degrada
+// graciosamente sin mostrar el "Por [autor]".
 const NOTICIA_SELECT =
-  'id, titulo, cuerpo, categoria, publicado_at, imagen_url, estado'
+  'id, titulo, cuerpo, categoria, publicado_at, imagen_url, estado, autor:autor_id ( id, nombre )'
 
 // fetchNoticiasPublicas: lista pública de noticias en estado
 // 'publicada', orden DESC por publicado_at. Usa el cliente

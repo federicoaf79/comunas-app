@@ -10,7 +10,7 @@ import NoticiaCard from '../../components/portal/NoticiaCard'
 import NoticiaFormModal from '../../components/portal/NoticiaFormModal'
 
 const NOTICIA_COLS =
-  'id, municipio_id, titulo, resumen, cuerpo, categoria, imagen_url, estado, publicado_at, created_at'
+  'id, municipio_id, titulo, resumen, cuerpo, categoria, imagen_url, estado, publicado_at, created_at, autor:autor_id ( id, nombre )'
 
 // Lista todas las noticias visibles para el usuario actual. Las
 // policies RLS hacen el resto: superadmin ve todas, staff ve las
@@ -258,6 +258,7 @@ export default function Noticias() {
         onSave={handleSave}
         noticia={editing}
         saving={upsertMut.isPending}
+        municipioId={perfil?.municipio_id ?? null}
       />
     </div>
   )
