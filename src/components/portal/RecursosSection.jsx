@@ -199,8 +199,9 @@ export default function RecursosSection() {
 
   return (
     <section
+      id="recursos"
       aria-labelledby="recursos-h2"
-      className="border-y border-border"
+      className="scroll-mt-20 border-y border-border"
       style={{ backgroundColor: '#F5F4EF' }}
     >
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">

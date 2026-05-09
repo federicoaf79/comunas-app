@@ -21,6 +21,7 @@ const PROVINCIA        = 'Santiago del Estero'
 const NAV_LINKS = [
   { to:   '/portal/noticias', label: 'Noticias' },
   { href: '#servicios',       label: 'Servicios' },
+  { href: '#recursos',        label: 'Recursos' },
   { to:   '/portal/turno',    label: 'Turnos' },
   { href: '#contacto',        label: 'Contacto' },
 ]
@@ -91,6 +92,7 @@ const ACCESOS_RAPIDOS = [
 // acá. Si una dep llega con un tipo no listado, se renderiza solo
 // con su nombre (sin detalle ni horario).
 const DEP_DESCRIPTOR = {
+  salud:       { detalle: 'Atención médica, vacunación y enfermería.',          horario: 'Lun a Vie · 8:00 – 20:00' },
   caps:        { detalle: 'Atención médica, vacunación y enfermería.',          horario: 'Lun a Vie · 8:00 – 20:00' },
   juzgado:     { detalle: 'Trámites civiles, certificaciones y mediación.',     horario: 'Lun a Vie · 7:00 – 13:00' },
   sum:         { detalle: 'Eventos comunitarios, capacitaciones y reuniones.',  horario: 'Reservas · consultar disponibilidad' },
