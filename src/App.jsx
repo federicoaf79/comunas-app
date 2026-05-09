@@ -26,6 +26,7 @@ import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
 import Noticias            from './pages/admin/Noticias'
 import Administracion      from './pages/admin/Administracion'
+import ConfigPortal        from './pages/admin/ConfigPortal'
 import PortalPublico       from './pages/portal/PortalPublico'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
@@ -89,6 +90,7 @@ const router = createBrowserRouter([
                   { path: '/admin/sum',        element: <SUM /> },
                   { path: '/admin/noticias',   element: <Noticias /> },
                   { path: '/admin/administracion', element: <Administracion /> },
+                  { path: '/admin/config',     element: <ConfigPortal /> },
                 ],
               },
             ],

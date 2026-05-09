@@ -1,51 +1,71 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useFuentesRssPublicas } from '../../hooks/useConfigPortal'
 import Spinner from '../ui/Spinner'
 
 // =============================================================
 // Noticias nacionales — feed RSS de medios argentinos vía
 // rss2json.com (proxy gratuito que convierte RSS a JSON).
 //
-// Es contenido de TERCEROS — el visual lo deja claro con el
-// badge "EXTERNO" en cada card y un disclaimer en el header.
-// Los enlaces abren en pestaña nueva con rel=noopener noreferrer.
+// Las fuentes vienen de la tabla `configuracion_portal` con clave
+// 'fuentes_rss'. Si no hay config persistida, el hook cae a un
+// set de defaults (Infobae / La Nación / BA Times).
+//
+// Cada item se filtra contra una lista de palabras clave
+// regionales/temáticas para mostrar solo lo relevante para el
+// vecino. Si después del filtro quedan menos de 3 noticias, se
+// muestran las primeras 8 sin filtrar y el badge cambia de
+// "EXTERNO" a "NACIONAL" para dejar claro que no son del recorte.
+//
+// El visual deja claro que es contenido de TERCEROS — badge en
+// cada card, disclaimer en el header y al pie. Los enlaces abren
+// en pestaña nueva con rel="noopener noreferrer".
 // =============================================================
-
-// Fuentes nacionales — los medios provinciales (El Liberal,
-// Panorama) bloquean a rss2json (HTTP 422) así que el feed cae
-// a medios nacionales que sí dejan pasar el proxy.
-const FUENTES = [
-  {
-    key:   'infobae',
-    label: 'Infobae',
-    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.infobae.com/argentina-rss.xml',
-    home:  'https://www.infobae.com/',
-  },
-  {
-    key:   'lanacion',
-    label: 'La Nación',
-    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.lanacion.com.ar/arc/outboundfeeds/rss/',
-    home:  'https://www.lanacion.com.ar/',
-  },
-  {
-    key:   'batimes',
-    label: 'BA Times',
-    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.batimes.com.ar/feed',
-    home:  'https://www.batimes.com.ar/',
-  },
-]
 
 const MAX_ITEMS = 8
 const STALE_MS  = 15 * 60 * 1000  // 15 minutos — el RSS no cambia tan seguido
 
-async function fetchRss(url) {
-  const res = await fetch(url)
+// Palabras clave base — comunes a todas las fuentes. Se combinan
+// con las palabras clave específicas que cada fuente agregue
+// desde el panel de admin.
+const BASE_KEYWORDS = [
+  'santiago del estero', 'santiagueño', 'santiagueña',
+  'santiago', 'norte argentino', 'noa', 'tucumán',
+  'salta', 'jujuy', 'catamarca', 'chaco', 'formosa',
+  'litoral', 'interior del país',
+]
+
+// Normaliza para comparación: lowercase + sin acentos. Hace que
+// "Tucumán" matchee "tucuman" y viceversa, y que el comentario
+// del usuario sobre "santiagueño" matchee aunque la nota diga
+// "santiagueno".
+function normalize(s) {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+}
+
+function matchesKeywords(item, keywords) {
+  if (!keywords?.length) return true
+  const text = normalize(`${item.title ?? ''} ${item.description ?? ''}`)
+  return keywords.some(k => {
+    const kn = normalize(k)
+    return kn && text.includes(kn)
+  })
+}
+
+async function fetchRss(rawRssUrl) {
+  const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rawRssUrl)}`
+  const res = await fetch(proxyUrl)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const data = await res.json()
   if (data?.status !== 'ok') {
     throw new Error(data?.message ?? 'No se pudo leer el RSS.')
   }
-  return (data.items ?? []).slice(0, MAX_ITEMS)
+  // Devolvemos hasta 30 items crudos para que el filtro tenga
+  // material — luego acotamos a MAX_ITEMS (8) para mostrar.
+  return (data.items ?? []).slice(0, 30)
 }
 
 // Intenta resolver una URL de imagen para el item. Prioriza:
@@ -103,7 +123,7 @@ function PlaceholderImg() {
   )
 }
 
-function NoticiaExternaCard({ item }) {
+function NoticiaExternaCard({ item, badgeLabel = 'Externo' }) {
   const img = getImageUrl(item)
   return (
     <a
@@ -129,7 +149,7 @@ function NoticiaExternaCard({ item }) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-2.5 w-2.5" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7v7M21 3l-9 9M10 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />
             </svg>
-            Externo
+            {badgeLabel}
           </span>
         </div>
         <div className="flex flex-1 flex-col gap-2 p-4">
@@ -152,15 +172,46 @@ function NoticiaExternaCard({ item }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function NoticiasProvinciales() {
-  const [fuenteKey, setFuenteKey] = useState(FUENTES[0].key)
-  const fuente = FUENTES.find(f => f.key === fuenteKey) ?? FUENTES[0]
+  const { data: fuentes = [], isLoading: loadingConfig } = useFuentesRssPublicas()
+  const fuentesActivas = useMemo(
+    () => (fuentes ?? []).filter(f => f.active !== false),
+    [fuentes],
+  )
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['rss-nacional', fuente.key],
+  const [fuenteKey, setFuenteKey] = useState(null)
+  const fuente = fuentesActivas.find(f => f.key === fuenteKey) ?? fuentesActivas[0]
+
+  const { data: items, isLoading: loadingFeed, error } = useQuery({
+    queryKey: ['rss-nacional', fuente?.url ?? '__none__'],
     queryFn:  () => fetchRss(fuente.url),
     staleTime: STALE_MS,
     retry: 1,
+    enabled: !!fuente?.url,
   })
+
+  // Aplicamos filtro de keywords (base + extras de la fuente). Si
+  // después de filtrar quedan menos de 3 ítems, mostramos las
+  // primeras 8 sin filtrar y cambiamos el badge a "Nacional" para
+  // que el usuario sepa que el feed está sin recorte regional.
+  const { display, badgeLabel, didFilter } = useMemo(() => {
+    const list = items ?? []
+    const keywords = [...BASE_KEYWORDS, ...((fuente?.palabras_clave ?? []))]
+    const filtered = list.filter(it => matchesKeywords(it, keywords))
+    if (filtered.length >= 3) {
+      return {
+        display:    filtered.slice(0, MAX_ITEMS),
+        badgeLabel: 'Externo',
+        didFilter:  true,
+      }
+    }
+    return {
+      display:    list.slice(0, MAX_ITEMS),
+      badgeLabel: 'Nacional',
+      didFilter:  false,
+    }
+  }, [items, fuente])
+
+  const isLoading = loadingConfig || loadingFeed
 
   return (
     <section
@@ -185,58 +236,83 @@ export default function NoticiasProvinciales() {
         </header>
 
         {/* Selector de fuente */}
-        <div
-          role="tablist"
-          aria-label="Fuente de noticias"
-          className="mb-6 flex gap-2 overflow-x-auto pb-1 sm:mb-8"
-        >
-          {FUENTES.map(f => (
-            <FuenteChip
-              key={f.key}
-              label={f.label}
-              active={fuenteKey === f.key}
-              onClick={() => setFuenteKey(f.key)}
-            />
-          ))}
-        </div>
+        {fuentesActivas.length > 0 && (
+          <div
+            role="tablist"
+            aria-label="Fuente de noticias"
+            className="mb-6 flex gap-2 overflow-x-auto pb-1 sm:mb-8"
+          >
+            {fuentesActivas.map(f => (
+              <FuenteChip
+                key={f.key}
+                label={f.label}
+                active={(fuenteKey ?? fuentesActivas[0]?.key) === f.key}
+                onClick={() => setFuenteKey(f.key)}
+              />
+            ))}
+          </div>
+        )}
 
-        {/* Estados de carga / error / vacío */}
-        {isLoading && (
+        {/* Sin fuentes configuradas */}
+        {!loadingConfig && fuentesActivas.length === 0 && (
+          <div className="rounded-xl border border-border bg-primary-50/40 p-10 text-center text-sm text-primary-400">
+            No hay fuentes externas configuradas para mostrar.
+          </div>
+        )}
+
+        {/* Estados de carga / error / vacío del feed */}
+        {fuente && isLoading && (
           <div className="flex items-center justify-center rounded-xl border border-border bg-primary-50/40 p-12">
             <Spinner size="lg" />
           </div>
         )}
 
-        {error && !isLoading && (
+        {fuente && error && !isLoading && (
           <div className="rounded-xl border border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
             <p className="font-semibold">No pudimos cargar las noticias nacionales.</p>
             <p className="mt-1 text-xs text-accent-700/80">
               Es contenido de medios externos — probá nuevamente más tarde.
-              {' '}
-              <a
-                href={fuente.home}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold underline hover:no-underline"
-              >
-                Visitar {fuente.label} directamente
-              </a>
+              {fuente.home && (
+                <>
+                  {' '}
+                  <a
+                    href={fuente.home}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold underline hover:no-underline"
+                  >
+                    Visitar {fuente.label} directamente
+                  </a>
+                </>
+              )}
             </p>
           </div>
         )}
 
-        {!isLoading && !error && (data?.length ?? 0) === 0 && (
+        {fuente && !isLoading && !error && display.length === 0 && (
           <div className="rounded-xl border border-border bg-primary-50/40 p-10 text-center text-sm text-primary-400">
             La fuente no devolvió noticias.
           </div>
         )}
 
-        {!isLoading && !error && data && data.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {data.map(item => (
-              <NoticiaExternaCard key={item.guid ?? item.link} item={item} />
-            ))}
-          </div>
+        {fuente && !isLoading && !error && display.length > 0 && (
+          <>
+            {!didFilter && (
+              <p className="mb-3 text-xs text-primary-400">
+                Mostrando las últimas noticias del medio (no encontramos suficientes
+                con foco regional para esta fuente).
+              </p>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {display.map(item => (
+                <NoticiaExternaCard
+                  key={item.guid ?? item.link}
+                  item={item}
+                  badgeLabel={badgeLabel}
+                />
+              ))}
+            </div>
+          </>
         )}
 
         <p className="mt-6 text-xs text-primary-400 sm:mt-8">
