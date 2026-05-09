@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import Spinner from '../ui/Spinner'
 
 // =============================================================
-// Noticias de la provincia — feed RSS de medios externos vía
+// Noticias nacionales — feed RSS de medios argentinos vía
 // rss2json.com (proxy gratuito que convierte RSS a JSON).
 //
 // Es contenido de TERCEROS — el visual lo deja claro con el
@@ -11,16 +11,27 @@ import Spinner from '../ui/Spinner'
 // Los enlaces abren en pestaña nueva con rel=noopener noreferrer.
 // =============================================================
 
+// Fuentes nacionales — los medios provinciales (El Liberal,
+// Panorama) bloquean a rss2json (HTTP 422) así que el feed cae
+// a medios nacionales que sí dejan pasar el proxy.
 const FUENTES = [
   {
-    key:   'liberal',
-    label: 'El Liberal',
-    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.elliberal.com.ar/rss/',
+    key:   'infobae',
+    label: 'Infobae',
+    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.infobae.com/argentina-rss.xml',
+    home:  'https://www.infobae.com/',
   },
   {
-    key:   'panorama',
-    label: 'Panorama',
-    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.diariopanorama.com/rss/',
+    key:   'lanacion',
+    label: 'La Nación',
+    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.lanacion.com.ar/arc/outboundfeeds/rss/',
+    home:  'https://www.lanacion.com.ar/',
+  },
+  {
+    key:   'batimes',
+    label: 'BA Times',
+    url:   'https://api.rss2json.com/v1/api.json?rss_url=https://www.batimes.com.ar/feed',
+    home:  'https://www.batimes.com.ar/',
   },
 ]
 
@@ -145,7 +156,7 @@ export default function NoticiasProvinciales() {
   const fuente = FUENTES.find(f => f.key === fuenteKey) ?? FUENTES[0]
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['rss-provincial', fuente.key],
+    queryKey: ['rss-nacional', fuente.key],
     queryFn:  () => fetchRss(fuente.url),
     staleTime: STALE_MS,
     retry: 1,
@@ -153,7 +164,7 @@ export default function NoticiasProvinciales() {
 
   return (
     <section
-      aria-labelledby="provinciales-h2"
+      aria-labelledby="nacionales-h2"
       className="border-y border-border bg-white"
     >
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
@@ -162,12 +173,12 @@ export default function NoticiasProvinciales() {
             <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
               Medios externos
             </p>
-            <h2 id="provinciales-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
-              Noticias de Santiago del Estero
+            <h2 id="nacionales-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
+              Noticias de Argentina
             </h2>
             <p className="mt-2 text-sm text-primary-500 sm:text-base">
-              Actualidad provincial — contenido publicado por medios independientes,
-              ajeno a la Comisión Municipal.
+              Actualidad nacional y regional — contenido publicado por medios
+              independientes, ajeno a la Comisión Municipal.
             </p>
           </div>
           <div className="hidden h-px flex-1 bg-gradient-to-l from-accent via-accent/60 to-transparent sm:block" aria-hidden="true" />
@@ -198,12 +209,12 @@ export default function NoticiasProvinciales() {
 
         {error && !isLoading && (
           <div className="rounded-xl border border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
-            <p className="font-semibold">No pudimos cargar las noticias provinciales.</p>
+            <p className="font-semibold">No pudimos cargar las noticias nacionales.</p>
             <p className="mt-1 text-xs text-accent-700/80">
               Es contenido de medios externos — probá nuevamente más tarde.
               {' '}
               <a
-                href={`https://www.${fuente.key === 'liberal' ? 'elliberal.com.ar' : 'diariopanorama.com'}/`}
+                href={fuente.home}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold underline hover:no-underline"
