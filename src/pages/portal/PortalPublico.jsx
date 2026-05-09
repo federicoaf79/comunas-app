@@ -4,8 +4,9 @@ import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
-import NoticiaCardSmall    from '../../components/portal/NoticiaCardSmall'
-import CategoriaPlaceholder from '../../components/portal/CategoriaPlaceholder'
+import NoticiaCardSmall      from '../../components/portal/NoticiaCardSmall'
+import CategoriaPlaceholder  from '../../components/portal/CategoriaPlaceholder'
+import NoticiasProvinciales  from '../../components/portal/NoticiasProvinciales'
 import { getResumen } from '../../lib/noticiasCategoria'
 import { dateOf } from '../../lib/datetime'
 
@@ -814,6 +815,7 @@ export default function PortalPublico() {
           loading={loadingNoticias}
           error={errNoticias}
         />
+        <NoticiasProvinciales />
         <ServiciosSection />
       </main>
 
