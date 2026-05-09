@@ -1,11 +1,43 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   useConfigClaveAdmin, useUpsertConfigClave,
 } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+
+// Para superadmin (perfil.municipio_id = null), tomamos el primer
+// municipio activo como destino del upsert. Sin esto, todas las
+// secciones tirarían "Tu usuario no tiene un municipio asignado"
+// al guardar.
+function useEffectiveMunicipioId() {
+  const { perfil, hasRole } = useAuth()
+  const propio = perfil?.municipio_id ?? null
+  const necesitaFallback = !propio && hasRole('superadmin')
+  const fallbackQ = useQuery({
+    queryKey: ['first-active-municipio'],
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from('municipios')
+        .select('id')
+        .eq('activo', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (error) {
+        console.warn('[ConfigGeneral] fallback municipio fetch error:', error.message)
+        return null
+      }
+      return data?.id ?? null
+    },
+    enabled:  necesitaFallback,
+    staleTime: 60 * 60 * 1000,
+  })
+  return propio ?? fallbackQ.data ?? null
+}
 
 // =============================================================
 // /admin/config-general — settings institucionales del portal.
@@ -86,8 +118,8 @@ function LoadingShell({ title }) {
 // Sección 1 — Redes Sociales
 // ─────────────────────────────────────────────────────────────────
 
-function RedesSocialesForm({ initial, disabled }) {
-  const upsertMut = useUpsertConfigClave('redes_sociales')
+function RedesSocialesForm({ initial, disabled, municipioId }) {
+  const upsertMut = useUpsertConfigClave('redes_sociales', { municipioIdOverride: municipioId })
   const [form, setForm] = useState(initial)
   const [error, setError] = useState('')
   const [ok, setOk]       = useState('')
@@ -156,18 +188,26 @@ function RedesSocialesForm({ initial, disabled }) {
   )
 }
 
-function RedesSocialesSection({ disabled }) {
-  const { data, isLoading } = useConfigClaveAdmin('redes_sociales', DEFAULT_REDES)
+function RedesSocialesSection({ disabled, municipioId }) {
+  const { data, isLoading } = useConfigClaveAdmin(
+    'redes_sociales', DEFAULT_REDES, { municipioIdOverride: municipioId },
+  )
   if (isLoading) return <LoadingShell title="Cargando redes sociales..." />
-  return <RedesSocialesForm initial={{ ...DEFAULT_REDES, ...(data ?? {}) }} disabled={disabled} />
+  return (
+    <RedesSocialesForm
+      initial={{ ...DEFAULT_REDES, ...(data ?? {}) }}
+      disabled={disabled}
+      municipioId={municipioId}
+    />
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Sección 2 — Datos del municipio
 // ─────────────────────────────────────────────────────────────────
 
-function DatosMunicipioForm({ initial, disabled }) {
-  const upsertMut = useUpsertConfigClave('datos_municipio')
+function DatosMunicipioForm({ initial, disabled, municipioId }) {
+  const upsertMut = useUpsertConfigClave('datos_municipio', { municipioIdOverride: municipioId })
   const [form, setForm] = useState(initial)
   const [error, setError] = useState('')
   const [ok, setOk]       = useState('')
@@ -236,10 +276,18 @@ function DatosMunicipioForm({ initial, disabled }) {
   )
 }
 
-function DatosMunicipioSection({ disabled }) {
-  const { data, isLoading } = useConfigClaveAdmin('datos_municipio', DEFAULT_DATOS)
+function DatosMunicipioSection({ disabled, municipioId }) {
+  const { data, isLoading } = useConfigClaveAdmin(
+    'datos_municipio', DEFAULT_DATOS, { municipioIdOverride: municipioId },
+  )
   if (isLoading) return <LoadingShell title="Cargando datos del municipio..." />
-  return <DatosMunicipioForm initial={{ ...DEFAULT_DATOS, ...(data ?? {}) }} disabled={disabled} />
+  return (
+    <DatosMunicipioForm
+      initial={{ ...DEFAULT_DATOS, ...(data ?? {}) }}
+      disabled={disabled}
+      municipioId={municipioId}
+    />
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -269,8 +317,8 @@ async function testPlanBConnection({ apiUrl, apiKey, numero, mensaje }) {
   return await res.json().catch(() => ({}))
 }
 
-function PlanBForm({ initial, disabled }) {
-  const upsertMut = useUpsertConfigClave('planb_config')
+function PlanBForm({ initial, disabled, municipioId }) {
+  const upsertMut = useUpsertConfigClave('planb_config', { municipioIdOverride: municipioId })
   const [form, setForm] = useState(initial)
   const [error, setError] = useState('')
   const [ok, setOk]       = useState('')
@@ -409,10 +457,18 @@ function PlanBForm({ initial, disabled }) {
   )
 }
 
-function PlanBSection({ disabled }) {
-  const { data, isLoading } = useConfigClaveAdmin('planb_config', DEFAULT_PLANB)
+function PlanBSection({ disabled, municipioId }) {
+  const { data, isLoading } = useConfigClaveAdmin(
+    'planb_config', DEFAULT_PLANB, { municipioIdOverride: municipioId },
+  )
   if (isLoading) return <LoadingShell title="Cargando Plan-B..." />
-  return <PlanBForm initial={{ ...DEFAULT_PLANB, ...(data ?? {}) }} disabled={disabled} />
+  return (
+    <PlanBForm
+      initial={{ ...DEFAULT_PLANB, ...(data ?? {}) }}
+      disabled={disabled}
+      municipioId={municipioId}
+    />
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -420,8 +476,14 @@ function PlanBSection({ disabled }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function ConfigGeneral() {
-  const { perfil } = useAuth()
-  const sinMunicipio = !perfil?.municipio_id
+  const { perfil, hasRole } = useAuth()
+  const municipioId  = useEffectiveMunicipioId()
+  const sinMunicipio = !municipioId
+  // Caso especial: superadmin con perfil cargado pero municipio
+  // todavía resolviendo via fallback. Mostramos un loading sutil
+  // en vez de el banner gold de "sin municipio".
+  const esperandoFallback =
+    !perfil?.municipio_id && hasRole('superadmin') && !municipioId
 
   return (
     <div className="space-y-5">
@@ -432,18 +494,27 @@ export default function ConfigGeneral() {
         </p>
       </header>
 
-      {sinMunicipio && (
-        <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
-          Tu usuario no tiene un municipio asignado, así que no podés guardar
-          cambios. Pedile al administrador que lo configure.
+      {esperandoFallback && (
+        <div className="card flex items-center justify-center p-12">
+          <Spinner />
         </div>
       )}
 
-      <div className="space-y-5">
-        <RedesSocialesSection  disabled={sinMunicipio} />
-        <DatosMunicipioSection disabled={sinMunicipio} />
-        <PlanBSection          disabled={sinMunicipio} />
-      </div>
+      {!esperandoFallback && sinMunicipio && (
+        <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
+          Tu usuario no tiene un municipio asignado y tampoco encontramos un
+          municipio activo de fallback. Pedile al administrador que configure
+          al menos un municipio.
+        </div>
+      )}
+
+      {!esperandoFallback && !sinMunicipio && (
+        <div className="space-y-5">
+          <RedesSocialesSection  disabled={sinMunicipio} municipioId={municipioId} />
+          <DatosMunicipioSection disabled={sinMunicipio} municipioId={municipioId} />
+          <PlanBSection          disabled={sinMunicipio} municipioId={municipioId} />
+        </div>
+      )}
     </div>
   )
 }

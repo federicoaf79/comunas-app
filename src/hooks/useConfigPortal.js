@@ -48,16 +48,20 @@ async function fetchClave({ client, municipioId, clave }) {
 
 // Hook genérico para el admin — filtra por municipio del perfil.
 // `defaultValue` se devuelve cuando la query no trae fila o falla.
-export function useConfigClaveAdmin(clave, defaultValue = null) {
+//
+// `municipioIdOverride` permite a páginas como ConfigGeneral pasar
+// un id resuelto externamente (caso superadmin con perfil.municipio_id
+// = null que cae a "primer municipio activo").
+export function useConfigClaveAdmin(clave, defaultValue = null, { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useQuery({
     queryKey: ['config-portal', clave, 'admin', municipioId ?? '__ALL__'],
     queryFn:  async () => {
       const v = await fetchClave({ client: supabase, municipioId, clave })
       return v ?? defaultValue
     },
-    enabled:  !!perfil,
+    enabled:  !!perfil && !!municipioId,
   })
 }
 
@@ -93,10 +97,13 @@ async function upsertClave({ municipioId, clave, valor }) {
   }
 }
 
-export function useUpsertConfigClave(clave) {
+// `municipioIdOverride` mismo motivo que en useConfigClaveAdmin:
+// cubre el caso superadmin (perfil.municipio_id null) que necesita
+// elegir un municipio destino para el upsert.
+export function useUpsertConfigClave(clave, { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useMutation({
     mutationFn: (valor) => upsertClave({ municipioId, clave, valor }),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['config-portal', clave] }),

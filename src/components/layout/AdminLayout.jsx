@@ -12,6 +12,24 @@ const TIPOS_CON_MODULO_PROPIO = new Set([
   'intendencia', 'admin', 'comuna',
 ])
 
+// Etiqueta amigable por tipo — usada en el sidebar para que tipos
+// con varias deps (ej: 'educacion' → Jardín + Escuela) aparezcan
+// agrupados con un solo nombre. Si el tipo no está acá, cae al
+// nombre de la primera dependencia con ese tipo.
+const LABEL_BY_TIPO = {
+  obras:          'Obras Públicas',
+  obras_publicas: 'Obras Públicas',
+  deporte:        'Polideportivo',
+  polideportivo:  'Polideportivo',
+  cementerio:     'Cementerio',
+  velatorio:      'Velatorio',
+  policia:        'Delegación Policial',
+  educacion:      'Educación',
+  bienes:         'Bienes',
+  ayuda_social:   'Ayuda Social',
+  social:         'Ayuda Social',
+}
+
 const NAV = [
   {
     to: '/admin',
@@ -142,10 +160,27 @@ function OtrasDependenciasSection() {
   const { data: deps = [], isLoading } = useDependencias()
   const [open, setOpen] = useState(true)
 
+  // Dedupe por TIPO (no por nombre) — si un municipio tiene
+  // varias dependencias con el mismo tipo (ej: tipo='educacion'
+  // con "Jardín de Infantes" + "Escuela Primaria"), las agrupamos
+  // en una sola entrada del sidebar. La página /admin/dependencia
+  // /:tipo se encarga de mostrar todas las que matcheen.
+  const seenTipo = new Set()
   const otras = (deps ?? [])
     .filter(d => d.activa !== false)
-    .filter(d => !TIPOS_CON_MODULO_PROPIO.has((d.tipo ?? '').toLowerCase()))
-    .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+    .filter(d => {
+      const t = (d.tipo ?? '').toLowerCase().trim()
+      if (!t) return false
+      if (TIPOS_CON_MODULO_PROPIO.has(t)) return false
+      if (seenTipo.has(t)) return false
+      seenTipo.add(t)
+      return true
+    })
+    .map(d => {
+      const t = (d.tipo ?? '').toLowerCase().trim()
+      return { ...d, _label: LABEL_BY_TIPO[t] ?? d.nombre, _tipoNorm: t }
+    })
+    .sort((a, b) => (a._label ?? '').localeCompare(b._label ?? ''))
 
   if (isLoading) return null
   if (otras.length === 0) return null
@@ -171,8 +206,8 @@ function OtrasDependenciasSection() {
         <div className="mt-1 flex flex-col gap-0.5">
           {otras.map(d => (
             <NavLink
-              key={d.id}
-              to={`/admin/dependencia/${d.tipo}`}
+              key={d._tipoNorm}
+              to={`/admin/dependencia/${d._tipoNorm}`}
               className={({ isActive }) =>
                 `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                   isActive
@@ -182,7 +217,7 @@ function OtrasDependenciasSection() {
               }
             >
               <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-              <span className="truncate">{d.nombre}</span>
+              <span className="truncate">{d._label}</span>
             </NavLink>
           ))}
         </div>
