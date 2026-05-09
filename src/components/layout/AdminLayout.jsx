@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
 
 // Tipos de dependencia que tienen su propio módulo top-level —
@@ -25,10 +25,18 @@ const LABEL_BY_TIPO = {
   velatorio:      'Velatorio',
   policia:        'Delegación Policial',
   educacion:      'Educación',
+  jardin:         'Jardín de Infantes',
+  primaria:       'Escuela Primaria',
+  secundaria:     'Escuela Secundaria',
   bienes:         'Bienes',
   ayuda_social:   'Ayuda Social',
   social:         'Ayuda Social',
 }
+
+// Tipos que se agrupan bajo el acordeón "Educación" en lugar de
+// listarse en el flat. Los demás tipos siguen apareciendo
+// individualmente como antes.
+const EDU_TIPOS = new Set(['jardin', 'primaria', 'secundaria', 'educacion'])
 
 const NAV = [
   {
@@ -152,38 +160,72 @@ const NAV = [
   },
 ]
 
+// Item plano del sidebar (usado tanto en "Otras" como en sub-items
+// de Educación, con un nivel extra de indent en el segundo caso).
+function SidebarDepLink({ tipo, label, indent = false }) {
+  return (
+    <NavLink
+      to={`/admin/dependencia/${tipo}`}
+      className={({ isActive }) =>
+        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+          indent ? 'pl-7' : ''
+        } ${
+          isActive
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+        }`
+      }
+    >
+      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+      <span className="truncate">{label}</span>
+    </NavLink>
+  )
+}
+
 // Sección colapsable que lista las dependencias activas del
 // municipio que NO tienen un módulo propio. Cada entrada navega
-// a /admin/dependencia/<tipo> y la página genérica se encarga
-// del resto.
+// a /admin/dependencia/<tipo>. Los tipos educativos (jardin /
+// primaria / secundaria / educacion) se agrupan bajo un acordeón
+// "Educación" anidado para que el sidebar no se llene con varias
+// líneas para una sola "área" del municipio.
 function OtrasDependenciasSection() {
   const { data: deps = [], isLoading } = useDependencias()
   const [open, setOpen] = useState(true)
+  const location = useLocation()
 
-  // Dedupe por TIPO (no por nombre) — si un municipio tiene
-  // varias dependencias con el mismo tipo (ej: tipo='educacion'
-  // con "Jardín de Infantes" + "Escuela Primaria"), las agrupamos
-  // en una sola entrada del sidebar. La página /admin/dependencia
-  // /:tipo se encarga de mostrar todas las que matcheen.
-  const seenTipo = new Set()
-  const otras = (deps ?? [])
-    .filter(d => d.activa !== false)
-    .filter(d => {
+  // Dedupe por TIPO + bucketing en dos grupos: educativos vs el
+  // resto. Los educativos van al acordeón anidado.
+  const { eduSubItems, otrosItems } = useMemo(() => {
+    const seenTipo = new Set()
+    const edu = []
+    const otros = []
+    for (const d of (deps ?? [])) {
+      if (d.activa === false) continue
       const t = (d.tipo ?? '').toLowerCase().trim()
-      if (!t) return false
-      if (TIPOS_CON_MODULO_PROPIO.has(t)) return false
-      if (seenTipo.has(t)) return false
+      if (!t) continue
+      if (TIPOS_CON_MODULO_PROPIO.has(t)) continue
+      if (seenTipo.has(t)) continue
       seenTipo.add(t)
-      return true
-    })
-    .map(d => {
-      const t = (d.tipo ?? '').toLowerCase().trim()
-      return { ...d, _label: LABEL_BY_TIPO[t] ?? d.nombre, _tipoNorm: t }
-    })
-    .sort((a, b) => (a._label ?? '').localeCompare(b._label ?? ''))
+      const item = { tipo: t, label: LABEL_BY_TIPO[t] ?? d.nombre }
+      if (EDU_TIPOS.has(t)) edu.push(item)
+      else                  otros.push(item)
+    }
+    edu.sort((a, b) => a.label.localeCompare(b.label))
+    otros.sort((a, b) => a.label.localeCompare(b.label))
+    return { eduSubItems: edu, otrosItems: otros }
+  }, [deps])
+
+  // Si la URL actual es /admin/dependencia/<tipo-edu>, el acordeón
+  // de Educación arranca expandido para mostrar el sub-item activo
+  // sin que el usuario tenga que abrirlo manualmente.
+  const eduPathActive = useMemo(() => {
+    const m = location.pathname.match(/^\/admin\/dependencia\/([^/]+)/)
+    return !!(m && EDU_TIPOS.has(m[1].toLowerCase()))
+  }, [location.pathname])
+  const [eduOpen, setEduOpen] = useState(eduPathActive || true)
 
   if (isLoading) return null
-  if (otras.length === 0) return null
+  if (eduSubItems.length === 0 && otrosItems.length === 0) return null
 
   return (
     <div className="mt-1 border-t border-border pt-2">
@@ -202,24 +244,44 @@ function OtrasDependenciasSection() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
         </svg>
       </button>
+
       {open && (
         <div className="mt-1 flex flex-col gap-0.5">
-          {otras.map(d => (
-            <NavLink
-              key={d._tipoNorm}
-              to={`/admin/dependencia/${d._tipoNorm}`}
-              className={({ isActive }) =>
-                `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
-                }`
-              }
-            >
-              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-              <span className="truncate">{d._label}</span>
-            </NavLink>
+          {/* Items planos (un tipo = un link) */}
+          {otrosItems.map(d => (
+            <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} />
           ))}
+
+          {/* Acordeón "Educación" si hay al menos un tipo educativo */}
+          {eduSubItems.length > 0 && (
+            <div className="mt-0.5">
+              <button
+                type="button"
+                onClick={() => setEduOpen(v => !v)}
+                aria-expanded={eduOpen}
+                className="flex w-full items-center justify-between gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium text-primary-500 transition-colors hover:bg-primary-50 hover:text-primary"
+              >
+                <span className="flex items-center gap-2.5">
+                  <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                  <span>Educación</span>
+                </span>
+                <svg
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  className={'h-3 w-3 shrink-0 transition-transform ' + (eduOpen ? 'rotate-180' : '')}
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              {eduOpen && (
+                <div className="mt-0.5 flex flex-col gap-0.5">
+                  {eduSubItems.map(d => (
+                    <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} indent />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

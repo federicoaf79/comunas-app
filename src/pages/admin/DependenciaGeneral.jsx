@@ -55,6 +55,9 @@ const DEP_INFO = {
   velatorio:      { detalle: 'Servicios de despedida y acompañamiento.',            horario: 'Disponibilidad 24/7' },
   policia:        { detalle: 'Seguridad ciudadana y emergencias.',                  horario: '24/7 · 911 / 101' },
   educacion:      { detalle: 'Becas, programas educativos y biblioteca.',           horario: 'Lun a Vie · 7:00 – 13:00' },
+  jardin:         { detalle: 'Becas, programas educativos y biblioteca.',           horario: 'Lun a Vie · 7:00 – 13:00' },
+  primaria:       { detalle: 'Becas, programas educativos y biblioteca.',           horario: 'Lun a Vie · 7:00 – 13:00' },
+  secundaria:     { detalle: 'Becas, programas educativos y biblioteca.',           horario: 'Lun a Vie · 7:00 – 13:00' },
   bienes:         { detalle: 'Catastro, bienes inmuebles y patrimonio.',            horario: 'Lun a Vie · 7:00 – 13:00' },
   ayuda_social:   { detalle: 'Programas de asistencia y acompañamiento social.',    horario: 'Lun a Vie · 8:00 – 13:00' },
   social:         { detalle: 'Programas de asistencia y acompañamiento social.',    horario: 'Lun a Vie · 8:00 – 13:00' },
@@ -66,7 +69,7 @@ function extraTabKey(tipo) {
   if (/ayuda_social|social|asisten/.test(t))    return 'beneficiarios'
   if (/obras|infra|catastro/.test(t))           return 'reclamos'
   if (/deport|recreaci|polideport/.test(t))     return 'reservas'
-  if (/educ|escuel|biblioteca/.test(t))         return 'calendario'
+  if (/educ|escuel|biblioteca|jardin|primaria|secundaria/.test(t)) return 'calendario'
   return null
 }
 
