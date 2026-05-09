@@ -18,12 +18,12 @@ import { monthRange } from './useAdministracion'
 
 const TIMEOUT_MS = 8000
 
-const RESERVA_COLS = `
-  id, municipio_id, dependencia_id, vecino_id, fecha,
-  hora_inicio, hora_fin, motivo, cant_personas, estado,
-  costo, notas_admin, created_at,
-  vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono )
-`
+// Columnas reales de sum_reservas en producción. La tabla guarda
+// el solicitante como texto plano en una columna `solicitante`
+// (no hay FK a vecinos) y la franja horaria en una sola columna
+// `horario` (no `hora_inicio`/`hora_fin`). Sin joins.
+const RESERVA_COLS =
+  'id, municipio_id, dependencia_id, solicitante, motivo, fecha, horario, estado, costo, created_at'
 
 function withTimeout() {
   const controller = new AbortController()
