@@ -55,17 +55,63 @@ function matchesKeywords(item, keywords) {
   })
 }
 
+// Cadena de fallback para leer RSS desde el browser:
+//
+//   1. rss2json.com — convierte RSS a JSON. Cuando funciona da
+//      thumbnails ya extraídos y un shape estable, pero su plan
+//      gratuito devuelve 422 para varios medios argentinos.
+//   2. corsproxy.io — proxy CORS-permisivo que sirve el XML crudo.
+//      Lo parseamos manual con DOMParser y normalizamos al mismo
+//      shape que rss2json para que el resto del componente no se
+//      entere de qué fuente vino.
+//
+// Devuelve hasta 30 items crudos para que el filtro de keywords
+// tenga material — luego acotamos a MAX_ITEMS (8) para mostrar.
 async function fetchRss(rawRssUrl) {
-  const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rawRssUrl)}`
-  const res = await fetch(proxyUrl)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const data = await res.json()
-  if (data?.status !== 'ok') {
-    throw new Error(data?.message ?? 'No se pudo leer el RSS.')
+  // Intento 1 — rss2json
+  try {
+    const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rawRssUrl)}`
+    const res = await fetch(proxyUrl)
+    if (res.ok) {
+      const data = await res.json()
+      if (data?.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
+        return data.items.slice(0, 30)
+      }
+    }
+  } catch (e) {
+    console.warn('[NoticiasProvinciales] rss2json falló, intento corsproxy:', e?.message)
   }
-  // Devolvemos hasta 30 items crudos para que el filtro tenga
-  // material — luego acotamos a MAX_ITEMS (8) para mostrar.
-  return (data.items ?? []).slice(0, 30)
+
+  // Intento 2 — corsproxy.io + DOMParser
+  const corsUrl = `https://corsproxy.io/?${encodeURIComponent(rawRssUrl)}`
+  const res = await fetch(corsUrl)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const text = await res.text()
+  return parseRssXml(text).slice(0, 30)
+}
+
+// Parsea un string XML de RSS 2.0 a la misma shape que produce
+// rss2json (campos: title, link, pubDate, description, thumbnail,
+// guid). Acepta tanto <link>url</link> (RSS clásico) como
+// <link href="url"/> (Atom-flavored).
+function parseRssXml(xmlText) {
+  const parser = new DOMParser()
+  const xml = parser.parseFromString(xmlText, 'text/xml')
+  if (xml.querySelector('parsererror')) {
+    throw new Error('La respuesta no es un RSS válido.')
+  }
+  return [...xml.querySelectorAll('item')].map(item => {
+    const linkEl  = item.querySelector('link')
+    const linkTxt = linkEl?.textContent?.trim() || linkEl?.getAttribute('href') || ''
+    return {
+      title:       item.querySelector('title')?.textContent?.trim() ?? '',
+      link:        linkTxt,
+      pubDate:     item.querySelector('pubDate')?.textContent?.trim() ?? '',
+      description: item.querySelector('description')?.textContent ?? '',
+      thumbnail:   item.querySelector('enclosure')?.getAttribute('url') ?? null,
+      guid:        item.querySelector('guid')?.textContent?.trim() || linkTxt,
+    }
+  })
 }
 
 // Intenta resolver una URL de imagen para el item. Prioriza:

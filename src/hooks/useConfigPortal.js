@@ -16,30 +16,24 @@ import { useAuth } from '../context/AuthContext'
 const CLAVE_FUENTES_RSS = 'fuentes_rss'
 
 // Defaults que la app usa cuando no hay config persistida (primer
-// uso, fila sin crear, o RLS bloquea la lectura). El portal arranca
-// mostrando estas tres fuentes hasta que el admin las edite.
+// uso, fila sin crear, o RLS bloquea la lectura). Estos dos feeds
+// pasan el filtro CORS del plan gratuito de rss2json y, si llegan
+// a fallar, el componente cae automáticamente a corsproxy.io + parseo
+// manual del XML (ver NoticiasProvinciales.jsx).
 export const DEFAULT_FUENTES_RSS = [
   {
     key:   'infobae',
     label: 'Infobae',
-    url:   'https://www.infobae.com/argentina-rss.xml',
+    url:   'https://www.infobae.com/feed/',
     home:  'https://www.infobae.com/',
     active: true,
     palabras_clave: [],
   },
   {
-    key:   'lanacion',
-    label: 'La Nación',
-    url:   'https://www.lanacion.com.ar/arc/outboundfeeds/rss/',
-    home:  'https://www.lanacion.com.ar/',
-    active: true,
-    palabras_clave: [],
-  },
-  {
-    key:   'batimes',
-    label: 'BA Times',
-    url:   'https://www.batimes.com.ar/feed',
-    home:  'https://www.batimes.com.ar/',
+    key:   'clarin',
+    label: 'Clarín',
+    url:   'https://www.clarin.com/rss/lo-ultimo/',
+    home:  'https://www.clarin.com/',
     active: true,
     palabras_clave: [],
   },
