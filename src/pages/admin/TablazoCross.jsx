@@ -175,8 +175,9 @@ export default function TablazoCross() {
     }
     // Tomamos solo dependencias activas; las que no estén activas
     // pero tengan turnos del día también las mostramos al final.
+    // La columna real en DB se llama `activa` (femenino).
     const activas = (dependencias ?? [])
-      .filter(d => d.activo !== false)
+      .filter(d => d.activa !== false)
       .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
 
     const conTurnosFueraDeCatalogo = []
@@ -186,7 +187,7 @@ export default function TablazoCross() {
           id:     depId,
           nombre: rows[0].dependencia.nombre,
           tipo:   '',
-          activo: true,
+          activa: true,
         })
       }
     }

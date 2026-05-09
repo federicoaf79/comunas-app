@@ -194,11 +194,12 @@ export async function cancelarTurno(id) {
 
 // fetchDependencias — fallback cuando el embed de turnos no trae
 // el nombre (RLS o falta de FK). Cacheado por TanStack vía useDependencias.
-// Incluye `tipo` y `activo` para que los consumers puedan filtrar
+// Incluye `tipo` y `activa` para que los consumers puedan filtrar
 // por categoría (caps/juzgado/sum/intendencia) y mostrar solo las
-// activas en los pickers.
+// activas en los pickers. La columna en la DB se llama `activa`
+// (femenino), distinta del `activo` de usuarios.
 export async function fetchDependencias(municipioId) {
-  let q = supabase.from('dependencias').select('id, nombre, tipo, municipio_id, activo')
+  let q = supabase.from('dependencias').select('id, nombre, tipo, municipio_id, activa')
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
   if (error) {
@@ -315,9 +316,9 @@ export function useDependenciaByTipo(tipo) {
     queryFn: async () => {
       let q = supabase
         .from('dependencias')
-        .select('id, nombre, tipo, municipio_id, activo')
+        .select('id, nombre, tipo, municipio_id, activa')
         .eq('tipo', tipo)
-        .eq('activo', true)
+        .eq('activa', true)
       if (municipioId) q = q.eq('municipio_id', municipioId)
       const { data, error } = await q.limit(1).maybeSingle()
       if (error) {
