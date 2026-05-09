@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useDependencias } from '../../hooks/useTurnos'
+import { useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
 import {
   useSumReservas, useCreateSumReserva, useUpdateSumReservaEstado,
@@ -417,11 +417,10 @@ export default function SUM() {
   const canApprove = hasRole(['admin_comuna', 'superadmin'])
 
   const [tab, setTab] = useState('reservas')
-  const { data: dependencias = [], isLoading: depsLoading } = useDependencias()
-  const depSum = useMemo(
-    () => dependencias.find(d => /sum|sal[oó]n/i.test(d.tipo ?? '')),
-    [dependencias],
-  )
+  // Busca la dependencia "sum" del municipio del operador. Si es
+  // superadmin (municipio_id = null), useDependenciaByTipo cae a la
+  // primera dependencia activa con ese tipo en cualquier municipio.
+  const { data: depSum = null, isLoading: depsLoading } = useDependenciaByTipo('sum')
 
   return (
     <div className="space-y-5">

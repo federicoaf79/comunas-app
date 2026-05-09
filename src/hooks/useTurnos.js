@@ -194,8 +194,11 @@ export async function cancelarTurno(id) {
 
 // fetchDependencias — fallback cuando el embed de turnos no trae
 // el nombre (RLS o falta de FK). Cacheado por TanStack vía useDependencias.
+// Incluye `tipo` y `activo` para que los consumers puedan filtrar
+// por categoría (caps/juzgado/sum/intendencia) y mostrar solo las
+// activas en los pickers.
 export async function fetchDependencias(municipioId) {
-  let q = supabase.from('dependencias').select('id, nombre, municipio_id')
+  let q = supabase.from('dependencias').select('id, nombre, tipo, municipio_id, activo')
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
   if (error) {
@@ -290,6 +293,39 @@ export function useDependencias() {
   return useQuery({
     queryKey: ['dependencias', municipioId ?? '__ALL__'],
     queryFn:  () => fetchDependencias(municipioId),
+    enabled,
+  })
+}
+
+// Devuelve UNA dependencia por `tipo` (caps/juzgado/sum/intendencia)
+// para el municipio del usuario.
+//
+// Caso superadmin (perfil.municipio_id = null): no se filtra por
+// municipio — toma la primera dependencia activa del tipo pedido
+// que exista en cualquier municipio del sistema. Esto permite que
+// las pantallas de Juez de Paz / SUM se rendericen sin romper la
+// experiencia del superadmin que no está atado a un municipio.
+export function useDependenciaByTipo(tipo) {
+  const { perfil } = useAuth()
+  const municipioId = perfil?.municipio_id ?? null
+  const enabled = !!perfil && !!tipo
+
+  return useQuery({
+    queryKey: ['dependencia-by-tipo', tipo, municipioId ?? '__ALL__'],
+    queryFn: async () => {
+      let q = supabase
+        .from('dependencias')
+        .select('id, nombre, tipo, municipio_id, activo')
+        .eq('tipo', tipo)
+        .eq('activo', true)
+      if (municipioId) q = q.eq('municipio_id', municipioId)
+      const { data, error } = await q.limit(1).maybeSingle()
+      if (error) {
+        console.warn('[useTurnos] useDependenciaByTipo error:', error.message)
+        return null
+      }
+      return data
+    },
     enabled,
   })
 }

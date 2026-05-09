@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useTurnos, useDependencias } from '../../hooks/useTurnos'
+import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useQueryClient } from '@tanstack/react-query'
 import { todayArgYMD, shortDateOf, timeOf } from '../../lib/datetime'
 import Tabs from '../../components/ui/Tabs'
@@ -320,11 +320,10 @@ export default function JuezDePaz() {
   const [tab, setTab] = useState('dia')
   const [modalOpen, setModalOpen] = useState(false)
 
-  const { data: dependencias = [], isLoading: depsLoading } = useDependencias()
-  const depJuez = useMemo(
-    () => dependencias.find(d => /juzgado|paz/i.test(d.tipo ?? '')),
-    [dependencias],
-  )
+  // Busca la dependencia "juzgado" del municipio del operador. Si
+  // es superadmin (municipio_id = null), useDependenciaByTipo cae a
+  // la primera dependencia activa con ese tipo en cualquier municipio.
+  const { data: depJuez = null, isLoading: depsLoading } = useDependenciaByTipo('juzgado')
 
   return (
     <div className="space-y-5">
