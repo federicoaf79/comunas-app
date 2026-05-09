@@ -291,7 +291,7 @@ export default function NoticiasProvinciales() {
             {fuentesActivas.map(f => (
               <FuenteChip
                 key={f.key}
-                label={f.label}
+                label={f.nombre ?? f.label}
                 active={(fuenteKey ?? fuentesActivas[0]?.key) === f.key}
                 onClick={() => setFuenteKey(f.key)}
               />
@@ -327,7 +327,7 @@ export default function NoticiasProvinciales() {
                     rel="noopener noreferrer"
                     className="font-semibold underline hover:no-underline"
                   >
-                    Visitar {fuente.label} directamente
+                    Visitar {fuente.nombre ?? fuente.label} directamente
                   </a>
                 </>
               )}

@@ -16,24 +16,44 @@ import { useAuth } from '../context/AuthContext'
 const CLAVE_FUENTES_RSS = 'fuentes_rss'
 
 // Defaults que la app usa cuando no hay config persistida (primer
-// uso, fila sin crear, o RLS bloquea la lectura). Estos dos feeds
-// pasan el filtro CORS del plan gratuito de rss2json y, si llegan
-// a fallar, el componente cae automáticamente a corsproxy.io + parseo
-// manual del XML (ver NoticiasProvinciales.jsx).
+// uso, fila sin crear, o RLS bloquea la lectura). Selección pensada
+// para municipios rurales del interior: gestión municipal, clima,
+// agro y vida en sociedades chicas. El componente cae a corsproxy.io
+// si rss2json falla para alguno de estos feeds.
+//
+// Las fuentes nuevas usan `nombre`; el componente acepta tanto
+// `nombre` como `label` para compatibilidad con configs viejas
+// guardadas vía /admin/config (que persistían `label`).
 export const DEFAULT_FUENTES_RSS = [
   {
-    key:   'infobae',
-    label: 'Infobae',
-    url:   'https://www.infobae.com/feed/',
-    home:  'https://www.infobae.com/',
+    key:    'entrerriano-municipios',
+    nombre: 'Municipios — Interior',
+    url:    'https://www.entrerrianodigital.com/categoria/municipios/feed/',
+    home:   'https://www.entrerrianodigital.com',
     active: true,
-    palabras_clave: [],
+    palabras_clave: ['municipio', 'interior', 'localidad', 'comisión'],
   },
   {
-    key:   'clarin',
-    label: 'Clarín',
-    url:   'https://www.clarin.com/rss/lo-ultimo/',
-    home:  'https://www.clarin.com/',
+    key:    'entrerriano-clima',
+    nombre: 'Clima — Interior',
+    url:    'https://www.entrerrianodigital.com/categoria/clima/feed/',
+    home:   'https://www.entrerrianodigital.com',
+    active: true,
+    palabras_clave: ['clima', 'lluvia', 'temperatura', 'alerta'],
+  },
+  {
+    key:    'clarin-rural',
+    nombre: 'Clarín Rural',
+    url:    'https://www.clarin.com/rss/rural/',
+    home:   'https://www.clarin.com',
+    active: true,
+    palabras_clave: ['campo', 'agro', 'cosecha', 'rural', 'soja', 'maiz'],
+  },
+  {
+    key:    'clarin-sociedad',
+    nombre: 'Clarín Sociedad',
+    url:    'https://www.clarin.com/rss/sociedad/',
+    home:   'https://www.clarin.com',
     active: true,
     palabras_clave: [],
   },
