@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
+import { supabaseAnon } from '../../lib/supabaseAnon'
 import Spinner from '../../components/ui/Spinner'
 import NoticiaCardSmall      from '../../components/portal/NoticiaCardSmall'
 import CategoriaPlaceholder  from '../../components/portal/CategoriaPlaceholder'
 import NoticiasProvinciales  from '../../components/portal/NoticiasProvinciales'
+import RecursosSection       from '../../components/portal/RecursosSection'
 import { getResumen } from '../../lib/noticiasCategoria'
 import { dateOf } from '../../lib/datetime'
 
@@ -83,50 +86,170 @@ const ACCESOS_RAPIDOS = [
   },
 ]
 
-const SERVICIOS = [
-  {
-    nombre:  'Sala de Primeros Auxilios',
-    horario: 'Lunes a Viernes · 8:00 – 20:00',
-    detalle: 'Atención médica, vacunación y enfermería.',
-    icon: (
+// Detalle/horario por `tipo` de dependencia. La tabla solo guarda
+// nombre/tipo/activa, así que el copy descriptivo lo enriquecemos
+// acá. Si una dep llega con un tipo no listado, se renderiza solo
+// con su nombre (sin detalle ni horario).
+const DEP_DESCRIPTOR = {
+  caps:        { detalle: 'Atención médica, vacunación y enfermería.',          horario: 'Lun a Vie · 8:00 – 20:00' },
+  juzgado:     { detalle: 'Trámites civiles, certificaciones y mediación.',     horario: 'Lun a Vie · 7:00 – 13:00' },
+  sum:         { detalle: 'Eventos comunitarios, capacitaciones y reuniones.',  horario: 'Reservas · consultar disponibilidad' },
+  intendencia: { detalle: 'Mesa de entradas, tesorería y trámites generales.',  horario: 'Lun a Vie · 7:00 – 13:00' },
+  obras:       { detalle: 'Permisos de construcción e infraestructura.',         horario: 'Lun a Vie · 7:00 – 13:00' },
+  deporte:     { detalle: 'Actividades deportivas, canchas y eventos.',          horario: 'Consultar horarios' },
+  cementerio:  { detalle: 'Servicios fúnebres y memoriales.',                    horario: 'Todos los días · 8:00 – 18:00' },
+  velatorio:   { detalle: 'Servicios de despedida y acompañamiento.',            horario: 'Disponibilidad 24/7' },
+  policia:     { detalle: 'Seguridad ciudadana y emergencias.',                  horario: '24/7 · 911 / 101' },
+  educacion:   { detalle: 'Becas, programas educativos y biblioteca.',           horario: 'Lun a Vie · 7:00 – 13:00' },
+  bienes:      { detalle: 'Catastro, bienes inmuebles y patrimonio.',            horario: 'Lun a Vie · 7:00 – 13:00' },
+  social:      { detalle: 'Ayuda social y programas de asistencia.',             horario: 'Lun a Vie · 7:00 – 13:00' },
+}
+
+// Ícono SVG inline por `tipo` de dependencia. Devuelve un default
+// (edificio genérico) cuando el tipo no matchea ninguno conocido.
+function iconForTipo(tipo) {
+  const t = (tipo ?? '').toLowerCase()
+  // CAPS / Salud — cruz
+  if (/caps|salud|sala/.test(t)) {
+    return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
         <circle cx="12" cy="12" r="9" />
         <path strokeLinecap="round" d="M12 8v8M8 12h8" />
       </svg>
-    ),
-  },
-  {
-    nombre:  'Juzgado de Paz',
-    horario: 'Lunes a Viernes · 7:00 – 13:00',
-    detalle: 'Trámites civiles, certificaciones y mediación.',
-    icon: (
+    )
+  }
+  // Juzgado — balanza
+  if (/juzgado|paz|justicia/.test(t)) {
+    return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
         <path strokeLinecap="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
       </svg>
-    ),
-  },
-  {
-    nombre:  'Salón de Usos Múltiples',
-    horario: 'Reservas — consultar disponibilidad',
-    detalle: 'Eventos comunitarios, capacitaciones y reuniones.',
-    icon: (
+    )
+  }
+  // SUM / cultural — salón
+  if (/sum|sal[oó]n|cultural/.test(t)) {
+    return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
       </svg>
-    ),
-  },
-  {
-    nombre:  'Administración',
-    horario: 'Lunes a Viernes · 7:00 – 13:00',
-    detalle: 'Mesa de entradas, tesorería y trámites generales.',
-    icon: (
+    )
+  }
+  // Intendencia / admin — edificio
+  if (/intendencia|admin|gobierno|comuna|gesti/.test(t)) {
+    return (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" />
       </svg>
-    ),
-  },
+    )
+  }
+  // Obras — casco de construcción
+  if (/obra|construc|infra|catastro/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 18h18M5 18v-3a7 7 0 0 1 14 0v3M9 7v4M15 7v4M9 11h6" />
+      </svg>
+    )
+  }
+  // Deporte — pelota
+  if (/deport|recreaci/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <circle cx="12" cy="12" r="9" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5-3 4-3-4 3-5zM3 12l5 3 4-3-4-3-5 3zM21 12l-5 3-4-3 4-3 5 3zM12 21l-3-5 3-4 3 4-3 5z" />
+      </svg>
+    )
+  }
+  // Cementerio — flor / memorial
+  if (/cementerio|necr/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <circle cx="12" cy="9" r="2.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.5V3M12 11.5V21M9.5 9c-2 0-3 1-3 2s1 2 3 2M14.5 9c2 0 3 1 3 2s-1 2-3 2M5 21h14" />
+      </svg>
+    )
+  }
+  // Velatorio — corazón / paz
+  if (/velatorio|despedida|f[uú]nebre/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
+      </svg>
+    )
+  }
+  // Policía — escudo
+  if (/polic|seguridad|defensa/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z" />
+      </svg>
+    )
+  }
+  // Educación — birrete + libro
+  if (/educ|escuel|biblioteca/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2 9l10-4 10 4-10 4-10-4zM6 11v5c0 1 3 3 6 3s6-2 6-3v-5M21 10v6" />
+      </svg>
+    )
+  }
+  // Bienes / catastro — llaves
+  if (/bienes|inmueble|patrim|llaves/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <circle cx="8" cy="14" r="3.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11 14h10v3M18 14v3" />
+      </svg>
+    )
+  }
+  // Social / familia — manos
+  if (/social|familia|comunidad|asisten/.test(t)) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 11.5V8a2 2 0 1 1 4 0v6l3-1 2 1v3a2 2 0 0 1-2 2h-6l-4-4-2 1V8a2 2 0 1 1 4 0v3.5" />
+      </svg>
+    )
+  }
+  // Default — edificio genérico
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <rect x="4" y="4" width="16" height="16" rx="2" />
+      <path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" />
+    </svg>
+  )
+}
+
+// Lista mostrada cuando la query a `dependencias` no devuelve nada
+// (DB vacía, RLS bloquea anon, o falla la red). Replica el mínimo
+// histórico de la sección para que el portal nunca se vea pelado.
+const FALLBACK_SERVICIOS = [
+  { id: 'fb-caps',        nombre: 'Sala de Primeros Auxilios', tipo: 'caps' },
+  { id: 'fb-juzgado',     nombre: 'Juzgado de Paz',            tipo: 'juzgado' },
+  { id: 'fb-sum',         nombre: 'Salón de Usos Múltiples',   tipo: 'sum' },
+  { id: 'fb-intendencia', nombre: 'Administración',            tipo: 'intendencia' },
 ]
+
+// Hook anon — la migration 20250507000002_portal_publico habilita
+// SELECT a anon en `dependencias`, así que el portal lee sin login.
+async function fetchDependenciasPublicas() {
+  const { data, error } = await supabaseAnon
+    .from('dependencias')
+    .select('id, nombre, tipo, activa')
+    .order('nombre', { ascending: true })
+  if (error) {
+    console.warn('[PortalPublico] fetchDependenciasPublicas:', error.message)
+    return null
+  }
+  return data ?? []
+}
+
+function useDependenciasPublicas() {
+  return useQuery({
+    queryKey: ['dependencias-publicas'],
+    queryFn:  fetchDependenciasPublicas,
+    staleTime: 5 * 60 * 1000,
+  })
+}
 
 // ─────────────────────────────────────────────────────────────────
 // SVGs decorativos / institucionales
@@ -656,6 +779,14 @@ function NoticiasSection({ noticias, loading, error }) {
 }
 
 function ServiciosSection() {
+  const { data, isLoading } = useDependenciasPublicas()
+  // Tomamos solo dependencias activas. Si la query falló (data === null)
+  // o el resultado está vacío, mostramos la lista mínima de fallback
+  // para que la sección nunca quede pelada.
+  const dbActivas = (data ?? []).filter(d => d.activa !== false)
+  const useFallback = !isLoading && (data === null || dbActivas.length === 0)
+  const items = useFallback ? FALLBACK_SERVICIOS : dbActivas
+
   return (
     <section id="servicios" aria-labelledby="servicios-h2" className="scroll-mt-20 bg-background">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
@@ -670,33 +801,52 @@ function ServiciosSection() {
             Horarios y servicios de las distintas dependencias de la Comisión Municipal Real Sayana.
           </p>
         </header>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {SERVICIOS.map(s => (
-            <div
-              key={s.nombre}
-              className="flex flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-shadow hover:shadow-lg sm:p-6"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent">
-                {s.icon}
-              </div>
-              <p className="text-base font-semibold text-primary">{s.nombre}</p>
-              <p className="text-xs text-primary-500 sm:text-sm">{s.detalle}</p>
-              <p className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <path strokeLinecap="round" d="M12 7v5l3 2" />
-                </svg>
-                {s.horario}
-              </p>
-            </div>
-          ))}
-        </div>
+
+        {isLoading ? (
+          <div className="card flex items-center justify-center p-12">
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {items.map(d => {
+              const desc    = DEP_DESCRIPTOR[d.tipo]
+              const detalle = desc?.detalle ?? null
+              const horario = desc?.horario ?? null
+              return (
+                <div
+                  key={d.id ?? d.nombre}
+                  className="flex flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-shadow hover:shadow-lg sm:p-6"
+                >
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent">
+                    {iconForTipo(d.tipo)}
+                  </div>
+                  <p className="text-base font-semibold text-primary">{d.nombre}</p>
+                  {detalle && (
+                    <p className="text-xs text-primary-500 sm:text-sm">{detalle}</p>
+                  )}
+                  {horario && (
+                    <p className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" />
+                        <path strokeLinecap="round" d="M12 7v5l3 2" />
+                      </svg>
+                      {horario}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </section>
   )
 }
 
 function FooterSection() {
+  const { data: depData } = useDependenciasPublicas()
+  const depList = (depData ?? []).filter(d => d.activa !== false)
+  const footerDeps = depList.length > 0 ? depList : FALLBACK_SERVICIOS
   return (
     <footer id="contacto" className="bg-primary-900 text-white">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14">
@@ -750,10 +900,12 @@ function FooterSection() {
               Dependencias
             </h3>
             <ul className="mt-3 space-y-1.5 text-sm text-white/80">
-              {SERVICIOS.map(s => (
-                <li key={s.nombre} className="flex flex-col">
+              {footerDeps.map(s => (
+                <li key={s.id ?? s.nombre} className="flex flex-col">
                   <span className="font-medium text-white/90">{s.nombre}</span>
-                  <span className="text-xs text-white/60">{s.horario}</span>
+                  <span className="text-xs text-white/60">
+                    {DEP_DESCRIPTOR[s.tipo]?.horario ?? '—'}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -817,6 +969,7 @@ export default function PortalPublico() {
         />
         <NoticiasProvinciales />
         <ServiciosSection />
+        <RecursosSection />
       </main>
 
       <FooterSection />
