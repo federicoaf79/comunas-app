@@ -6,11 +6,14 @@ import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
-// Tablero de turnos cruzado — vista kanban horizontal.
+// Tablero de turnos — vista de lista agrupada por franja horaria.
 //
-// Una columna por dependencia activa, dentro de cada columna los
-// turnos del día seleccionado ordenados por hora. Pensado para que
-// el operador vea de un vistazo cómo está cargada la jornada.
+// Reemplaza el antiguo layout Kanban horizontal (una columna por
+// dependencia) por una lista vertical organizada por hora. Cada
+// franja muestra un separador con la hora a la izquierda y todos
+// los turnos de esa franja debajo, con badge coloreado por
+// dependencia. Escala mucho mejor cuando hay muchas dependencias
+// y se colapsa naturalmente en mobile.
 // =============================================================
 
 const ESTADOS_OPTS = [
@@ -47,15 +50,20 @@ const CANAL_CLASS = {
   presencial: 'canal-presencial',
 }
 
-// Color del borde superior de cada columna según el `tipo` de la
-// dependencia. Cero verde — los matches caen a tonos navy/azul/gold/gris.
-function topBorderForTipo(tipo) {
+// Color del badge de dependencia según `tipo`. Cero verde — todas
+// las variantes caen a navy / azul OK / gold / gris / slate.
+function depBadgeClass(tipo) {
   const t = (tipo ?? '').toLowerCase()
-  if (/caps|salud|sala/.test(t))                return 'border-t-ok'         // Sala PA → azul
-  if (/juzgado|paz/.test(t))                    return 'border-t-primary'    // Juez de Paz → navy
-  if (/sum|sal[oó]n|cultural/.test(t))          return 'border-t-accent'     // SUM → gold
-  if (/intendencia|admin|gobierno|comuna/.test(t)) return 'border-t-gray-400' // Admin → gris
-  return 'border-t-primary-200'
+  if (/caps|salud|sala/.test(t))                   return 'bg-ok-50 text-ok-700 ring-ok-100'
+  if (/juzgado|paz|justicia/.test(t))              return 'bg-primary-100 text-primary-700 ring-primary-200'
+  if (/sum|sal[oó]n|cultural/.test(t))             return 'bg-accent-50 text-accent-700 ring-accent-100'
+  if (/intendencia|admin|gobierno|comuna/.test(t)) return 'bg-gray-100 text-gray-700 ring-gray-300'
+  if (/obra|construc|infra|catastro/.test(t))      return 'bg-slate-100 text-slate-700 ring-slate-200'
+  if (/deport|recreaci|polideport/.test(t))        return 'bg-accent-100 text-accent-800 ring-accent-200'
+  if (/educ|escuel|biblioteca/.test(t))            return 'bg-accent-50 text-accent-700 ring-accent-100'
+  if (/social|familia|asisten/.test(t))            return 'bg-primary-50 text-primary-700 ring-primary-200'
+  if (/polic|seguridad/.test(t))                   return 'bg-primary-100 text-primary-700 ring-primary-200'
+  return 'bg-primary-50 text-primary-700 ring-primary-200'
 }
 
 function vecinoNombre(v) {
@@ -65,86 +73,82 @@ function vecinoNombre(v) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Card de turno dentro de la columna
+// Fila de turno (un item dentro del bloque de la franja horaria)
 // ─────────────────────────────────────────────────────────────────
 
-function TurnoCard({ turno }) {
+function TurnoRow({ turno, onConfirmar, onCancelar }) {
   const isFamiliar = !!turno.metadata?.para_familiar
-  const nombre = isFamiliar
+  const nombrePrincipal = isFamiliar
     ? (turno.metadata.familiar_nombre || vecinoNombre(turno.vecino))
     : vecinoNombre(turno.vecino)
 
-  return (
-    <article className="rounded-lg border border-border bg-white p-3 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-sora text-base font-bold text-primary">
-          {timeOf(turno.fecha_hora) || '—'}
-        </p>
-        {turno.numero_turno && (
-          <span className="text-[11px] font-medium text-primary-400">
-            #{turno.numero_turno}
-          </span>
-        )}
-      </div>
-      <p className="mt-1 line-clamp-2 text-sm font-medium text-primary-700">
-        {nombre}
-      </p>
-      {isFamiliar && turno.vecino && (
-        <p className="mt-0.5 text-[11px] text-primary-400">
-          Solicitó: {vecinoNombre(turno.vecino)}
-        </p>
-      )}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className={ESTADO_CLASS[turno.estado] ?? 'estado-pendiente'}>
-          {ESTADO_LABEL[turno.estado] ?? turno.estado}
-        </span>
-        {turno.canal && (
-          <span className={CANAL_CLASS[turno.canal] ?? 'canal-presencial'}>
-            {turno.canal}
-          </span>
-        )}
-        {isFamiliar && (
-          <span
-            className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-semibold text-accent-700 ring-1 ring-inset ring-accent-100"
-            title={turno.metadata.vinculo ? `Vínculo: ${turno.metadata.vinculo}` : 'Turno familiar'}
-          >
-            <span aria-hidden="true">👨‍👩‍👧</span>
-            Familiar
-          </span>
-        )}
-      </div>
-    </article>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Columna por dependencia
-// ─────────────────────────────────────────────────────────────────
-
-function DependenciaColumn({ dependencia, turnos }) {
-  const top = topBorderForTipo(dependencia.tipo)
-  const sorted = [...turnos].sort((a, b) => (a.fecha_hora ?? '').localeCompare(b.fecha_hora ?? ''))
+  const depNombre = turno.dependencia?.nombre ?? turno.dependencia_nombre ?? '—'
+  const depCls    = depBadgeClass(turno.dependencia?.tipo)
 
   return (
-    <div className={`flex w-72 shrink-0 flex-col rounded-xl border-t-4 border border-border bg-primary-50/60 ${top}`}>
-      <header className="border-b border-border bg-white px-4 py-3">
-        <h3 className="font-sora text-sm font-bold text-primary">
-          {dependencia.nombre}
-        </h3>
-        <p className="mt-0.5 text-xs font-medium text-primary-400">
-          {turnos.length} turno{turnos.length === 1 ? '' : 's'} hoy
+    <li className="group flex flex-wrap items-start gap-3 p-4 transition-colors hover:bg-primary-50/40">
+      {/* Badge de dependencia, coloreada por tipo */}
+      <span
+        className={
+          'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ' +
+          depCls
+        }
+      >
+        {depNombre}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-primary sm:text-base">
+          {nombrePrincipal}
         </p>
-      </header>
-      <div className="flex flex-1 flex-col gap-2.5 p-3">
-        {sorted.length === 0 ? (
-          <p className="rounded-md border border-dashed border-border bg-white p-4 text-center text-xs text-primary-400">
-            Sin turnos para esta fecha.
+        {isFamiliar && turno.vecino && (
+          <p className="mt-0.5 text-[11px] text-primary-400">
+            Solicitó: {vecinoNombre(turno.vecino)}
           </p>
-        ) : (
-          sorted.map(t => <TurnoCard key={t.id} turno={t} />)
         )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs">
+          <span className={ESTADO_CLASS[turno.estado] ?? 'estado-pendiente'}>
+            {ESTADO_LABEL[turno.estado] ?? turno.estado}
+          </span>
+          {turno.canal && (
+            <span className={CANAL_CLASS[turno.canal] ?? 'canal-presencial'}>
+              {turno.canal}
+            </span>
+          )}
+          {turno.numero_turno && (
+            <span className="font-medium text-primary-400">
+              #{turno.numero_turno}
+            </span>
+          )}
+          {isFamiliar && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-semibold text-accent-700 ring-1 ring-inset ring-accent-100"
+              title={turno.metadata.vinculo ? `Vínculo: ${turno.metadata.vinculo}` : 'Turno familiar'}
+            >
+              <span aria-hidden="true">👨‍👩‍👧</span>
+              Familiar
+            </span>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Acciones — siempre visibles en mobile (no hay hover),
+          ocultas hasta hover/focus en desktop. */}
+      {(onConfirmar || onCancelar) && (
+        <div className="flex shrink-0 gap-3 text-xs font-medium opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+          {onConfirmar && (
+            <button onClick={onConfirmar} className="text-ok-700 hover:underline">
+              Confirmar
+            </button>
+          )}
+          {onCancelar && (
+            <button onClick={onCancelar} className="text-danger hover:underline">
+              Cancelar
+            </button>
+          )}
+        </div>
+      )}
+    </li>
   )
 }
 
@@ -153,63 +157,66 @@ function DependenciaColumn({ dependencia, turnos }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function TablazoCross() {
-  const [fecha, setFecha]   = useState(() => todayArgYMD())
-  const [estado, setEstado] = useState('')
+  const [fecha, setFecha]                 = useState(() => todayArgYMD())
+  const [dependenciaId, setDependenciaId] = useState('')
+  const [estado, setEstado]               = useState('')
 
-  const { turnos, isLoading, isFetching, error } = useTurnos({
-    fecha,
-    estado: estado || undefined,
-  })
-  const { data: dependencias = [], isLoading: depsLoading } = useDependencias()
-
-  // Catálogo activo (orden alfabético) + agrupación de turnos por
-  // dependencia_id. Si un turno apunta a una dep que no está en el
-  // catálogo (caso raro), se acumula bajo la key del dep.id sin
-  // bloque visual — preferimos no perderlo.
-  const grupos = useMemo(() => {
-    const turnosByDep = new Map()
-    for (const t of turnos ?? []) {
-      const k = t.dependencia_id
-      if (!turnosByDep.has(k)) turnosByDep.set(k, [])
-      turnosByDep.get(k).push(t)
-    }
-    // Tomamos solo dependencias activas; las que no estén activas
-    // pero tengan turnos del día también las mostramos al final.
-    // La columna real en DB se llama `activa` (femenino).
-    const activas = (dependencias ?? [])
+  const { data: deps = [] } = useDependencias()
+  const depsActivasOpts = useMemo(() =>
+    (deps ?? [])
       .filter(d => d.activa !== false)
       .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+      .map(d => ({ value: d.id, label: d.nombre })),
+    [deps],
+  )
 
-    const conTurnosFueraDeCatalogo = []
-    for (const [depId, rows] of turnosByDep.entries()) {
-      if (!activas.find(d => d.id === depId) && rows[0]?.dependencia?.nombre) {
-        conTurnosFueraDeCatalogo.push({
-          id:     depId,
-          nombre: rows[0].dependencia.nombre,
-          tipo:   '',
-          activa: true,
-        })
-      }
+  const { turnos, isLoading, isFetching, error, updateEstado, cancel } = useTurnos({
+    fecha,
+    dependenciaId: dependenciaId || undefined,
+    estado:        estado || undefined,
+  })
+
+  // Agrupamos por hora HH:MM. Si dos turnos tienen exactamente la
+  // misma hora, quedan apilados bajo el mismo separador.
+  const grupos = useMemo(() => {
+    const map = new Map()
+    for (const t of turnos ?? []) {
+      const hora = timeOf(t.fecha_hora) || '—'
+      if (!map.has(hora)) map.set(hora, [])
+      map.get(hora).push(t)
     }
-    return [...activas, ...conTurnosFueraDeCatalogo].map(d => ({
-      dependencia: d,
-      turnos:      turnosByDep.get(d.id) ?? [],
-    }))
-  }, [turnos, dependencias])
+    return Array.from(map.entries())
+      .map(([hora, items]) => ({
+        hora,
+        turnos: items.slice().sort((a, b) =>
+          (a.fecha_hora ?? '').localeCompare(b.fecha_hora ?? ''),
+        ),
+      }))
+      .sort((a, b) => a.hora.localeCompare(b.hora))
+  }, [turnos])
 
-  const totalTurnos = (turnos ?? []).length
+  async function handleConfirmar(id) {
+    try { await updateEstado.mutateAsync({ id, estado: 'confirmado' }) }
+    catch (e) { alert(`No se pudo confirmar: ${e.message}`) }
+  }
+  async function handleCancelar(id) {
+    if (!confirm('¿Cancelar este turno?')) return
+    try { await cancel.mutateAsync(id) }
+    catch (e) { alert(`No se pudo cancelar: ${e.message}`) }
+  }
+
+  const total = (turnos ?? []).length
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-primary">Tablero de turnos</h1>
           <p className="text-sm text-primary-400">
-            Vista cruzada por dependencia · {fecha}
+            Lista por franja horaria · {fecha} · {total} turno{total === 1 ? '' : 's'}
             {isFetching && !isLoading && (
               <span className="ml-2 text-primary-300">(actualizando...)</span>
             )}
-            {' · '}{totalTurnos} turno{totalTurnos === 1 ? '' : 's'}
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -219,6 +226,14 @@ export default function TablazoCross() {
             value={fecha}
             onChange={e => setFecha(e.target.value)}
             className="min-w-[160px]"
+          />
+          <Select
+            label="Dependencia"
+            value={dependenciaId}
+            onChange={setDependenciaId}
+            placeholder="Todas"
+            options={depsActivasOpts}
+            className="min-w-[200px]"
           />
           <Select
             label="Estado"
@@ -237,29 +252,50 @@ export default function TablazoCross() {
         </div>
       )}
 
-      {(isLoading || depsLoading) && (
+      {isLoading && (
         <div className="card flex items-center justify-center p-12">
           <Spinner size="lg" />
         </div>
       )}
 
-      {!isLoading && !depsLoading && grupos.length === 0 && (
-        <div className="card p-10 text-center text-sm text-primary-400">
-          No hay dependencias activas para mostrar.
+      {!isLoading && !error && grupos.length === 0 && (
+        <div className="card p-12 text-center text-sm text-primary-400">
+          No hay turnos para esta fecha.
         </div>
       )}
 
-      {!isLoading && !depsLoading && grupos.length > 0 && (
-        <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
-          <div className="flex gap-4">
-            {grupos.map(g => (
-              <DependenciaColumn
-                key={g.dependencia.id}
-                dependencia={g.dependencia}
-                turnos={g.turnos}
-              />
-            ))}
-          </div>
+      {!isLoading && !error && grupos.length > 0 && (
+        <div className="space-y-6">
+          {grupos.map(g => (
+            <section key={g.hora}>
+              {/* Separador de franja horaria */}
+              <div className="mb-2 flex items-center gap-3">
+                <p className="shrink-0 font-sora text-lg font-bold text-primary sm:text-xl">
+                  {g.hora}
+                </p>
+                <div className="h-px flex-1 bg-border" aria-hidden="true" />
+                <p className="shrink-0 text-xs font-medium uppercase tracking-wide text-primary-400">
+                  {g.turnos.length} turno{g.turnos.length === 1 ? '' : 's'}
+                </p>
+              </div>
+
+              {/* Lista de turnos de la franja */}
+              <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-white shadow-card">
+                {g.turnos.map(t => (
+                  <TurnoRow
+                    key={t.id}
+                    turno={t}
+                    onConfirmar={t.estado === 'pendiente' ? () => handleConfirmar(t.id) : null}
+                    onCancelar={
+                      t.estado !== 'cancelado' && t.estado !== 'completado'
+                        ? () => handleCancelar(t.id)
+                        : null
+                    }
+                  />
+                ))}
+              </ul>
+            </section>
+          ))}
         </div>
       )}
     </div>
