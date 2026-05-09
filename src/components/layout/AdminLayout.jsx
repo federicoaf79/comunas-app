@@ -1,4 +1,16 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useDependencias } from '../../hooks/useTurnos'
+
+// Tipos de dependencia que tienen su propio módulo top-level —
+// se EXCLUYEN de la lista "Otras dependencias" para no duplicar
+// el acceso desde el sidebar.
+const TIPOS_CON_MODULO_PROPIO = new Set([
+  'caps', 'salud',
+  'juzgado',
+  'sum', 'salon',
+  'intendencia', 'admin', 'comuna',
+])
 
 const NAV = [
   {
@@ -122,6 +134,63 @@ const NAV = [
   },
 ]
 
+// Sección colapsable que lista las dependencias activas del
+// municipio que NO tienen un módulo propio. Cada entrada navega
+// a /admin/dependencia/<tipo> y la página genérica se encarga
+// del resto.
+function OtrasDependenciasSection() {
+  const { data: deps = [], isLoading } = useDependencias()
+  const [open, setOpen] = useState(true)
+
+  const otras = (deps ?? [])
+    .filter(d => d.activa !== false)
+    .filter(d => !TIPOS_CON_MODULO_PROPIO.has((d.tipo ?? '').toLowerCase()))
+    .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+
+  if (isLoading) return null
+  if (otras.length === 0) return null
+
+  return (
+    <div className="mt-1 border-t border-border pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary-500 transition-colors hover:bg-primary-50"
+      >
+        <span>Otras dependencias</span>
+        <svg
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={'h-3 w-3 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-0.5">
+          {otras.map(d => (
+            <NavLink
+              key={d.id}
+              to={`/admin/dependencia/${d.tipo}`}
+              className={({ isActive }) =>
+                `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary text-white shadow-sm'
+                    : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+                }`
+              }
+            >
+              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+              <span className="truncate">{d.nombre}</span>
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AdminLayout() {
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -144,6 +213,13 @@ export default function AdminLayout() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+          {/* En desktop la sección colapsable se ve naturalmente al pie
+              del nav vertical. En mobile (overflow-x scroll) puede
+              quedar mezclada con los íconos top-level — aceptamos esa
+              degradación para no duplicar nav layout. */}
+          <div className="hidden lg:block">
+            <OtrasDependenciasSection />
+          </div>
         </nav>
       </aside>
 
