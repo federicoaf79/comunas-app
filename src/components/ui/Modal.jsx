@@ -20,17 +20,24 @@ export default function Modal({ open, onClose, title, children, footer, size = '
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/50 px-4 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/50 px-4 py-4 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
+      {/* Layout flex-col + max-h-[90vh] hace que el body crezca y
+          se scrollee solo, mientras header y footer quedan siempre
+          visibles. min-h-0 en el body es necesario para que el
+          flex item respete el overflow en lugar de crecer. */}
       <div
-        className={cn('card w-full p-0 animate-slide-up', sizeClass[size] ?? sizeClass.md)}
+        className={cn(
+          'card flex max-h-[90vh] w-full flex-col p-0 animate-slide-up',
+          sizeClass[size] ?? sizeClass.md,
+        )}
         onClick={e => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
       >
         {title && (
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
             <h2 className="text-base font-semibold text-primary">{title}</h2>
             <button
               onClick={onClose}
@@ -43,9 +50,9 @@ export default function Modal({ open, onClose, title, children, footer, size = '
             </button>
           </div>
         )}
-        <div className="px-5 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t border-border px-5 py-3">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-white px-5 py-3">{footer}</div>
         )}
       </div>
     </div>
