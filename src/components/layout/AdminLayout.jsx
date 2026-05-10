@@ -50,6 +50,17 @@ const NAV = [
     ),
   },
   {
+    to: '/admin/usuarios',
+    label: 'Usuarios',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <circle cx="12" cy="8" r="3.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 21a7 7 0 0 1 14 0" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 5l2 2 3-3" />
+      </svg>
+    ),
+  },
+  {
     to: '/admin/crm',
     label: 'CRM Vecinal',
     icon: (

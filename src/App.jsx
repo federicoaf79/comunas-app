@@ -15,6 +15,7 @@ import Acceso   from './pages/auth/Acceso'
 import Register from './pages/auth/Register'
 
 import AdminDashboard      from './pages/admin/AdminDashboard'
+import Usuarios            from './pages/admin/Usuarios'
 import CrmVecinos          from './pages/admin/CrmVecinos'
 import VecinoDetail        from './pages/admin/VecinoDetail'
 import TablazoCross        from './pages/admin/TablazoCross'
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
                 element: <AdminLayout />,
                 children: [
                   { path: '/admin',            element: <AdminDashboard /> },
+                  { path: '/admin/usuarios',   element: <Usuarios /> },
                   { path: '/admin/crm',        element: <CrmVecinos /> },
                   { path: '/admin/crm/:id',    element: <VecinoDetail /> },
                   // /admin/turnos se unificó dentro del Tablero
