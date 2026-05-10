@@ -9,7 +9,7 @@ import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
-import { todayArgYMD, dateTimeOf, timeOf } from '../../lib/datetime'
+import { dateTimeOf, timeOf } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -129,7 +129,7 @@ async function fetchUltimasNoticias(municipioId) {
 async function fetchUltimasDenuncias(municipioId) {
   let q = supabase
     .from('denuncias')
-    .select('id, descripcion, tipo, estado, created_at')
+    .select('id, descripcion, estado, created_at')
     .order('created_at', { ascending: false })
     .limit(3)
   if (municipioId) q = q.eq('municipio_id', municipioId)
@@ -207,8 +207,8 @@ async function fetchMedicoGuardia(dependenciaId, today) {
     .select(MEDICO_COLS)
     .eq('dependencia_id', dependenciaId)
     .eq('activo', true)
-    .lte('semana_inicio', today)
     .gte('semana_fin', today)
+    .lte('semana_inicio', today)
     .order('semana_inicio', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -1135,7 +1135,7 @@ function ActividadTimelineCard({ noticias, gastos, denuncias, turnosHoy, isLoadi
         id:    `d-${d.id}`,
         tipo:  'denuncia',
         texto: d.descripcion ?? 'Denuncia',
-        sub:   d.tipo ?? 'Reclamo ciudadano',
+        sub:   'Reclamo ciudadano',
         ts:    d.created_at,
       })
     }
@@ -1215,7 +1215,12 @@ export default function AdminDashboard() {
   // primer municipio activo. Sin esto el médico de guardia y otras
   // queries con .eq('municipio_id', null) no encuentran filas.
   const municipioId = useEffectiveMunicipioId()
-  const today = todayArgYMD()
+  // today como 'YYYY-MM-DD' sin hora — Supabase serializa el string
+  // a timestamptz interpretándolo como medianoche UTC y eso rompe
+  // los .lte/.gte contra semana_inicio/semana_fin si el formato no
+  // es estricto. Usamos toISOString().split para garantizar formato
+  // canónico (en lugar de Intl con timezone).
+  const today = new Date().toISOString().split('T')[0]
   const mes   = currentMonthYYYYMM()
   const mesAnterior = prevMonthYYYYMM(mes)
   const anio  = currentYear()
