@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider }   from './context/AuthContext'
 import { VecinoProvider } from './context/VecinoContext'
@@ -8,6 +8,7 @@ import RoleGuard   from './components/guards/RoleGuard'
 import VecinoGuard from './components/guards/VecinoGuard'
 import AppShell    from './components/layout/AppShell'
 import AdminLayout from './components/layout/AdminLayout'
+import ScrollToTop from './components/utils/ScrollToTop'
 
 import NotFound from './pages/NotFound'
 import Login    from './pages/auth/Login'
@@ -47,7 +48,23 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 })
 
+// Wrapper top-level del árbol de rutas. ScrollToTop usa useLocation,
+// que requiere estar dentro del RouterProvider — montarlo acá lo
+// activa una sola vez para toda la app y resetea el scroll a 0
+// en cada cambio de pathname.
+function RootLayout() {
+  return (
+    <>
+      <ScrollToTop />
+      <Outlet />
+    </>
+  )
+}
+
 const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
   // Rutas públicas — sin AuthGuard.
   // La raíz redirige al Portal Ciudadano — la Landing legacy
   // dejó de ser el primer punto de contacto.
@@ -136,6 +153,8 @@ const router = createBrowserRouter([
   },
 
   { path: '*', element: <NotFound /> },
+    ],
+  },
 ])
 
 export default function App() {
