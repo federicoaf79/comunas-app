@@ -488,7 +488,7 @@ function VistaToggle({ vista, onChange }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function TablazoCross() {
-  const [vista, setVista]                 = useState('dia')
+  const [vista, setVista]                 = useState('semana')
   const [fecha, setFecha]                 = useState(() => todayArgYMD())
   const [dependenciaId, setDependenciaId] = useState('')
   const [estado, setEstado]               = useState('')

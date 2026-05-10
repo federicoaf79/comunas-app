@@ -416,7 +416,7 @@ export default function SUM() {
   const { hasRole } = useAuth()
   const canApprove = hasRole(['admin_comuna', 'superadmin'])
 
-  const [tab, setTab] = useState('reservas')
+  const [tab, setTab] = useState('calendario')
   // Busca la dependencia "sum" del municipio del operador. Si es
   // superadmin (municipio_id = null), useDependenciaByTipo cae a la
   // primera dependencia activa con ese tipo en cualquier municipio.

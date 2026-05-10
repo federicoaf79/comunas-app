@@ -317,7 +317,7 @@ function ConsultasTab({ depJuez }) {
 
 export default function JuezDePaz() {
   const qc = useQueryClient()
-  const [tab, setTab] = useState('dia')
+  const [tab, setTab] = useState('semana')
   const [modalOpen, setModalOpen] = useState(false)
 
   // Busca la dependencia "juzgado" del municipio del operador. Si
