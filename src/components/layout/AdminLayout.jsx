@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
+import { useAuth } from '../../context/AuthContext'
 
 // Tipos de dependencia que tienen su propio módulo top-level —
 // se EXCLUYEN de la lista "Otras dependencias" para no duplicar
@@ -338,11 +339,69 @@ function NavGroup({ label, icon, subitems }) {
   )
 }
 
+// Sección "SUPERADMIN" — visible solo cuando el usuario tiene ese
+// rol. Se monta arriba del NAV principal y agrupa las pantallas
+// cross-municipio (gestión de municipios, panel global). Visualmente
+// usa la paleta navy/gold para diferenciarse del NAV regular y dejar
+// claro que esas rutas operan a nivel sistema.
+function SuperadminSection() {
+  const { hasRole } = useAuth()
+  if (!hasRole('superadmin')) return null
+
+  const items = [
+    {
+      to: '/superadmin/municipios',
+      label: 'Municipios',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V10l4-3 3 2 3-2 4 3v11M9 21v-5h6v5M10 13h.01M14 13h.01" />
+        </svg>
+      ),
+    },
+    {
+      to: '/superadmin/panel',
+      label: 'Panel global',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l4-4 4 4 5-6" />
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <div className="mb-2 rounded-md border border-accent-200 bg-primary-50/60 p-1.5">
+      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-accent-700">
+        Superadmin
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {items.map(item => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-primary-700 hover:bg-white hover:text-primary'
+              }`
+            }
+          >
+            <span aria-hidden="true">{item.icon}</span>
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminLayout() {
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <aside className="lg:w-56 lg:shrink-0">
         <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:overflow-visible">
+          <SuperadminSection />
           {NAV.map(item => (
             item.subitems
               ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />

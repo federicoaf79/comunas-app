@@ -37,6 +37,8 @@ import MiSalud             from './pages/portal/MiSalud'
 import VecinoAcceso        from './pages/portal/VecinoAcceso'
 import VecinoDashboard     from './pages/portal/VecinoDashboard'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
+import SuperadminMunicipios from './pages/superadmin/Municipios'
+import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -108,7 +110,18 @@ const router = createBrowserRouter([
           {
             element: <RoleGuard roles={['superadmin']} />,
             children: [
-              { path: '/superadmin', element: <SuperadminDashboard /> },
+              // Las pantallas de superadmin comparten el chrome de
+              // AdminLayout para tener sidebar consistente — la
+              // sección "SUPERADMIN" del sidebar se muestra solo
+              // cuando hasRole('superadmin') es true.
+              {
+                element: <AdminLayout />,
+                children: [
+                  { path: '/superadmin',            element: <SuperadminDashboard /> },
+                  { path: '/superadmin/municipios', element: <SuperadminMunicipios /> },
+                  { path: '/superadmin/panel',      element: <SuperadminPanelGlobal /> },
+                ],
+              },
             ],
           },
         ],
