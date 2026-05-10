@@ -141,6 +141,8 @@ async function fetchUltimasDenuncias(municipioId) {
   return data ?? []
 }
 
+const MEDICO_COLS = 'id, nombre, matricula, fecha_desde, fecha_hasta, horario_inicio, horario_fin, telefono'
+
 // Médico de guardia rotativo — busca la fila de medicos_agenda
 // activa cuyo rango fecha_desde..fecha_hasta contiene a hoy.
 // Schema: id, municipio_id, nombre, matricula, fecha_desde,
@@ -148,7 +150,7 @@ async function fetchUltimasDenuncias(municipioId) {
 async function fetchMedicoGuardia(municipioId, today) {
   let q = supabase
     .from('medicos_agenda')
-    .select('id, nombre, matricula, fecha_desde, fecha_hasta, horario_inicio, horario_fin, telefono')
+    .select(MEDICO_COLS)
     .lte('fecha_desde', today)
     .gte('fecha_hasta', today)
     .eq('activo', true)
@@ -159,6 +161,28 @@ async function fetchMedicoGuardia(municipioId, today) {
   if (error) {
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
       console.warn('[Dashboard] fetchMedicoGuardia:', error.message)
+    }
+    return null
+  }
+  return data
+}
+
+// Próxima guardia futura — fallback cuando hoy no hay médico
+// asignado. Trae la fila activa con fecha_desde > today (la más
+// cercana). Devuelve null si no hay ninguna programada.
+async function fetchProximoMedico(municipioId, today) {
+  let q = supabase
+    .from('medicos_agenda')
+    .select(MEDICO_COLS)
+    .gt('fecha_desde', today)
+    .eq('activo', true)
+    .order('fecha_desde', { ascending: true })
+    .limit(1)
+  if (municipioId) q = q.eq('municipio_id', municipioId)
+  const { data, error } = await q.maybeSingle()
+  if (error) {
+    if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
+      console.warn('[Dashboard] fetchProximoMedico:', error.message)
     }
     return null
   }
@@ -388,6 +412,20 @@ function fechaTituloDe(iso) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
+// Formato "Lun 12/05" para la primera celda de cada fila en modo
+// "próximos turnos" — distintos turnos pueden caer en distintos
+// días, así que cada fila lleva su propia fecha.
+const _fmtWd = new Intl.DateTimeFormat('es-AR', { weekday: 'short' })
+const _fmtDM = new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit' })
+function fechaCortaFilaDe(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  // "lun." → "Lun" (capitaliza + remueve punto que mete es-AR).
+  const wd = _fmtWd.format(d).replace('.', '')
+  return `${wd.charAt(0).toUpperCase() + wd.slice(1)} ${_fmtDM.format(d)}`
+}
+
 function TurnoRow({ t, mostrarHora = true }) {
   const isFamiliar = !!t.metadata?.para_familiar
   const nombre = isFamiliar
@@ -396,14 +434,25 @@ function TurnoRow({ t, mostrarHora = true }) {
   const depNombre = t.dependencia?.nombre ?? t.dependencia_nombre ?? '—'
   return (
     <tr>
-      <td className="whitespace-nowrap px-4 py-3 font-bold text-primary">
-        {mostrarHora
-          ? (timeOf(t.fecha_hora) || '—')
-          : (
-            <span className="inline-flex items-center rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700 ring-1 ring-inset ring-accent/30">
+      <td className="whitespace-nowrap px-4 py-3">
+        {mostrarHora ? (
+          <span className="font-bold text-primary">
+            {timeOf(t.fecha_hora) || '—'}
+          </span>
+        ) : (
+          // Modo "próximo": badge gold, fecha corta + hora apilados.
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="inline-flex items-center rounded-full bg-accent/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent-700 ring-1 ring-inset ring-accent/30">
               Próximo
             </span>
-          )}
+            <span className="text-xs font-semibold text-primary-700">
+              {fechaCortaFilaDe(t.fecha_hora)}
+            </span>
+            <span className="text-sm font-bold text-primary">
+              {timeOf(t.fecha_hora) || '—'}
+            </span>
+          </div>
+        )}
       </td>
       <td className="px-4 py-3">
         <span
@@ -504,15 +553,55 @@ function TurnosHoyCard({ turnos, isLoading, proximos = [], proximosLoading = fal
 // Médico de guardia — card navy con foto del rotativo de la semana
 // ─────────────────────────────────────────────────────────────────
 
-function MedicoGuardiaCard({ data, isLoading }) {
-  const nombre    = data?.nombre || ''
-  const matricula = data?.matricula || ''
-  // Horario combinado "HH:MM – HH:MM" — guardamos solo HH:MM si los
-  // campos vienen como time o como string corto.
+// Render compartido del bloque "ficha del médico" — lo usan tanto
+// la guardia activa como la próxima programada cuando no hay médico
+// asignado esta semana. `tagInicio` es un texto chico arriba del
+// nombre ("Próxima guardia · 15 may" cuando estamos en fallback).
+function MedicoFicha({ medico, tagInicio = null }) {
   const trimHora = (h) => (h ? String(h).slice(0, 5) : '')
-  const hi = trimHora(data?.horario_inicio)
-  const hf = trimHora(data?.horario_fin)
+  const hi = trimHora(medico?.horario_inicio)
+  const hf = trimHora(medico?.horario_fin)
   const horario = hi && hf ? `${hi} – ${hf}` : (hi || hf || '')
+
+  return (
+    <div className="flex items-start gap-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-accent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v8a4 4 0 0 0 8 0V3M5 3H3M13 3h-2M9 15v3a4 4 0 0 0 8 0v-2" />
+          <circle cx="17" cy="13" r="2" />
+        </svg>
+      </div>
+      <div className="min-w-0 flex-1">
+        {tagInicio && (
+          <p className="text-[10px] font-bold uppercase tracking-wider text-accent">
+            {tagInicio}
+          </p>
+        )}
+        <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
+          {medico?.nombre || 'Sin nombre'}
+        </p>
+        {medico?.matricula && (
+          <p className="mt-1 text-sm text-white/70">Matrícula {medico.matricula}</p>
+        )}
+        {horario && (
+          <p className="mt-3 text-xs text-white/60">Horario: {horario}</p>
+        )}
+        {(medico?.fecha_desde || medico?.fecha_hasta) && (
+          <p className="mt-1 text-xs text-white/50">
+            {medico.fecha_desde ? dateOf(medico.fecha_desde) : '—'} al {medico.fecha_hasta ? dateOf(medico.fecha_hasta) : '—'}
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MedicoGuardiaCard({ data, isLoading, proximo = null, proximoLoading = false }) {
+  // Tres estados:
+  //   1) data       → médico activo esta semana (caso feliz).
+  //   2) !data + proximo → "no hay esta semana, próxima guardia es..."
+  //   3) sin nada   → empty state con CTA a /admin/sala.
+  const showSpinner = isLoading || (!data && proximoLoading)
 
   return (
     <div className="card overflow-hidden bg-gradient-to-br from-primary via-primary-700 to-primary-900 p-0 text-white">
@@ -523,39 +612,33 @@ function MedicoGuardiaCard({ data, isLoading }) {
         </Link>
       </header>
       <div className="p-5 sm:p-6">
-        {isLoading ? (
+        {showSpinner ? (
           <div className="flex items-center justify-center p-4">
             <Spinner />
           </div>
-        ) : !data ? (
-          <p className="text-sm text-white/70">
-            Sin guardia asignada esta semana.
-          </p>
+        ) : data ? (
+          <MedicoFicha medico={data} />
+        ) : proximo ? (
+          <div className="space-y-4">
+            <p className="text-sm text-white/70">
+              No hay médico asignado esta semana.
+            </p>
+            <MedicoFicha
+              medico={proximo}
+              tagInicio={`Próxima guardia · ${proximo.fecha_desde ? dateOf(proximo.fecha_desde) : '—'}`}
+            />
+          </div>
         ) : (
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-accent">
-              {/* Estetoscopio inline */}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v8a4 4 0 0 0 8 0V3M5 3H3M13 3h-2M9 15v3a4 4 0 0 0 8 0v-2" />
-                <circle cx="17" cy="13" r="2" />
-              </svg>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
-                {nombre || 'Sin nombre'}
-              </p>
-              {matricula && (
-                <p className="mt-1 text-sm text-white/70">Matrícula {matricula}</p>
-              )}
-              {horario && (
-                <p className="mt-3 text-xs text-white/60">Horario: {horario}</p>
-              )}
-              {(data.fecha_desde || data.fecha_hasta) && (
-                <p className="mt-1 text-xs text-white/50">
-                  {data.fecha_desde ? dateOf(data.fecha_desde) : '—'} al {data.fecha_hasta ? dateOf(data.fecha_hasta) : '—'}
-                </p>
-              )}
-            </div>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-sm text-white/70">
+              Sin guardias programadas.
+            </p>
+            <Link
+              to="/admin/sala"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-primary shadow-sm transition-colors hover:bg-accent-400"
+            >
+              Ir a agenda →
+            </Link>
           </div>
         )}
       </div>
@@ -590,9 +673,27 @@ function UltimosMensajesCard({ mensajes, isLoading }) {
       {isLoading ? (
         <div className="flex items-center justify-center p-8"><Spinner /></div>
       ) : items.length === 0 ? (
-        <p className="p-6 text-center text-sm text-primary-400">
-          Sin mensajes recientes.
-        </p>
+        <div className="flex flex-col items-center gap-3 p-8 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-400">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z" />
+            </svg>
+          </span>
+          <div>
+            <p className="font-sora text-sm font-semibold text-primary">
+              Sin mensajes enviados este mes
+            </p>
+            <p className="mt-1 text-xs text-primary-400">
+              Los mensajes SMS y WhatsApp enviados a vecinos aparecerán acá.
+            </p>
+          </div>
+          <Link
+            to="/admin/mensajeria"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+          >
+            Ir a Mensajería →
+          </Link>
+        </div>
       ) : (
         <ul className="divide-y divide-border">
           {items.map(m => {
@@ -1079,6 +1180,14 @@ export default function AdminDashboard() {
     queryFn:  () => fetchMedicoGuardia(municipioId, today),
     enabled:  !!perfil,
   })
+  // Fallback: si no hay médico esta semana, traemos la próxima guardia
+  // futura para no dejar la card seca. Solo se enciende cuando ya
+  // sabemos que el query principal devolvió null.
+  const proximoMedicoQ = useQuery({
+    queryKey: ['dashboard', 'proximo-medico', municipioId ?? '__ALL__', today],
+    queryFn:  () => fetchProximoMedico(municipioId, today),
+    enabled:  !!perfil && !medicoGuardiaQ.isLoading && medicoGuardiaQ.data === null,
+  })
   const ultimosMensajesQ = useQuery({
     queryKey: ['dashboard', 'ultimos-mensajes', municipioId ?? '__ALL__'],
     queryFn:  () => fetchUltimosMensajes(municipioId),
@@ -1195,6 +1304,8 @@ export default function AdminDashboard() {
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
           isLoading={medicoGuardiaQ.isLoading}
+          proximo={proximoMedicoQ.data}
+          proximoLoading={proximoMedicoQ.isFetching}
         />
       </div>
 
