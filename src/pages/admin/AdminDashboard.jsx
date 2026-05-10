@@ -9,7 +9,7 @@ import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
-import { todayArgYMD, dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
+import { todayArgYMD, dateTimeOf, timeOf } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -144,29 +144,54 @@ async function fetchUltimasDenuncias(municipioId) {
 // Schema real de medicos_agenda:
 //   id, dependencia_id, usuario_id, semana_inicio, semana_fin,
 //   activo, created_at
-// No tiene municipio_id ni columnas de matrícula/horario — esos
-// datos viven en `usuarios` (el join trae nombre y email). Para
-// filtrar por municipio usamos el inner join sobre dependencia y
-// preguntamos por `dependencia.municipio_id`.
+// No tiene municipio_id propio. El nombre del médico vive en
+// `usuarios` y se trae vía join.
+//
+// Para filtrar por municipio el flujo es de dos pasos: primero
+// fetchDepSalud resuelve la dependencia de salud del municipio
+// (caps/salud/sala), después medicos_agenda se filtra por ese
+// dependencia_id.
 const MEDICO_COLS = `
   id, semana_inicio, semana_fin, activo,
-  dependencia:dependencia_id!inner ( id, tipo, municipio_id ),
   usuario:usuario_id ( id, nombre, email )
 `
 
-async function fetchMedicoGuardia(municipioId, today) {
-  let q = supabase
+const TIPOS_DEP_SALUD = ['caps', 'salud', 'sala']
+
+async function fetchDepSalud(municipioId) {
+  if (!municipioId) return null
+  const { data, error } = await supabase
+    .from('dependencias')
+    .select('id, tipo, nombre')
+    .eq('municipio_id', municipioId)
+    .in('tipo', TIPOS_DEP_SALUD)
+    .eq('activa', true)
+    .order('tipo', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
+      console.warn('[Dashboard] fetchDepSalud:', error.message)
+    }
+    return null
+  }
+  return data
+}
+
+// Médico activo esta semana — la fila de medicos_agenda cuyo
+// rango semana_inicio..semana_fin contiene a hoy.
+async function fetchMedicoGuardia(dependenciaId, today) {
+  if (!dependenciaId) return null
+  const { data, error } = await supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
+    .eq('dependencia_id', dependenciaId)
     .eq('activo', true)
     .lte('semana_inicio', today)
     .gte('semana_fin', today)
     .order('semana_inicio', { ascending: false })
     .limit(1)
-  // Filtramos a través del !inner join sobre dependencia. PostgREST
-  // permite `.eq('dependencia.col', valor)` cuando el embed es inner.
-  if (municipioId) q = q.eq('dependencia.municipio_id', municipioId)
-  const { data, error } = await q.maybeSingle()
+    .maybeSingle()
   if (error) {
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
       console.warn('[Dashboard] fetchMedicoGuardia:', error.message)
@@ -176,25 +201,25 @@ async function fetchMedicoGuardia(municipioId, today) {
   return data
 }
 
-// Próxima guardia futura — fallback cuando hoy no hay médico
-// asignado. Trae la fila activa con semana_inicio > today.
-async function fetchProximoMedico(municipioId, today) {
-  let q = supabase
+// Próximas guardias — las siguientes 3 filas activas con
+// semana_inicio > hoy, ordenadas ascendente.
+async function fetchProximasGuardias(dependenciaId, today, limit = 3) {
+  if (!dependenciaId) return []
+  const { data, error } = await supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
+    .eq('dependencia_id', dependenciaId)
     .eq('activo', true)
     .gt('semana_inicio', today)
     .order('semana_inicio', { ascending: true })
-    .limit(1)
-  if (municipioId) q = q.eq('dependencia.municipio_id', municipioId)
-  const { data, error } = await q.maybeSingle()
+    .limit(limit)
   if (error) {
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
-      console.warn('[Dashboard] fetchProximoMedico:', error.message)
+      console.warn('[Dashboard] fetchProximasGuardias:', error.message)
     }
-    return null
+    return []
   }
-  return data
+  return data ?? []
 }
 
 // Últimos mensajes salientes/entrantes desde la tabla sms_log.
@@ -561,16 +586,33 @@ function TurnosHoyCard({ turnos, isLoading, proximos = [], proximosLoading = fal
 // Médico de guardia — card navy con foto del rotativo de la semana
 // ─────────────────────────────────────────────────────────────────
 
-// Render compartido del bloque "ficha del médico" — lo usan tanto
-// la guardia activa como la próxima programada cuando no hay médico
-// asignado esta semana. `tagInicio` es un texto chico arriba del
-// nombre ("Próxima guardia · 15 may" cuando estamos en fallback).
-//
-// Schema real de medicos_agenda: el nombre del médico vive en el
-// JOIN a usuarios (`usuario.nombre`); la fila trae solo el rango
-// semanal (semana_inicio/semana_fin) y estado.
-function MedicoFicha({ medico, tagInicio = null }) {
+// Formateo es-AR de rangos semanales para mostrar al usuario:
+//   "del 10 al 17 de mayo"          (mismo mes)
+//   "del 29 de mayo al 5 de junio"  (cruza mes)
+//   "desde el 18 de mayo"           (open-ended, una sola fecha)
+const _fmtDiaMesLong = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long' })
+const _fmtMesLong    = new Intl.DateTimeFormat('es-AR', { month: 'long' })
+
+function rangoSemanaTexto(desde, hasta) {
+  if (!desde) return ''
+  const d1 = new Date(desde)
+  if (isNaN(d1)) return ''
+  if (!hasta) return `desde el ${_fmtDiaMesLong.format(d1)}`
+  const d2 = new Date(hasta)
+  if (isNaN(d2)) return `desde el ${_fmtDiaMesLong.format(d1)}`
+  const sameMes = d1.getMonth() === d2.getMonth() && d1.getFullYear() === d2.getFullYear()
+  if (sameMes) {
+    return `del ${d1.getDate()} al ${d2.getDate()} de ${_fmtMesLong.format(d2)}`
+  }
+  return `del ${_fmtDiaMesLong.format(d1)} al ${_fmtDiaMesLong.format(d2)}`
+}
+
+// Ficha del médico activo de la semana. Solo se usa para el render
+// del médico vigente — las próximas guardias se listan con un
+// bullet más compacto debajo.
+function MedicoFicha({ medico }) {
   const nombre = medico?.usuario?.nombre || 'Médico de guardia'
+  const rango  = rangoSemanaTexto(medico?.semana_inicio, medico?.semana_fin)
 
   return (
     <div className="flex items-start gap-4">
@@ -581,30 +623,38 @@ function MedicoFicha({ medico, tagInicio = null }) {
         </svg>
       </div>
       <div className="min-w-0 flex-1">
-        {tagInicio && (
-          <p className="text-[10px] font-bold uppercase tracking-wider text-accent">
-            {tagInicio}
-          </p>
-        )}
-        <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
-          {nombre}
-        </p>
-        {(medico?.semana_inicio || medico?.semana_fin) && (
-          <p className="mt-2 text-xs text-white/60">
-            Semana: {medico.semana_inicio ? dateOf(medico.semana_inicio) : '—'} al {medico.semana_fin ? dateOf(medico.semana_fin) : '—'}
-          </p>
-        )}
+        <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">{nombre}</p>
+        {rango && <p className="mt-2 text-xs text-white/60">{rango}</p>}
       </div>
     </div>
   )
 }
 
-function MedicoGuardiaCard({ data, isLoading, proximo = null, proximoLoading = false }) {
-  // Tres estados:
-  //   1) data       → médico activo esta semana (caso feliz).
-  //   2) !data + proximo → "no hay esta semana, próxima guardia es..."
-  //   3) sin nada   → empty state con CTA a /admin/sala.
-  const showSpinner = isLoading || (!data && proximoLoading)
+// Línea de "Próximas guardias" — bullet gold + "Dr. X — del 18 al
+// 24 de mayo". Usa el mismo rangoSemanaTexto.
+function ProximaGuardiaItem({ medico }) {
+  const nombre = medico?.usuario?.nombre || 'Por asignar'
+  const rango  = rangoSemanaTexto(medico?.semana_inicio, medico?.semana_fin)
+  return (
+    <li className="flex items-start gap-2 text-sm">
+      <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+      <span className="text-white/85">
+        <span className="font-semibold text-white">{nombre}</span>
+        {rango && <span className="text-white/55"> — {rango}</span>}
+      </span>
+    </li>
+  )
+}
+
+function MedicoGuardiaCard({ data, isLoading, proximas = [], proximasLoading = false }) {
+  // 3 estados:
+  //   1) data → médico activo + (opcional) lista de próximas guardias
+  //   2) !data + proximas[0] → "sin guardia esta semana" + ficha de la próxima
+  //   3) sin nada → empty state con CTA a /admin/sala
+  const showSpinner = isLoading || (!data && proximasLoading)
+  const hayActual   = !!data
+  const proximasRestantes = hayActual ? proximas : proximas.slice(1)
+  const proximaSiguiente  = hayActual ? null : (proximas[0] ?? null)
 
   return (
     <div className="card overflow-hidden bg-gradient-to-br from-primary via-primary-700 to-primary-900 p-0 text-white">
@@ -614,28 +664,57 @@ function MedicoGuardiaCard({ data, isLoading, proximo = null, proximoLoading = f
           Ver agenda →
         </Link>
       </header>
-      <div className="p-5 sm:p-6">
+      <div className="space-y-4 p-5 sm:p-6">
         {showSpinner ? (
           <div className="flex items-center justify-center p-4">
             <Spinner />
           </div>
-        ) : data ? (
-          <MedicoFicha medico={data} />
-        ) : proximo ? (
-          <div className="space-y-4">
-            <p className="text-sm text-white/70">
-              No hay médico asignado esta semana.
-            </p>
-            <MedicoFicha
-              medico={proximo}
-              tagInicio={`Próxima guardia · ${proximo.semana_inicio ? dateOf(proximo.semana_inicio) : '—'}`}
-            />
-          </div>
+        ) : hayActual ? (
+          <>
+            <MedicoFicha medico={data} />
+            {proximasRestantes.length > 0 && (
+              <div className="border-t border-white/10 pt-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
+                  Próximas guardias
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {proximasRestantes.map(m => (
+                    <ProximaGuardiaItem key={m.id} medico={m} />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        ) : proximaSiguiente ? (
+          <>
+            <p className="text-sm text-white/70">Sin guardia asignada esta semana.</p>
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-accent">
+                Próxima guardia
+              </p>
+              <p className="mt-1 font-sora text-base font-bold leading-tight">
+                {proximaSiguiente.usuario?.nombre || 'Médico de guardia'}
+              </p>
+              <p className="text-xs text-white/60">
+                {rangoSemanaTexto(proximaSiguiente.semana_inicio, proximaSiguiente.semana_fin)}
+              </p>
+            </div>
+            {proximasRestantes.length > 0 && (
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
+                  Después
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {proximasRestantes.map(m => (
+                    <ProximaGuardiaItem key={m.id} medico={m} />
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex flex-col items-start gap-3">
-            <p className="text-sm text-white/70">
-              Sin guardias programadas.
-            </p>
+            <p className="text-sm text-white/70">Sin guardias programadas.</p>
             <Link
               to="/admin/sala"
               className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-primary shadow-sm transition-colors hover:bg-accent-400"
@@ -1177,19 +1256,30 @@ export default function AdminDashboard() {
     enabled:  !!perfil,
   })
 
-  // Médico de guardia + últimos mensajes
-  const medicoGuardiaQ = useQuery({
-    queryKey: ['dashboard', 'medico-guardia', municipioId ?? '__ALL__', today],
-    queryFn:  () => fetchMedicoGuardia(municipioId, today),
-    enabled:  !!perfil,
+  // Médico de guardia — flujo de 3 queries:
+  //   1) depSaludQ: resuelve la dependencia de salud del municipio.
+  //      medicos_agenda se filtra por dependencia_id, no por
+  //      municipio_id (no existe esa columna).
+  //   2) medicoGuardiaQ: médico activo esta semana.
+  //   3) proximasGuardiasQ: las próximas 3 guardias futuras. Se
+  //      muestran SIEMPRE que existan, no solo como fallback.
+  const depSaludQ = useQuery({
+    queryKey: ['dashboard', 'dep-salud', municipioId ?? '__NONE__'],
+    queryFn:  () => fetchDepSalud(municipioId),
+    enabled:  !!perfil && !!municipioId,
+    staleTime: 60 * 60 * 1000,
   })
-  // Fallback: si no hay médico esta semana, traemos la próxima guardia
-  // futura para no dejar la card seca. Solo se enciende cuando ya
-  // sabemos que el query principal devolvió null.
-  const proximoMedicoQ = useQuery({
-    queryKey: ['dashboard', 'proximo-medico', municipioId ?? '__ALL__', today],
-    queryFn:  () => fetchProximoMedico(municipioId, today),
-    enabled:  !!perfil && !medicoGuardiaQ.isLoading && medicoGuardiaQ.data === null,
+  const depSaludId = depSaludQ.data?.id ?? null
+
+  const medicoGuardiaQ = useQuery({
+    queryKey: ['dashboard', 'medico-guardia', depSaludId ?? '__NONE__', today],
+    queryFn:  () => fetchMedicoGuardia(depSaludId, today),
+    enabled:  !!perfil && !!depSaludId,
+  })
+  const proximasGuardiasQ = useQuery({
+    queryKey: ['dashboard', 'proximas-guardias', depSaludId ?? '__NONE__', today],
+    queryFn:  () => fetchProximasGuardias(depSaludId, today, 3),
+    enabled:  !!perfil && !!depSaludId,
   })
   const ultimosMensajesQ = useQuery({
     queryKey: ['dashboard', 'ultimos-mensajes', municipioId ?? '__ALL__'],
@@ -1306,9 +1396,9 @@ export default function AdminDashboard() {
         />
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
-          isLoading={medicoGuardiaQ.isLoading}
-          proximo={proximoMedicoQ.data}
-          proximoLoading={proximoMedicoQ.isFetching}
+          isLoading={depSaludQ.isLoading || medicoGuardiaQ.isLoading}
+          proximas={proximasGuardiasQ.data ?? []}
+          proximasLoading={proximasGuardiasQ.isFetching}
         />
       </div>
 
