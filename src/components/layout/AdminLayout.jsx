@@ -136,7 +136,9 @@ const NAV = [
     ],
   },
   {
-    to: '/admin/administracion',
+    // Carpeta "Administración" con subitems: el módulo financiero
+    // base (gastos/ingresos/presupuesto/partidas) y el módulo de
+    // rendición al Tribunal de Cuentas, alineado SARC.
     label: 'Administración',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
@@ -146,6 +148,10 @@ const NAV = [
         <circle cx="3" cy="17" r="0.6" fill="currentColor" />
       </svg>
     ),
+    subitems: [
+      { to: '/admin/administracion', label: 'Gastos e ingresos' },
+      { to: '/admin/rendicion',      label: 'Rendición de cuentas' },
+    ],
   },
   {
     to: '/admin/config-general',
