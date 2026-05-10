@@ -9,7 +9,6 @@ import VecinoGuard from './components/guards/VecinoGuard'
 import AppShell    from './components/layout/AppShell'
 import AdminLayout from './components/layout/AdminLayout'
 
-import Landing  from './pages/Landing'
 import NotFound from './pages/NotFound'
 import Login    from './pages/auth/Login'
 import Acceso   from './pages/auth/Acceso'
@@ -44,7 +43,9 @@ const queryClient = new QueryClient({
 
 const router = createBrowserRouter([
   // Rutas públicas — sin AuthGuard.
-  { path: '/',         element: <Landing /> },
+  // La raíz redirige al Portal Ciudadano — la Landing legacy
+  // dejó de ser el primer punto de contacto.
+  { path: '/',         element: <Navigate to="/portal" replace /> },
   { path: '/acceso',   element: <Acceso /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
