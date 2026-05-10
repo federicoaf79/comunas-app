@@ -159,10 +159,20 @@ const MEDICO_COLS = `
 const TIPOS_DEP_SALUD = ['caps', 'salud', 'sala']
 
 async function fetchDepSalud(municipioId) {
-  if (!municipioId) return null
+  // Trace de input para debuggear casos donde el card aparece sin
+  // médico aunque hay datos cargados: si municipioId es null acá,
+  // el problema está aguas arriba (useEffectiveMunicipioId).
+  console.log('[Dashboard] fetchDepSalud input municipioId:', municipioId)
+  if (!municipioId) {
+    console.warn('[Dashboard] fetchDepSalud: sin municipioId, retornando null')
+    return null
+  }
+  // El campo es `activa` (femenino) en dependencias, vs `activo`
+  // (masculino) en usuarios y en medicos_agenda. Confirmado por
+  // schema. Filtro por municipio_id ya aplicado.
   const { data, error } = await supabase
     .from('dependencias')
-    .select('id, tipo, nombre')
+    .select('id, tipo, nombre, activa, municipio_id')
     .eq('municipio_id', municipioId)
     .in('tipo', TIPOS_DEP_SALUD)
     .eq('activa', true)
@@ -170,18 +180,28 @@ async function fetchDepSalud(municipioId) {
     .limit(1)
     .maybeSingle()
   if (error) {
-    if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
-      console.warn('[Dashboard] fetchDepSalud:', error.message)
-    }
+    console.warn('[Dashboard] fetchDepSalud error:', error.message)
     return null
+  }
+  if (!data) {
+    console.warn(`[Dashboard] fetchDepSalud: sin dep de salud para municipio ${municipioId} (tipos ${TIPOS_DEP_SALUD.join('/')} con activa=true)`)
+  } else {
+    console.log('[Dashboard] fetchDepSalud result:', data)
   }
   return data
 }
 
 // Médico activo esta semana — la fila de medicos_agenda cuyo
 // rango semana_inicio..semana_fin contiene a hoy.
+//
+// OJO: el campo se llama `activo` (masculino) en medicos_agenda,
+// distinto del `activa` (femenino) en dependencias.
 async function fetchMedicoGuardia(dependenciaId, today) {
-  if (!dependenciaId) return null
+  console.log('[Dashboard] fetchMedicoGuardia input:', { dependenciaId, today })
+  if (!dependenciaId) {
+    console.warn('[Dashboard] fetchMedicoGuardia: sin dependenciaId, retornando null')
+    return null
+  }
   const { data, error } = await supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
@@ -193,17 +213,21 @@ async function fetchMedicoGuardia(dependenciaId, today) {
     .limit(1)
     .maybeSingle()
   if (error) {
-    if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
-      console.warn('[Dashboard] fetchMedicoGuardia:', error.message)
-    }
+    console.warn('[Dashboard] fetchMedicoGuardia error:', error.message)
     return null
+  }
+  if (!data) {
+    console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para dep ${dependenciaId} cubriendo ${today}`)
+  } else {
+    console.log('[Dashboard] fetchMedicoGuardia result:', data)
   }
   return data
 }
 
-// Próximas guardias — las siguientes 3 filas activas con
+// Próximas guardias — las siguientes filas activas con
 // semana_inicio > hoy, ordenadas ascendente.
 async function fetchProximasGuardias(dependenciaId, today, limit = 3) {
+  console.log('[Dashboard] fetchProximasGuardias input:', { dependenciaId, today, limit })
   if (!dependenciaId) return []
   const { data, error } = await supabase
     .from('medicos_agenda')
@@ -214,11 +238,10 @@ async function fetchProximasGuardias(dependenciaId, today, limit = 3) {
     .order('semana_inicio', { ascending: true })
     .limit(limit)
   if (error) {
-    if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
-      console.warn('[Dashboard] fetchProximasGuardias:', error.message)
-    }
+    console.warn('[Dashboard] fetchProximasGuardias error:', error.message)
     return []
   }
+  console.log('[Dashboard] fetchProximasGuardias result:', data?.length ?? 0, 'fila(s)')
   return data ?? []
 }
 
