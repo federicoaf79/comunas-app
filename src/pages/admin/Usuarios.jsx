@@ -9,7 +9,7 @@ import Select from '../../components/ui/Select'
 import Button from '../../components/ui/Button'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import UsuarioInvitarModal from '../../components/admin/UsuarioInvitarModal'
-import { dateOf, dateTimeOf } from '../../lib/datetime'
+import { dateOf } from '../../lib/datetime'
 
 // =============================================================
 // /admin/usuarios — Panel de Usuarios y Roles
@@ -79,7 +79,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo, created_at, updated_at')
+    .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo, created_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
@@ -358,7 +358,7 @@ export default function Usuarios() {
                   </Td>
                   <Td><EstadoBadge activo={!!u.activo} /></Td>
                   <Td className="whitespace-nowrap text-xs text-primary-400">
-                    {u.updated_at ? dateTimeOf(u.updated_at) : (u.created_at ? dateOf(u.created_at) : '—')}
+                    {u.created_at ? dateOf(u.created_at) : '—'}
                   </Td>
                   <Td className="whitespace-nowrap text-right text-xs font-medium">
                     {editable ? (

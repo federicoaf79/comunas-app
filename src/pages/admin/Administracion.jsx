@@ -221,7 +221,7 @@ function DashboardTab({ municipioId }) {
   const saldoMes    = totalIngMes - totalGasMes
 
   // % ejecución presupuestaria YTD (gastos aprobados / presupuesto anual).
-  const presupuestoTotal = sum(presupuesto, 'monto_anual')
+  const presupuestoTotal = sum(presupuesto, 'monto_asignado')
   const gastadoYTD       = sum(gastos.filter(g => g.estado === 'aprobado'))
   const pctEjecucion     = presupuestoTotal > 0
     ? Math.round((gastadoYTD / presupuestoTotal) * 100)
@@ -605,14 +605,14 @@ function PresupuestoTab({ municipioId }) {
     }
     return presupuesto.map(p => {
       const gastado    = gastoPorDep.get(p.dependencia_id) ?? 0
-      const disponible = Number(p.monto_anual ?? 0) - gastado
-      const pct        = p.monto_anual > 0
-        ? Math.round((gastado / Number(p.monto_anual)) * 100)
+      const disponible = Number(p.monto_asignado ?? 0) - gastado
+      const pct        = p.monto_asignado > 0
+        ? Math.round((gastado / Number(p.monto_asignado)) * 100)
         : 0
       return {
         id:            p.id,
         dependencia:   p.dependencia?.nombre ?? '—',
-        monto_anual:   Number(p.monto_anual ?? 0),
+        monto_asignado:   Number(p.monto_asignado ?? 0),
         gastado,
         disponible,
         pct,
@@ -620,7 +620,7 @@ function PresupuestoTab({ municipioId }) {
     })
   }, [presQ.data, gastosQ.data])
 
-  const totalAnual      = sum(rows, 'monto_anual')
+  const totalAnual      = sum(rows, 'monto_asignado')
   const totalGastado    = sum(rows, 'gastado')
   const totalDisponible = totalAnual - totalGastado
   const totalPct        = totalAnual > 0 ? Math.round((totalGastado / totalAnual) * 100) : 0
@@ -657,7 +657,7 @@ function PresupuestoTab({ municipioId }) {
             {rows.map(r => (
               <Tr key={r.id}>
                 <Td className="font-medium text-primary">{r.dependencia}</Td>
-                <Td className="whitespace-nowrap text-right">{fmtMoney.format(r.monto_anual)}</Td>
+                <Td className="whitespace-nowrap text-right">{fmtMoney.format(r.monto_asignado)}</Td>
                 <Td className="whitespace-nowrap text-right font-semibold">{fmtMoney.format(r.gastado)}</Td>
                 <Td className={`whitespace-nowrap text-right font-semibold ${r.disponible < 0 ? 'text-danger' : 'text-primary-700'}`}>
                   {fmtMoney.format(r.disponible)}

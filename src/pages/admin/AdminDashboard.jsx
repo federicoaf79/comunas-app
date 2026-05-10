@@ -129,7 +129,7 @@ async function fetchUltimasNoticias(municipioId) {
 async function fetchUltimasDenuncias(municipioId) {
   let q = supabase
     .from('denuncias')
-    .select('id, asunto, tipo, estado, created_at')
+    .select('id, descripcion, tipo, estado, created_at')
     .order('created_at', { ascending: false })
     .limit(3)
   if (municipioId) q = q.eq('municipio_id', municipioId)
@@ -142,21 +142,21 @@ async function fetchUltimasDenuncias(municipioId) {
 }
 
 // Médico de guardia rotativo — busca la fila de medicos_agenda
-// activa cuyo rango semana_inicio..semana_fin contiene a hoy.
+// activa cuyo rango fecha_desde..fecha_hasta contiene a hoy.
+// Schema: id, municipio_id, nombre, matricula, fecha_desde,
+// fecha_hasta, horario_inicio, horario_fin, telefono, activo.
 async function fetchMedicoGuardia(municipioId, today) {
   let q = supabase
     .from('medicos_agenda')
-    .select('id, semana_inicio, semana_fin, especialidad, usuario:usuario_id ( id, nombre, especialidad )')
-    .lte('semana_inicio', today)
-    .gte('semana_fin', today)
+    .select('id, nombre, matricula, fecha_desde, fecha_hasta, horario_inicio, horario_fin, telefono')
+    .lte('fecha_desde', today)
+    .gte('fecha_hasta', today)
     .eq('activo', true)
-    .order('semana_inicio', { ascending: false })
+    .order('fecha_desde', { ascending: false })
     .limit(1)
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q.maybeSingle()
   if (error) {
-    // Las columnas (semana_inicio/fin/activo) pueden no existir
-    // todavía en algunos schemas — degradamos a "sin guardia".
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
       console.warn('[Dashboard] fetchMedicoGuardia:', error.message)
     }
@@ -452,9 +452,14 @@ function TurnosHoyCard({ turnos, isLoading }) {
 // ─────────────────────────────────────────────────────────────────
 
 function MedicoGuardiaCard({ data, isLoading }) {
-  const usuario = data?.usuario ?? null
-  const nombre = usuario?.nombre || data?.medico_nombre || ''
-  const especialidad = usuario?.especialidad || data?.especialidad || ''
+  const nombre    = data?.nombre || ''
+  const matricula = data?.matricula || ''
+  // Horario combinado "HH:MM – HH:MM" — guardamos solo HH:MM si los
+  // campos vienen como time o como string corto.
+  const trimHora = (h) => (h ? String(h).slice(0, 5) : '')
+  const hi = trimHora(data?.horario_inicio)
+  const hf = trimHora(data?.horario_fin)
+  const horario = hi && hf ? `${hi} – ${hf}` : (hi || hf || '')
 
   return (
     <div className="card overflow-hidden bg-gradient-to-br from-primary via-primary-700 to-primary-900 p-0 text-white">
@@ -486,12 +491,15 @@ function MedicoGuardiaCard({ data, isLoading }) {
               <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
                 {nombre || 'Sin nombre'}
               </p>
-              {especialidad && (
-                <p className="mt-1 text-sm text-white/70">{especialidad}</p>
+              {matricula && (
+                <p className="mt-1 text-sm text-white/70">Matrícula {matricula}</p>
               )}
-              {(data.semana_inicio || data.semana_fin) && (
-                <p className="mt-3 text-xs text-white/60">
-                  Semana: {data.semana_inicio ? dateOf(data.semana_inicio) : '—'} al {data.semana_fin ? dateOf(data.semana_fin) : '—'}
+              {horario && (
+                <p className="mt-3 text-xs text-white/60">Horario: {horario}</p>
+              )}
+              {(data.fecha_desde || data.fecha_hasta) && (
+                <p className="mt-1 text-xs text-white/50">
+                  {data.fecha_desde ? dateOf(data.fecha_desde) : '—'} al {data.fecha_hasta ? dateOf(data.fecha_hasta) : '—'}
                 </p>
               )}
             </div>
@@ -867,7 +875,7 @@ function ActividadTimelineCard({ noticias, gastos, denuncias, turnosHoy, isLoadi
       out.push({
         id:    `d-${d.id}`,
         tipo:  'denuncia',
-        texto: d.asunto ?? 'Denuncia',
+        texto: d.descripcion ?? 'Denuncia',
         sub:   d.tipo ?? 'Reclamo ciudadano',
         ts:    d.created_at,
       })

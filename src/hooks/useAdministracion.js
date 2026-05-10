@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext'
 //                created_at)
 //   ingresos    (id, municipio_id, fecha date, descripcion, origen,
 //                monto numeric, created_at)
-//   presupuesto (id, municipio_id, dependencia_id, anio, monto_anual)
+//   presupuesto (id, municipio_id, dependencia_id, anio, monto_asignado)
 //
 // Todos los fetches usan AbortController de 8s y filtran por
 // municipio del perfil actual (excepto superadmin que ve todo).
@@ -29,7 +29,7 @@ const INGRESO_COLS = `
   id, municipio_id, fecha, descripcion, origen, monto, created_at
 `
 const PRESUPUESTO_COLS = `
-  id, municipio_id, dependencia_id, anio, monto_anual,
+  id, municipio_id, dependencia_id, anio, monto_asignado,
   dependencia:dependencia_id ( id, nombre )
 `
 
