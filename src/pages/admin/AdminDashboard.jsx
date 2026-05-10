@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -7,14 +8,20 @@ import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
-import { todayArgYMD, dateOf, timeOf } from '../../lib/datetime'
-import StatCard from '../../components/ui/StatCard'
+import { todayArgYMD, dateTimeOf, timeOf } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
 // Dashboard real — sin mockData. Junta datos de turnos, vecinos,
 // mensajes, denuncias, noticias, gastos e ingresos vía hooks
 // existentes + queries inline para los conteos head:true.
+//
+// Esta versión rediseñada agrega:
+//   - Resumen del día (banner navy con saludo + alerta de turnos)
+//   - KPIs con ícono, tendencia vs mes anterior y barra de progreso
+//   - Gráfico SVG de turnos por dependencia del mes
+//   - Gráfico financiero mejorado (vertical bars con eje Y)
+//   - Timeline vertical de actividad reciente
 // =============================================================
 
 const fmtMoney = new Intl.NumberFormat('es-AR', {
@@ -22,33 +29,48 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
   currency: 'ARS',
   maximumFractionDigits: 0,
 })
+const fmtCompacto = new Intl.NumberFormat('es-AR', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+const fmtFechaLarga = new Intl.DateTimeFormat('es-AR', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+})
 
-const ESTADO_LABEL = {
-  pendiente:  'Pendiente',
-  confirmado: 'Confirmado',
-  en_curso:   'En curso',
-  completado: 'Completado',
-  cancelado:  'Cancelado',
-  reservado:  'Pendiente',
-  atendido:   'Atendido',
+// "YYYY-MM" del mes anterior al pasado.
+function prevMonthYYYYMM(yyyymm) {
+  const [y, m] = yyyymm.split('-').map(Number)
+  const py = m === 1 ? y - 1 : y
+  const pm = m === 1 ? 12 : m - 1
+  return `${py}-${String(pm).padStart(2, '0')}`
 }
-const ESTADO_CLASS = {
-  pendiente:  'estado-pendiente',
-  confirmado: 'estado-confirmado',
-  en_curso:   'estado-en-curso',
-  completado: 'estado-completado',
-  cancelado:  'estado-cancelado',
-  reservado:  'estado-pendiente',
-  atendido:   'estado-atendido',
+
+function saludoSegunHora(date = new Date()) {
+  const h = date.getHours()
+  if (h < 12) return 'Buenos días'
+  if (h < 19) return 'Buenas tardes'
+  return 'Buenas noches'
+}
+
+function primerNombre(nombre) {
+  if (!nombre) return ''
+  return nombre.trim().split(/\s+/)[0]
+}
+
+function vecinoNombre(v) {
+  if (!v) return 'Vecino'
+  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
+  return v.nombre_completo || v.apellido || v.nombre || 'Vecino'
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Conteos rápidos vía head:true — no traen filas, solo el count
+// Conteos rápidos vía head:true (no traen filas, solo el count)
 // ─────────────────────────────────────────────────────────────────
 
-async function fetchVecinosCount(municipioId) {
+async function fetchVecinosCount(municipioId, sinceDate = null) {
   let q = supabase.from('vecinos').select('id', { count: 'exact', head: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
+  if (sinceDate)   q = q.gte('created_at', `${sinceDate}T00:00:00`)
   const { count, error } = await q
   if (error) {
     console.warn('[Dashboard] fetchVecinosCount:', error.message)
@@ -57,11 +79,8 @@ async function fetchVecinosCount(municipioId) {
   return count ?? 0
 }
 
-async function fetchMensajesMesCount(municipioId) {
-  const mes = currentMonthYYYYMM()
+async function fetchMensajesCount(municipioId, mes) {
   const { first, next } = monthRange(mes)
-  // Las fechas son timestamptz — comparamos con ISO de la primera
-  // hora del mes en zona local (suficiente para un KPI de cabecera).
   let q = supabase
     .from('sms_log')
     .select('id', { count: 'exact', head: true })
@@ -70,7 +89,7 @@ async function fetchMensajesMesCount(municipioId) {
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { count, error } = await q
   if (error) {
-    console.warn('[Dashboard] fetchMensajesMesCount:', error.message)
+    console.warn('[Dashboard] fetchMensajesCount:', error.message)
     return 0
   }
   return count ?? 0
@@ -106,27 +125,196 @@ async function fetchUltimasNoticias(municipioId) {
   return data ?? []
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Sub-componentes
-// ─────────────────────────────────────────────────────────────────
-
-function vecinoNombre(v) {
-  if (!v) return 'Vecino'
-  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
-  return v.nombre_completo || v.apellido || v.nombre || 'Vecino'
+async function fetchUltimasDenuncias(municipioId) {
+  let q = supabase
+    .from('denuncias')
+    .select('id, asunto, tipo, estado, created_at')
+    .order('created_at', { ascending: false })
+    .limit(3)
+  if (municipioId) q = q.eq('municipio_id', municipioId)
+  const { data, error } = await q
+  if (error) {
+    console.warn('[Dashboard] fetchUltimasDenuncias:', error.message)
+    return []
+  }
+  return data ?? []
 }
 
-function StatCardLoading({ label }) {
+// ─────────────────────────────────────────────────────────────────
+// Resumen del día — franja navy con saludo y alerta
+// ─────────────────────────────────────────────────────────────────
+
+function ResumenDelDia({ perfil, turnosHoy }) {
+  const pendientes = (turnosHoy ?? []).filter(t =>
+    t.estado === 'pendiente' || t.estado === 'confirmado' || t.estado === 'en_curso',
+  ).length
+  const fechaLarga = fmtFechaLarga.format(new Date())
+  const nombre = primerNombre(perfil?.nombre)
+
   return (
-    <div className="card flex flex-col gap-2 p-5">
-      <p className="text-sm font-medium text-primary-500">{label}</p>
-      <Spinner size="sm" />
+    <section className="overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary-700 to-primary-900 p-5 text-white shadow-card sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="font-sora text-xl font-bold sm:text-2xl">
+            {saludoSegunHora()}{nombre ? `, ${nombre}` : ''}.
+          </p>
+          <p className="mt-1 text-sm capitalize text-white/70 sm:text-base">
+            Hoy es {fechaLarga}.
+          </p>
+        </div>
+        {pendientes > 0 && (
+          <div className="inline-flex items-center gap-2.5 rounded-lg bg-accent/15 px-4 py-2.5 ring-1 ring-inset ring-accent/30">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 shrink-0 text-accent" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path strokeLinecap="round" d="M12 7v5l3 2" />
+            </svg>
+            <p className="text-sm font-medium text-white">
+              <span className="font-bold text-accent">{pendientes}</span>{' '}
+              turno{pendientes === 1 ? '' : 's'} pendiente{pendientes === 1 ? '' : 's'} para hoy
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// KPI mejorada — ícono + valor + tendencia + barra mini
+// ─────────────────────────────────────────────────────────────────
+
+function TrendBadge({ delta }) {
+  if (delta == null || !Number.isFinite(delta)) return null
+  if (delta === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-400">
+        — sin cambios
+      </span>
+    )
+  }
+  const positive = delta > 0
+  return (
+    <span className={
+      'inline-flex items-center gap-0.5 text-[11px] font-semibold ' +
+      (positive ? 'text-ok-700' : 'text-danger')
+    }>
+      <span aria-hidden="true">{positive ? '↑' : '↓'}</span>
+      {positive ? '+' : ''}{delta} vs mes anterior
+    </span>
+  )
+}
+
+function MiniProgress({ pct, color = 'primary' }) {
+  const clamped = Math.max(0, Math.min(100, pct ?? 0))
+  const fill = color === 'danger' ? 'bg-danger'
+            : color === 'accent' ? 'bg-accent'
+            : color === 'ok'     ? 'bg-ok'
+            : 'bg-primary'
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary-50">
+      <div className={`h-full ${fill}`} style={{ width: `${clamped}%` }} />
     </div>
   )
 }
 
+function KpiCard({
+  label, value, icon, accent = 'primary',
+  hint, delta, progressPct, progressColor,
+  isLoading,
+}) {
+  // Colores según el accent — el ícono lleva fondo navy con
+  // glyph en gold para los KPIs neutros, y rojo / rojo para
+  // alertas (denuncias).
+  const iconWrap = accent === 'danger'
+    ? 'bg-red-50 text-danger'
+    : 'bg-primary text-accent'
+
+  const valueColor = accent === 'danger' ? 'text-danger'
+                  : accent === 'ok'     ? 'text-ok-700'
+                  : 'text-primary'
+
+  if (isLoading) {
+    return (
+      <div className="card flex flex-col gap-2 p-5">
+        <p className="text-sm font-medium text-primary-500">{label}</p>
+        <Spinner size="sm" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="card flex flex-col gap-3 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-primary-500">{label}</p>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconWrap}`}>
+          {icon}
+        </div>
+      </div>
+      <p className={`-mt-1 text-3xl font-bold ${valueColor}`}>
+        {value}
+      </p>
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-primary-400">
+          {hint ? <span>{hint}</span> : <span />}
+          <TrendBadge delta={delta} />
+        </div>
+        {Number.isFinite(progressPct) && (
+          <MiniProgress pct={progressPct} color={progressColor ?? accent} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+const ICONS = {
+  calendar: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path strokeLinecap="round" d="M3 9h18M8 3v4M16 3v4" />
+    </svg>
+  ),
+  people: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 20a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6M21.5 20a4.5 4.5 0 0 0-4-4.45" />
+    </svg>
+  ),
+  chat: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z" />
+    </svg>
+  ),
+  alert: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01" />
+    </svg>
+  ),
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Turnos del día (lista compacta)
+// ─────────────────────────────────────────────────────────────────
+
+const ESTADO_LABEL = {
+  pendiente:  'Pendiente',
+  confirmado: 'Confirmado',
+  en_curso:   'En curso',
+  completado: 'Completado',
+  cancelado:  'Cancelado',
+  reservado:  'Pendiente',
+  atendido:   'Atendido',
+}
+const ESTADO_CLASS = {
+  pendiente:  'estado-pendiente',
+  confirmado: 'estado-confirmado',
+  en_curso:   'estado-en-curso',
+  completado: 'estado-completado',
+  cancelado:  'estado-cancelado',
+  reservado:  'estado-pendiente',
+  atendido:   'estado-atendido',
+}
+
 function TurnosHoyCard({ turnos, isLoading }) {
-  // Próximos del día: confirmados + pendientes ordenados por hora.
   const proximos = (turnos ?? [])
     .filter(t => t.estado === 'pendiente' || t.estado === 'confirmado' || t.estado === 'en_curso')
     .sort((a, b) => (a.fecha_hora ?? '').localeCompare(b.fecha_hora ?? ''))
@@ -136,7 +324,7 @@ function TurnosHoyCard({ turnos, isLoading }) {
     <div className="card overflow-hidden p-0">
       <header className="flex items-center justify-between border-b border-border bg-primary-50 px-5 py-3">
         <h3 className="text-sm font-semibold text-primary">Turnos de hoy</h3>
-        <Link to="/admin/turnos" className="text-xs font-medium text-primary hover:underline">
+        <Link to="/admin/tablero" className="text-xs font-medium text-primary hover:underline">
           Ver todos →
         </Link>
       </header>
@@ -179,113 +367,106 @@ function TurnosHoyCard({ turnos, isLoading }) {
   )
 }
 
-function ActividadRecienteCard({ noticias, gastos, isLoading }) {
-  const ultimasNoticias = noticias ?? []
-  const ultimosGastos   = (gastos ?? []).slice(0, 3)
+// ─────────────────────────────────────────────────────────────────
+// Gráfico turnos por dependencia (SVG horizontal bars)
+// ─────────────────────────────────────────────────────────────────
+
+function TurnosPorDependenciaCard({ turnosMes, isLoading }) {
+  const items = useMemo(() => {
+    const map = new Map()
+    for (const t of (turnosMes ?? [])) {
+      const dep = t.dependencia?.nombre ?? t.dependencia_nombre ?? '—'
+      map.set(dep, (map.get(dep) ?? 0) + 1)
+    }
+    return Array.from(map.entries())
+      .map(([nombre, count]) => ({ nombre, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8)
+  }, [turnosMes])
+
+  const max = items.reduce((m, it) => Math.max(m, it.count), 0)
 
   return (
     <div className="card overflow-hidden p-0">
       <header className="flex items-center justify-between border-b border-border bg-primary-50 px-5 py-3">
-        <h3 className="text-sm font-semibold text-primary">Actividad reciente</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-primary">Turnos por dependencia</h3>
+          <p className="text-[11px] text-primary-400">Este mes</p>
+        </div>
+        <Link to="/admin/tablero" className="text-xs font-medium text-primary hover:underline">
+          Ver tablero →
+        </Link>
       </header>
       {isLoading ? (
-        <div className="flex items-center justify-center p-8"><Spinner /></div>
+        <div className="flex items-center justify-center p-12"><Spinner /></div>
+      ) : items.length === 0 ? (
+        <p className="p-8 text-center text-sm text-primary-400">
+          Sin turnos cargados este mes.
+        </p>
       ) : (
-        <div className="divide-y divide-border">
-          <section className="p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wider text-accent-700">
-                Últimas noticias
-              </p>
-              <Link to="/admin/noticias" className="text-xs font-medium text-primary hover:underline">
-                Ver noticias →
-              </Link>
-            </div>
-            {ultimasNoticias.length === 0 ? (
-              <p className="text-sm text-primary-400">Todavía no hay noticias publicadas.</p>
-            ) : (
-              <ul className="space-y-2">
-                {ultimasNoticias.map(n => (
-                  <li key={n.id} className="flex items-start gap-3">
-                    <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-primary-700">{n.titulo}</p>
-                      <p className="text-xs text-primary-400">
-                        {n.categoria ? `${n.categoria} · ` : ''}
-                        {n.publicado_at ? dateOf(n.publicado_at) : '—'}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="p-5">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold uppercase tracking-wider text-accent-700">
-                Últimos gastos
-              </p>
-              <Link to="/admin/administracion" className="text-xs font-medium text-primary hover:underline">
-                Ver gastos →
-              </Link>
-            </div>
-            {ultimosGastos.length === 0 ? (
-              <p className="text-sm text-primary-400">No hay gastos cargados.</p>
-            ) : (
-              <ul className="space-y-2">
-                {ultimosGastos.map(g => (
-                  <li key={g.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-primary-700">{g.descripcion}</p>
-                      <p className="text-xs text-primary-400">
-                        {g.categoria ? `${g.categoria} · ` : ''}
-                        {dateOf(g.fecha)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-primary">
-                      {fmtMoney.format(g.monto ?? 0)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+        <ul className="space-y-2 p-5">
+          {items.map(it => {
+            const pct = max > 0 ? (it.count / max) * 100 : 0
+            return (
+              <li key={it.nombre} className="grid grid-cols-[minmax(0,9rem)_1fr_3rem] items-center gap-3 text-xs sm:grid-cols-[minmax(0,11rem)_1fr_3rem]">
+                <span className="truncate font-medium text-primary-700" title={it.nombre}>
+                  {it.nombre}
+                </span>
+                <div className="h-3 overflow-hidden rounded-full bg-background">
+                  <div
+                    className="h-full rounded-full bg-ok"
+                    style={{ width: `${pct}%`, minWidth: it.count > 0 ? 4 : 0 }}
+                  />
+                </div>
+                <span className="text-right font-bold text-primary tabular-nums">
+                  {it.count}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       )}
     </div>
   )
 }
 
-function ResumenFinancieroCard({ ingresos, gastos, presupuesto, isLoading }) {
+// ─────────────────────────────────────────────────────────────────
+// Gráfico financiero — vertical bars con eje Y y valores
+// ─────────────────────────────────────────────────────────────────
+
+function ResumenFinancieroCard({ ingresos, gastos, isLoading }) {
   const sum = (rows, key = 'monto') =>
     (rows ?? []).reduce((a, r) => a + Number(r[key] ?? 0), 0)
 
   const totalIng = sum(ingresos)
   const totalGas = sum(gastos)
   const saldo    = totalIng - totalGas
+  const max      = Math.max(totalIng, totalGas, 1)
 
-  // % de ejecución presupuestaria YTD: gastos aprobados del año en
-  // curso sobre el presupuesto anual total. Usamos la versión rápida:
-  // el componente recibe el presupuesto del año + los gastos del mes,
-  // pero para el % necesitamos los aprobados YTD — si no los tenemos
-  // en este componente, mostramos solo ingresos vs gastos del mes.
-  const presTotal = sum(presupuesto, 'monto_anual')
-  const gastadoMesAprobado = sum((gastos ?? []).filter(g => g.estado === 'aprobado'))
-  const pctMes = presTotal > 0
-    ? Math.min(100, Math.round((gastadoMesAprobado / presTotal) * 100 * 12)) // proyección anualizada
-    : 0
-  // Usamos pctMes solo como referencia del mes — la página de
-  // administración tiene el indicador YTD real. Acá privilegiamos
-  // un dashboard rápido sin queries adicionales.
-  const max = Math.max(totalIng, totalGas, 1)
+  // SVG bar chart — 2 barras pareadas en la mitad derecha, eje Y
+  // a la izquierda con ticks 0/25/50/75/100% del max.
+  const W       = 600
+  const H       = 240
+  const PAD_L   = 60
+  const PAD_R   = 20
+  const PAD_TOP = 30
+  const PAD_BOT = 36
+  const innerH  = H - PAD_TOP - PAD_BOT
+  const innerW  = W - PAD_L - PAD_R
+  const barW    = innerW * 0.18
+  const xCenterIng = PAD_L + innerW * 0.30
+  const xCenterGas = PAD_L + innerW * 0.70
+  const hIng    = (totalIng / max) * innerH
+  const hGas    = (totalGas / max) * innerH
 
   return (
-    <div className="card p-5">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="card overflow-hidden p-0">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-primary-50 px-5 py-3">
         <div>
           <h3 className="text-sm font-semibold text-primary">Resumen financiero del mes</h3>
-          <p className="text-xs text-primary-400">Ingresos vs gastos · {currentMonthYYYYMM()}</p>
+          <p className="text-[11px] text-primary-400">
+            Ingresos vs gastos · {currentMonthYYYYMM()}
+          </p>
         </div>
         <Link to="/admin/administracion" className="text-xs font-medium text-primary hover:underline">
           Ver detalle →
@@ -293,9 +474,10 @@ function ResumenFinancieroCard({ ingresos, gastos, presupuesto, isLoading }) {
       </header>
 
       {isLoading ? (
-        <div className="flex items-center justify-center p-8"><Spinner /></div>
+        <div className="flex items-center justify-center p-12"><Spinner /></div>
       ) : (
-        <div className="space-y-5">
+        <div className="p-5">
+          {/* KPIs arriba */}
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Ingresos</p>
@@ -317,45 +499,232 @@ function ResumenFinancieroCard({ ingresos, gastos, presupuesto, isLoading }) {
             </div>
           </div>
 
-          {/* Barra comparativa simple ingresos vs gastos */}
-          <div>
-            <div className="mb-1 flex items-center justify-between text-xs font-medium text-primary-500">
-              <span>Comparativa del mes</span>
-              <span>
-                Ingresos {Math.round((totalIng / max) * 100)}% · Gastos {Math.round((totalGas / max) * 100)}%
-              </span>
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <span className="w-20 shrink-0 text-xs font-medium text-primary-500">Ingresos</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-primary-50">
-                  <div className="h-full bg-ok" style={{ width: `${(totalIng / max) * 100}%` }} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-20 shrink-0 text-xs font-medium text-primary-500">Gastos</span>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-primary-50">
-                  <div className="h-full bg-accent" style={{ width: `${(totalGas / max) * 100}%` }} />
-                </div>
-              </div>
-            </div>
+          {/* Leyenda */}
+          <div className="mt-4 flex items-center gap-4 text-xs">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-3 rounded-sm bg-primary" /> Ingresos
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-3 rounded-sm bg-accent" /> Gastos
+            </span>
           </div>
 
-          {/* Ejecución presupuestaria (proyección mensual) */}
-          {presTotal > 0 && (
-            <div>
-              <div className="mb-1 flex items-center justify-between text-xs font-medium text-primary-500">
-                <span>Ejecución presupuestaria del mes (proyectada al año)</span>
-                <span>{pctMes}%</span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-primary-50">
-                <div
-                  className={pctMes > 90 ? 'bg-danger h-full' : pctMes > 70 ? 'bg-accent h-full' : 'bg-ok h-full'}
-                  style={{ width: `${Math.min(100, pctMes)}%` }}
-                />
-              </div>
-            </div>
-          )}
+          {/* Chart */}
+          <div className="mt-3 overflow-x-auto">
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className="block h-auto w-full"
+              style={{ minHeight: 200 }}
+              role="img"
+              aria-label="Gráfico de ingresos vs gastos del mes"
+            >
+              {/* Eje Y con ticks 0/25/50/75/100% */}
+              {[0, 25, 50, 75, 100].map(pct => {
+                const y = PAD_TOP + innerH - (pct / 100) * innerH
+                const valueAtTick = (max * pct) / 100
+                return (
+                  <g key={pct}>
+                    <line
+                      x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
+                      stroke="#DDE0EC"
+                      strokeDasharray={pct === 0 ? '0' : '2 4'}
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={PAD_L - 8} y={y + 4}
+                      textAnchor="end"
+                      fontSize="11"
+                      fill="#475A7C"
+                    >
+                      {fmtCompacto.format(valueAtTick)}
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* Bar Ingresos (navy) */}
+              <rect
+                x={xCenterIng - barW / 2}
+                y={PAD_TOP + innerH - hIng}
+                width={barW}
+                height={hIng}
+                fill="#0F1C35"
+                rx="3"
+              >
+                <title>{`Ingresos: ${fmtMoney.format(totalIng)}`}</title>
+              </rect>
+              <text
+                x={xCenterIng}
+                y={PAD_TOP + innerH - hIng - 8}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="700"
+                fill="#0F1C35"
+              >
+                {fmtCompacto.format(totalIng)}
+              </text>
+              <text
+                x={xCenterIng}
+                y={H - 12}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="600"
+                fill="#475A7C"
+              >
+                Ingresos
+              </text>
+
+              {/* Bar Gastos (gold) */}
+              <rect
+                x={xCenterGas - barW / 2}
+                y={PAD_TOP + innerH - hGas}
+                width={barW}
+                height={hGas}
+                fill="#C9A84C"
+                rx="3"
+              >
+                <title>{`Gastos: ${fmtMoney.format(totalGas)}`}</title>
+              </rect>
+              <text
+                x={xCenterGas}
+                y={PAD_TOP + innerH - hGas - 8}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="700"
+                fill="#7E682B"
+              >
+                {fmtCompacto.format(totalGas)}
+              </text>
+              <text
+                x={xCenterGas}
+                y={H - 12}
+                textAnchor="middle"
+                fontSize="12"
+                fontWeight="600"
+                fill="#475A7C"
+              >
+                Gastos
+              </text>
+            </svg>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Actividad reciente — timeline vertical
+// ─────────────────────────────────────────────────────────────────
+
+const TIMELINE_COLOR = {
+  turno:    'bg-ok',
+  noticia:  'bg-accent',
+  gasto:    'bg-primary',
+  denuncia: 'bg-danger',
+}
+const TIMELINE_LABEL = {
+  turno:    'Turno',
+  noticia:  'Noticia',
+  gasto:    'Gasto',
+  denuncia: 'Denuncia',
+}
+
+function ActividadTimelineCard({ noticias, gastos, denuncias, turnosHoy, isLoading }) {
+  // Mezclamos eventos de varias fuentes en un único stream ordenado
+  // por timestamp DESC. Cada evento lleva tipo + texto principal +
+  // contexto + tiempo, y se cap-ea a 8 items.
+  const eventos = useMemo(() => {
+    const out = []
+    for (const n of (noticias ?? [])) {
+      if (!n.publicado_at) continue
+      out.push({
+        id:    `n-${n.id}`,
+        tipo:  'noticia',
+        texto: n.titulo,
+        sub:   n.categoria || '—',
+        ts:    n.publicado_at,
+      })
+    }
+    for (const g of (gastos ?? []).slice(0, 5)) {
+      if (!g.created_at && !g.fecha) continue
+      out.push({
+        id:    `g-${g.id}`,
+        tipo:  'gasto',
+        texto: g.descripcion ?? 'Gasto',
+        sub:   `${g.categoria ?? '—'} · ${fmtMoney.format(g.monto ?? 0)}`,
+        ts:    g.created_at ?? `${g.fecha}T00:00:00`,
+      })
+    }
+    for (const d of (denuncias ?? [])) {
+      out.push({
+        id:    `d-${d.id}`,
+        tipo:  'denuncia',
+        texto: d.asunto ?? 'Denuncia',
+        sub:   d.tipo ?? 'Reclamo ciudadano',
+        ts:    d.created_at,
+      })
+    }
+    for (const t of (turnosHoy ?? []).slice(0, 5)) {
+      out.push({
+        id:    `t-${t.id}`,
+        tipo:  'turno',
+        texto: vecinoNombre(t.vecino),
+        sub:   `${t.dependencia?.nombre ?? '—'} · ${timeOf(t.fecha_hora) || '—'}`,
+        ts:    t.created_at ?? t.fecha_hora,
+      })
+    }
+    return out
+      .filter(e => !!e.ts)
+      .sort((a, b) => (b.ts ?? '').localeCompare(a.ts ?? ''))
+      .slice(0, 8)
+  }, [noticias, gastos, denuncias, turnosHoy])
+
+  return (
+    <div className="card overflow-hidden p-0">
+      <header className="flex items-center justify-between border-b border-border bg-primary-50 px-5 py-3">
+        <h3 className="text-sm font-semibold text-primary">Actividad reciente</h3>
+      </header>
+      {isLoading ? (
+        <div className="flex items-center justify-center p-8"><Spinner /></div>
+      ) : eventos.length === 0 ? (
+        <p className="p-6 text-center text-sm text-primary-400">
+          Sin actividad registrada todavía.
+        </p>
+      ) : (
+        <div className="relative px-5 py-5">
+          {/* Línea vertical navy */}
+          <div className="absolute bottom-5 left-[26px] top-5 w-0.5 bg-primary-100" aria-hidden="true" />
+          <ul className="space-y-4">
+            {eventos.map(e => {
+              const dotCls = TIMELINE_COLOR[e.tipo] ?? 'bg-primary-300'
+              return (
+                <li key={e.id} className="relative flex gap-3 pl-8">
+                  {/* Punto */}
+                  <span
+                    className={`absolute left-[14px] top-1.5 inline-block h-3 w-3 rounded-full ring-2 ring-white ${dotCls}`}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="line-clamp-1 text-sm font-medium text-primary-700">
+                        {e.texto}
+                      </p>
+                      <span className="text-[11px] uppercase tracking-wide text-primary-400">
+                        {TIMELINE_LABEL[e.tipo]}
+                      </span>
+                    </div>
+                    <p className="line-clamp-1 text-xs text-primary-400">
+                      {e.sub}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-primary-300">
+                      {dateTimeOf(e.ts)}
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
     </div>
@@ -371,20 +740,36 @@ export default function AdminDashboard() {
   const municipioId = perfil?.municipio_id ?? null
   const today = todayArgYMD()
   const mes   = currentMonthYYYYMM()
+  const mesAnterior = prevMonthYYYYMM(mes)
   const anio  = currentYear()
+  const monthStart = monthRange(mes).first
 
-  // Turnos del día (hook ya filtrado por municipio del perfil).
+  // Turnos del día
   const turnosQ = useTurnos({ fecha: today })
 
-  // Conteos rápidos de KPIs.
-  const vecinosCountQ = useQuery({
+  // Turnos del mes para el gráfico por dependencia
+  const { first: monthFrom, next: monthEnd } = monthRange(mes)
+  const turnosMesQ = useTurnos({ fechaFrom: monthFrom, fechaTo: monthEnd })
+
+  // KPIs
+  const vecinosTotalQ = useQuery({
     queryKey: ['dashboard', 'vecinos-count', municipioId ?? '__ALL__'],
     queryFn:  () => fetchVecinosCount(municipioId),
     enabled:  !!perfil,
   })
+  const vecinosNuevosQ = useQuery({
+    queryKey: ['dashboard', 'vecinos-nuevos-mes', municipioId ?? '__ALL__', mes],
+    queryFn:  () => fetchVecinosCount(municipioId, monthStart),
+    enabled:  !!perfil,
+  })
   const mensajesMesQ = useQuery({
     queryKey: ['dashboard', 'mensajes-mes', municipioId ?? '__ALL__', mes],
-    queryFn:  () => fetchMensajesMesCount(municipioId),
+    queryFn:  () => fetchMensajesCount(municipioId, mes),
+    enabled:  !!perfil,
+  })
+  const mensajesPrevQ = useQuery({
+    queryKey: ['dashboard', 'mensajes-mes', municipioId ?? '__ALL__', mesAnterior],
+    queryFn:  () => fetchMensajesCount(municipioId, mesAnterior),
     enabled:  !!perfil,
   })
   const denunciasAbQ = useQuery({
@@ -393,18 +778,50 @@ export default function AdminDashboard() {
     enabled:  !!perfil,
   })
 
-  // Actividad reciente — noticias publicadas y últimos gastos.
+  // Actividad reciente
   const noticiasQ = useQuery({
     queryKey: ['dashboard', 'ultimas-noticias', municipioId ?? '__ALL__'],
     queryFn:  () => fetchUltimasNoticias(municipioId),
     enabled:  !!perfil,
   })
-  const gastosRecientesQ = useGastos({}) // sin filtros — la query trae los más recientes (orden DESC por fecha)
+  const gastosRecientesQ = useGastos({})
+  const ultimasDenunciasQ = useQuery({
+    queryKey: ['dashboard', 'ultimas-denuncias', municipioId ?? '__ALL__'],
+    queryFn:  () => fetchUltimasDenuncias(municipioId),
+    enabled:  !!perfil,
+  })
 
-  // Resumen financiero del mes.
-  const ingresosMesQ    = useIngresos({ mes })
-  const gastosMesQ      = useGastos({ mes })
-  const presupuestoQ    = usePresupuesto(anio)
+  // Resumen financiero del mes
+  const ingresosMesQ = useIngresos({ mes })
+  const gastosMesQ   = useGastos({ mes })
+  // presupuesto se mantiene cargado por si lo retomamos en una
+  // próxima iteración (ej: % ejecución como KPI quinto).
+  usePresupuesto(anio)
+
+  // Métricas derivadas para los KPIs
+  const turnosHoy        = turnosQ.data ?? []
+  const turnosCount      = turnosHoy.length
+  const turnosAtendidos  = turnosHoy.filter(t => t.estado === 'completado' || t.estado === 'atendido').length
+  const turnosPctAtendidos = turnosCount > 0 ? Math.round((turnosAtendidos / turnosCount) * 100) : 0
+
+  const vecinosTotal     = vecinosTotalQ.data ?? 0
+  const vecinosNuevos    = vecinosNuevosQ.data ?? 0
+  // Barra mini: % de nuevos del mes sobre el total — chico pero
+  // suficiente para indicar crecimiento visual.
+  const vecinosPct = vecinosTotal > 0
+    ? Math.min(100, Math.round((vecinosNuevos / vecinosTotal) * 100))
+    : 0
+
+  const mensajesMes = mensajesMesQ.data ?? 0
+  const mensajesPrev = mensajesPrevQ.data ?? 0
+  const mensajesDelta = mensajesMes - mensajesPrev
+  const mensajesPct = mensajesMes + mensajesPrev > 0
+    ? Math.round((mensajesMes / (mensajesMes + mensajesPrev)) * 100)
+    : 0
+
+  const denunciasAb = denunciasAbQ.data ?? 0
+  // "Severity meter": cap a 10. Si hay 5 denuncias = 50% de barra.
+  const denunciasPct = Math.min(100, denunciasAb * 10)
 
   return (
     <div className="space-y-6">
@@ -415,64 +832,79 @@ export default function AdminDashboard() {
         </p>
       </header>
 
-      {/* Fila 1: KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {turnosQ.isLoading ? (
-          <StatCardLoading label="Turnos hoy" />
-        ) : (
-          <StatCard
-            label="Turnos hoy"
-            value={turnosQ.data?.length ?? 0}
-            hint={`${(turnosQ.data ?? []).filter(t => t.estado === 'completado' || t.estado === 'atendido').length} atendidos`}
-          />
-        )}
-        {vecinosCountQ.isLoading ? (
-          <StatCardLoading label="Vecinos registrados" />
-        ) : (
-          <StatCard
-            label="Vecinos registrados"
-            value={vecinosCountQ.data ?? 0}
-            hint="Padrón actual"
-          />
-        )}
-        {mensajesMesQ.isLoading ? (
-          <StatCardLoading label="Mensajes del mes" />
-        ) : (
-          <StatCard
-            label="Mensajes del mes"
-            value={mensajesMesQ.data ?? 0}
-            hint="SMS + WhatsApp"
-          />
-        )}
-        {denunciasAbQ.isLoading ? (
-          <StatCardLoading label="Denuncias abiertas" />
-        ) : (
-          <StatCard
-            label="Denuncias abiertas"
-            value={denunciasAbQ.data ?? 0}
-            hint="Sin resolver"
-            accent={denunciasAbQ.data > 0 ? 'danger' : 'primary'}
-          />
-        )}
-      </div>
+      {/* Resumen del día — banner navy */}
+      <ResumenDelDia perfil={perfil} turnosHoy={turnosHoy} />
 
-      {/* Fila 2: Turnos del día + Actividad reciente */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TurnosHoyCard turnos={turnosQ.data} isLoading={turnosQ.isLoading} />
-        <ActividadRecienteCard
-          noticias={noticiasQ.data}
-          gastos={gastosRecientesQ.data}
-          isLoading={noticiasQ.isLoading || gastosRecientesQ.isLoading}
+      {/* KPIs */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          isLoading={turnosQ.isLoading}
+          label="Turnos hoy"
+          value={turnosCount}
+          icon={ICONS.calendar}
+          hint={`${turnosAtendidos} atendido${turnosAtendidos === 1 ? '' : 's'}`}
+          progressPct={turnosPctAtendidos}
+          progressColor="ok"
+        />
+        <KpiCard
+          isLoading={vecinosTotalQ.isLoading || vecinosNuevosQ.isLoading}
+          label="Vecinos registrados"
+          value={vecinosTotal}
+          icon={ICONS.people}
+          hint="Padrón actual"
+          delta={vecinosNuevos > 0 ? vecinosNuevos : null}
+          progressPct={vecinosPct}
+          progressColor="primary"
+        />
+        <KpiCard
+          isLoading={mensajesMesQ.isLoading || mensajesPrevQ.isLoading}
+          label="Mensajes del mes"
+          value={mensajesMes}
+          icon={ICONS.chat}
+          hint="SMS + WhatsApp"
+          delta={mensajesDelta}
+          progressPct={mensajesPct}
+          progressColor="accent"
+        />
+        <KpiCard
+          isLoading={denunciasAbQ.isLoading}
+          label="Denuncias abiertas"
+          value={denunciasAb}
+          icon={ICONS.alert}
+          accent={denunciasAb > 0 ? 'danger' : 'primary'}
+          hint="Sin resolver"
+          progressPct={denunciasAb > 0 ? denunciasPct : 0}
+          progressColor={denunciasAb > 0 ? 'danger' : 'primary'}
         />
       </div>
 
-      {/* Fila 3: Resumen financiero del mes */}
-      <ResumenFinancieroCard
-        ingresos={ingresosMesQ.data}
-        gastos={gastosMesQ.data}
-        presupuesto={presupuestoQ.data}
-        isLoading={ingresosMesQ.isLoading || gastosMesQ.isLoading || presupuestoQ.isLoading}
-      />
+      {/* Fila 2: Turnos del día + Turnos por dependencia */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TurnosHoyCard turnos={turnosQ.data} isLoading={turnosQ.isLoading} />
+        <TurnosPorDependenciaCard
+          turnosMes={turnosMesQ.turnos}
+          isLoading={turnosMesQ.isLoading}
+        />
+      </div>
+
+      {/* Fila 3: Resumen financiero + Actividad reciente */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ResumenFinancieroCard
+          ingresos={ingresosMesQ.data}
+          gastos={gastosMesQ.data}
+          isLoading={ingresosMesQ.isLoading || gastosMesQ.isLoading}
+        />
+        <ActividadTimelineCard
+          noticias={noticiasQ.data}
+          gastos={gastosRecientesQ.data}
+          denuncias={ultimasDenunciasQ.data}
+          turnosHoy={turnosQ.data}
+          isLoading={
+            noticiasQ.isLoading || gastosRecientesQ.isLoading ||
+            ultimasDenunciasQ.isLoading || turnosQ.isLoading
+          }
+        />
+      </div>
     </div>
   )
 }
