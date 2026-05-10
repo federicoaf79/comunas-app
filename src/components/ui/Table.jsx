@@ -1,8 +1,12 @@
 import { cn } from '../../lib/utils'
 
 export function Table({ children, className }) {
+  // overflow-x-auto en vez de overflow-hidden: cuando una tabla tiene
+  // muchas columnas (Inventario / Flota / Administración), el wrapper
+  // permite scroll horizontal en vez de comprimir las celdas y romper
+  // el layout. Mantiene el clip de las esquinas redondeadas.
   return (
-    <div className={cn('overflow-hidden rounded-xl border border-border bg-white shadow-card', className)}>
+    <div className={cn('overflow-x-auto rounded-xl border border-border bg-white shadow-card', className)}>
       <table className="w-full text-left text-sm">{children}</table>
     </div>
   )

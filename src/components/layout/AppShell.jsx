@@ -63,7 +63,12 @@ export default function AppShell() {
       </header>
 
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl p-4 lg:p-6">
+        {/* Sin max-w fijo — el sidebar de AdminLayout queda en 224px
+            (lg:w-56) y el contenido principal usa flex-1 + min-w-0
+            para ocupar todo el ancho disponible. Los breakpoints muy
+            anchos (>1600px) ahora aprovechan el viewport en lugar de
+            dejar dos franjas grises a los costados. */}
+        <div className="w-full p-4 lg:p-6">
           <Outlet />
         </div>
       </main>

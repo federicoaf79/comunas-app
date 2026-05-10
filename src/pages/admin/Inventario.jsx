@@ -97,6 +97,8 @@ function StockBadge({ estado }) {
   return <span className="badge-ok">OK</span>
 }
 
+const PAGE_SIZE_STOCK = 20
+
 function StockTab({ municipioId, dependencias, canEdit }) {
   const [dependenciaId, setDependenciaId] = useState('')
   const [categoria, setCategoria]         = useState('')
@@ -105,6 +107,15 @@ function StockTab({ municipioId, dependencias, canEdit }) {
   const [editing, setEditing]             = useState(null)
   const [movItem, setMovItem]             = useState(null)
   const [movTipo, setMovTipo]             = useState('entrada')
+  const [page, setPage]                   = useState(1) // 1-indexed para la UI
+
+  // Cambios de filtro disparan reset a página 1 vía wrappers — sino
+  // podés quedar mirando "Página 5 de 1" cuando el filtro reduce
+  // el resultado. Hacerlo en useEffect dispara `react-hooks/
+  // set-state-in-effect` (cascading renders).
+  const onChangeDep      = (v) => { setDependenciaId(v); setPage(1) }
+  const onChangeCateg    = (v) => { setCategoria(v);     setPage(1) }
+  const onChangeEstado   = (v) => { setEstadoFiltro(v);  setPage(1) }
 
   const filters = {
     dependenciaId: dependenciaId || undefined,
@@ -116,6 +127,11 @@ function StockTab({ municipioId, dependencias, canEdit }) {
     if (!estadoFiltro) return items
     return items.filter(i => stockEstado(i) === estadoFiltro)
   }, [items, estadoFiltro])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE_STOCK))
+  const safePage   = Math.min(page, totalPages)
+  const pageStart  = (safePage - 1) * PAGE_SIZE_STOCK
+  const pageItems  = filtered.slice(pageStart, pageStart + PAGE_SIZE_STOCK)
 
   const totalItems    = items.length
   const itemsCriticos = items.filter(i => stockEstado(i) === 'critico').length
@@ -136,17 +152,17 @@ function StockTab({ municipioId, dependencias, canEdit }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Select
-            label="Dependencia" value={dependenciaId} onChange={setDependenciaId}
+            label="Dependencia" value={dependenciaId} onChange={onChangeDep}
             placeholder="Todas"
             options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
           />
           <Select
-            label="Categoría" value={categoria} onChange={setCategoria}
+            label="Categoría" value={categoria} onChange={onChangeCateg}
             placeholder="Todas"
             options={CATEGORIAS.map(c => ({ value: c, label: c }))}
           />
           <Select
-            label="Estado de stock" value={estadoFiltro} onChange={setEstadoFiltro}
+            label="Estado de stock" value={estadoFiltro} onChange={onChangeEstado}
             placeholder="Todos"
             options={[
               { value: 'critico', label: 'Crítico' },
@@ -165,6 +181,7 @@ function StockTab({ municipioId, dependencias, canEdit }) {
       ) : filtered.length === 0 ? (
         <div className="card p-10 text-center text-sm text-primary-400">No hay ítems con estos filtros.</div>
       ) : (
+        <>
         <Table>
           <THead>
             <Tr>
@@ -180,7 +197,7 @@ function StockTab({ municipioId, dependencias, canEdit }) {
             </Tr>
           </THead>
           <tbody>
-            {filtered.map(i => {
+            {pageItems.map(i => {
               const est = stockEstado(i)
               return (
                 <Tr key={i.id}>
@@ -219,6 +236,16 @@ function StockTab({ municipioId, dependencias, canEdit }) {
             })}
           </tbody>
         </Table>
+        <Paginacion
+          page={safePage}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageStart={pageStart}
+          pageSize={PAGE_SIZE_STOCK}
+          onPrev={() => setPage(p => Math.max(1, p - 1))}
+          onNext={() => setPage(p => Math.min(totalPages, p + 1))}
+        />
+        </>
       )}
 
       {modalNew && (
@@ -255,7 +282,43 @@ function StockTab({ municipioId, dependencias, canEdit }) {
   )
 }
 
-function ItemFormModal({ editing = null, onClose, onSave, dependencias, saving }) {
+// Paginación inline genérica — la usa StockTab y se reusa desde
+// DependenciaGeneral via export.
+export function Paginacion({ page, totalPages, totalItems, pageStart, pageSize, onPrev, onNext }) {
+  if (totalItems === 0) return null
+  const fin = Math.min(pageStart + pageSize, totalItems)
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-white px-4 py-3 text-sm shadow-card">
+      <span className="text-primary-500">
+        Mostrando <b className="text-primary">{pageStart + 1}–{fin}</b> de{' '}
+        <b className="text-primary">{totalItems}</b>
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={page <= 1}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          ← Anterior
+        </button>
+        <span className="px-2 text-xs font-medium text-primary-700">
+          Página <b className="text-primary">{page}</b> de <b className="text-primary">{totalPages}</b>
+        </span>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={page >= totalPages}
+          className="btn-secondary px-3 py-1.5 text-xs disabled:opacity-40"
+        >
+          Siguiente →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export function ItemFormModal({ editing = null, onClose, onSave, dependencias, saving }) {
   const [form, setForm] = useState(() => editing ?? {
     dependencia_id: '', nombre: '', categoria: '', unidad: '',
     stock_actual: '', stock_minimo: '', precio_referencia: '', partida_codigo: '',
@@ -333,7 +396,7 @@ function ItemFormModal({ editing = null, onClose, onSave, dependencias, saving }
   )
 }
 
-function MovimientoFormModal({ item, tipo, onClose }) {
+export function MovimientoFormModal({ item, tipo, onClose }) {
   const [cantidad, setCantidad] = useState('')
   const [motivo, setMotivo]     = useState('')
   const [error, setError]       = useState('')
