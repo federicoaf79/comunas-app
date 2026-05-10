@@ -123,7 +123,10 @@ function StepIdentificacion({
   submitting, error,
   onSubmit,
 }) {
-  const canSubmit = dni.trim() && telefono.trim() && email.trim()
+  // Email es opcional — el ingreso se habilita con DNI + teléfono.
+  // Si el usuario lo completa se persiste en la sesión y el paso 3
+  // (empleados municipales) lo pre-rellena.
+  const canSubmit = dni.trim() && telefono.trim()
   return (
     <section className="animate-fade-in">
       <StepIndicator step={1} />
@@ -162,15 +165,17 @@ function StepIdentificacion({
             Sin el +54, solo el número celular
           </p>
         </div>
-        <Input
-          label="Email"
-          value={email}
-          onChange={e => onChange('email', e.target.value)}
-          required
-          type="email"
-          autoComplete="email"
-          placeholder="tu@email.com"
-        />
+        <div>
+          <Input
+            label="Email"
+            value={email}
+            onChange={e => onChange('email', e.target.value)}
+            type="email"
+            autoComplete="email"
+            placeholder="tu@email.com"
+          />
+          <p className="mt-1 text-xs text-gray-500">Opcional</p>
+        </div>
 
         {error && (
           <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
@@ -444,12 +449,17 @@ export default function Acceso() {
     }
   }
 
-  // PASO 2 — Vecino: crear sesión y entrar al área personal.
+  // PASO 2 — Vecino: crear sesión y entrar al área personal. El
+  // email del paso 1 se guarda como `email_login` (opcional) por
+  // si después se necesita para pre-rellenar formularios o
+  // notificaciones, sin pisar el `email` real del vecino persistido.
   function handleEntrarComoVecino() {
     if (!vecino) return
+    const emailLimpio = form.email.trim()
     setVecinoSession({
       ...vecino,
       telefono_login: form.telefono.replace(/[^0-9]/g, ''),
+      ...(emailLimpio ? { email_login: emailLimpio } : {}),
     })
     navigate('/mi-cuenta', { replace: true })
   }
