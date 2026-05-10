@@ -147,16 +147,21 @@ function StepIdentificacion({
           autoFocus
           placeholder="Ej: 32145678"
         />
-        <Input
-          label="Teléfono celular"
-          value={telefono}
-          onChange={e => onChange('telefono', e.target.value)}
-          required
-          inputMode="tel"
-          type="tel"
-          autoComplete="tel"
-          placeholder="+54 9 ..."
-        />
+        <div>
+          <Input
+            label="Teléfono celular"
+            value={telefono}
+            onChange={e => onChange('telefono', e.target.value)}
+            required
+            inputMode="tel"
+            type="tel"
+            autoComplete="tel"
+            placeholder="3854123456"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            Sin el +54, solo el número celular
+          </p>
+        </div>
         <Input
           label="Email"
           value={email}

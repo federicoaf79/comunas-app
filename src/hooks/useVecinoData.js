@@ -75,14 +75,21 @@ export async function refetchVecinoById(vecinoId) {
   return data
 }
 
-// Login del vecino — match DNI + teléfono. Comparación de
-// teléfono "tolerante": ignora caracteres no numéricos (mismo
-// criterio que la RPC de HC). Devuelve el vecino si matchea, null
-// si no. NO crea sesión — eso lo hace el llamador.
+// Normaliza un teléfono a "los últimos 10 dígitos" — alcanza para
+// matchear celulares argentinos sin importar el prefijo: +54, 54,
+// 0 inicial, 9 móvil, espacios o guiones, todos colapsan al mismo
+// número. Cubre los casos típicos: '+54 9 3854 123456',
+// '543854123456', '3854123456', '0385 4-12-3456' → '3854123456'.
+function normalizeTel(tel) {
+  return String(tel ?? '').replace(/\D/g, '').slice(-10)
+}
+
+// Login del vecino — match DNI + teléfono. Devuelve el vecino si
+// matchea, null si no. NO crea sesión — eso lo hace el llamador.
 export async function findVecinoByDniTelefono({ dni, telefono }) {
-  const dniClean = (dni ?? '').trim()
-  const telClean = (telefono ?? '').replace(/[^0-9]/g, '')
-  if (!dniClean || !telClean) return null
+  const dniClean   = (dni ?? '').trim()
+  const telInputN  = normalizeTel(telefono)
+  if (!dniClean || !telInputN) return null
 
   const { data, error } = await supabaseAnon
     .from('vecinos')
@@ -92,13 +99,11 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
   if (error) throw error
   if (!data || data.length === 0) return null
 
-  // Match por contenido — el vecino ingresa con o sin código de
-  // país, prefijo, espacios. El registro guardado puede tener
-  // formato distinto. Comparamos sólo dígitos.
+  // Comparación equality sobre los últimos 10 dígitos. Si el
+  // registro guardado tiene menos de 10 dígitos (raro) la función
+  // los compara igual contra el suffix del input.
   for (const v of data) {
-    const stored = (v.telefono ?? '').replace(/[^0-9]/g, '')
-    if (!stored) continue
-    if (stored.endsWith(telClean) || telClean.endsWith(stored) || stored.includes(telClean)) {
+    if (normalizeTel(v.telefono) === telInputN) {
       return v
     }
   }
