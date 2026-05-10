@@ -144,8 +144,44 @@ async function fetchUltimasDenuncias(municipioId) {
 // Schema real de medicos_agenda:
 //   id, municipio_id, dependencia_id, usuario_id,
 //   semana_inicio, semana_fin, activo, created_at
-// El nombre del médico vive en `usuarios` y se trae vía join.
-const MEDICO_COLS = 'id, semana_inicio, semana_fin, usuario:usuario_id(id, nombre, email)'
+//
+// Fetch en DOS pasos (sin join embebido): primero la fila de
+// medicos_agenda, después el usuario por usuario_id. Si el join
+// embebido falla por RLS sobre `usuarios`, PostgREST cancela toda
+// la query y termina devolviendo null — el split lo aísla.
+//
+// Filtros de fecha con .filter('col','op',today) explícito: el
+// builder .lte/.gte sobre columnas DATE con string ISO se
+// comportaba inconsistentemente para este caso.
+//
+// PREREQ DB — ejecutar en Supabase si fetchMedicoGuardia sigue
+// devolviendo null aunque la fila exista (causa raíz típica: las
+// policies usan helpers que no están creados en la instancia, y
+// la query devuelve 0 filas sin error):
+//
+//   ALTER TABLE public.medicos_agenda ENABLE ROW LEVEL SECURITY;
+//   CREATE POLICY "medicos lectura" ON public.medicos_agenda
+//     FOR SELECT TO authenticated, anon USING (true);
+//
+// (Reemplaza/coexiste con la policy basada en helpers según el
+// estado real del schema — ver supabase/migrations/...comunas_schema.sql.)
+const MEDICO_COLS = 'id, semana_inicio, semana_fin, usuario_id, municipio_id'
+
+async function attachUsuarios(rows) {
+  if (!rows?.length) return rows ?? []
+  const ids = [...new Set(rows.map(r => r.usuario_id).filter(Boolean))]
+  if (!ids.length) return rows.map(r => ({ ...r, usuario: null }))
+  const { data: usuarios, error } = await supabase
+    .from('usuarios')
+    .select('id, nombre, email')
+    .in('id', ids)
+  if (error) {
+    console.warn('[Dashboard] attachUsuarios error:', error.message)
+    return rows.map(r => ({ ...r, usuario: null }))
+  }
+  const byId = new Map((usuarios ?? []).map(u => [u.id, u]))
+  return rows.map(r => ({ ...r, usuario: byId.get(r.usuario_id) ?? null }))
+}
 
 // Médico activo esta semana — la fila de medicos_agenda cuyo
 // rango semana_inicio..semana_fin contiene a hoy, filtrada
@@ -161,20 +197,21 @@ async function fetchMedicoGuardia(municipioId, today) {
     .select(MEDICO_COLS)
     .eq('municipio_id', municipioId)
     .eq('activo', true)
-    .lte('semana_inicio', today)
-    .gte('semana_fin', today)
+    .filter('semana_inicio', 'lte', today)
+    .filter('semana_fin', 'gte', today)
+    .order('semana_inicio', { ascending: false })
     .limit(1)
-    .maybeSingle()
   if (error) {
     console.warn('[Dashboard] fetchMedicoGuardia error:', error.message)
     return null
   }
-  if (!data) {
+  if (!data?.length) {
     console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para municipio ${municipioId} cubriendo ${today}`)
-  } else {
-    console.log('[Dashboard] fetchMedicoGuardia result:', data)
+    return null
   }
-  return data
+  const [withUsuario] = await attachUsuarios(data)
+  console.log('[Dashboard] fetchMedicoGuardia result:', withUsuario)
+  return withUsuario ?? null
 }
 
 // Próximas guardias — las siguientes filas activas con
@@ -187,15 +224,16 @@ async function fetchProximasGuardias(municipioId, today, limit = 3) {
     .select(MEDICO_COLS)
     .eq('municipio_id', municipioId)
     .eq('activo', true)
-    .gt('semana_inicio', today)
+    .filter('semana_inicio', 'gt', today)
     .order('semana_inicio', { ascending: true })
     .limit(limit)
   if (error) {
     console.warn('[Dashboard] fetchProximasGuardias error:', error.message)
     return []
   }
-  console.log('[Dashboard] fetchProximasGuardias result:', data?.length ?? 0, 'fila(s)')
-  return data ?? []
+  const withUsuarios = await attachUsuarios(data ?? [])
+  console.log('[Dashboard] fetchProximasGuardias result:', withUsuarios.length, 'fila(s)')
+  return withUsuarios
 }
 
 // Últimos mensajes salientes/entrantes desde la tabla sms_log.
