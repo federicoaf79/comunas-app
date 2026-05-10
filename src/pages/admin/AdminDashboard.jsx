@@ -203,25 +203,21 @@ async function fetchMedicoGuardia(dependenciaId, today) {
     return null
   }
   const { data, error } = await supabase
-    .from('medicos_agenda')
-    .select(MEDICO_COLS)
-    .eq('dependencia_id', dependenciaId)
-    .eq('activo', true)
-    .filter('semana_inicio', 'lte', today)
-    .filter('semana_fin', 'gte', today)
-    .order('semana_inicio', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .rpc('get_medico_guardia', {
+      p_dependencia_id: dependenciaId,
+      p_fecha: today,
+    })
   if (error) {
     console.warn('[Dashboard] fetchMedicoGuardia error:', error.message)
     return null
   }
-  if (!data) {
+  const medico = data?.[0] ?? null
+  if (!medico) {
     console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para dep ${dependenciaId} cubriendo ${today}`)
   } else {
-    console.log('[Dashboard] fetchMedicoGuardia result:', data)
+    console.log('[Dashboard] fetchMedicoGuardia result:', medico)
   }
-  return data
+  return medico
 }
 
 // Próximas guardias — las siguientes filas activas con
@@ -634,7 +630,7 @@ function rangoSemanaTexto(desde, hasta) {
 // del médico vigente — las próximas guardias se listan con un
 // bullet más compacto debajo.
 function MedicoFicha({ medico }) {
-  const nombre = medico?.usuario?.nombre || 'Médico de guardia'
+  const nombre = medico?.usuario_nombre || 'Médico de guardia'
   const rango  = rangoSemanaTexto(medico?.semana_inicio, medico?.semana_fin)
 
   return (
