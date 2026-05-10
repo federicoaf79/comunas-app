@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 
 const PAGE_SIZE  = 50
 const TIMEOUT_MS = 8000
@@ -126,16 +127,15 @@ export async function updateVecino(id, data) {
 }
 
 // Hook React: encapsula el estado de carga, paginación y mutaciones.
-// El municipio_id se resuelve del perfil del usuario logueado.
-// - admin_comuna / operador: filtra por su municipio.
-// - superadmin (municipio_id null): trae todos los municipios.
+// El municipio_id se resuelve vía useEffectiveMunicipioId — para
+// admin_comuna/operador devuelve el municipio del perfil; para
+// superadmin sin municipio asignado cae al primer municipio activo.
+// Sin este fallback, el listado quedaba sin datos para superadmin
+// porque la RLS o el query devolvían 0 filas.
 export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
-
-  // Tomamos el campo tal cual viene del perfil; null acá significa
-  // explícitamente "todos los municipios" (caso superadmin).
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = useEffectiveMunicipioId()
 
   // La query se dispara apenas haya perfil cargado. NO requiere
   // municipio: superadmin con municipio_id = null debe ver todos

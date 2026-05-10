@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useTurnos } from '../../hooks/useTurnos'
 import {
   useGastos, useIngresos, usePresupuesto,
@@ -943,7 +944,10 @@ function ActividadTimelineCard({ noticias, gastos, denuncias, turnosHoy, isLoadi
 
 export default function AdminDashboard() {
   const { perfil, municipio } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  // useEffectiveMunicipioId — para superadmin sin municipio_id cae al
+  // primer municipio activo. Sin esto el médico de guardia y otras
+  // queries con .eq('municipio_id', null) no encuentran filas.
+  const municipioId = useEffectiveMunicipioId()
   const today = todayArgYMD()
   const mes   = currentMonthYYYYMM()
   const mesAnterior = prevMonthYYYYMM(mes)
@@ -1016,8 +1020,11 @@ export default function AdminDashboard() {
   // próxima iteración (ej: % ejecución como KPI quinto).
   usePresupuesto(anio)
 
-  // Métricas derivadas para los KPIs
-  const turnosHoy        = turnosQ.data ?? []
+  // Métricas derivadas para los KPIs.
+  // useTurnos devuelve { turnos, isLoading, ... } — NO un useQuery
+  // crudo. Acceder a `.data` daba siempre undefined → turnos hoy
+  // aparecía vacío aunque hubiera filas.
+  const turnosHoy        = turnosQ.turnos ?? []
   const turnosCount      = turnosHoy.length
   const turnosAtendidos  = turnosHoy.filter(t => t.estado === 'completado' || t.estado === 'atendido').length
   const turnosPctAtendidos = turnosCount > 0 ? Math.round((turnosAtendidos / turnosCount) * 100) : 0
@@ -1098,7 +1105,7 @@ export default function AdminDashboard() {
 
       {/* Fila 2: Turnos del día (tabla) + Médico de guardia */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <TurnosHoyCard turnos={turnosQ.data} isLoading={turnosQ.isLoading} />
+        <TurnosHoyCard turnos={turnosHoy} isLoading={turnosQ.isLoading} />
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
           isLoading={medicoGuardiaQ.isLoading}
@@ -1128,7 +1135,7 @@ export default function AdminDashboard() {
           noticias={noticiasQ.data}
           gastos={gastosRecientesQ.data}
           denuncias={ultimasDenunciasQ.data}
-          turnosHoy={turnosQ.data}
+          turnosHoy={turnosHoy}
           isLoading={
             noticiasQ.isLoading || gastosRecientesQ.isLoading ||
             ultimasDenunciasQ.isLoading || turnosQ.isLoading

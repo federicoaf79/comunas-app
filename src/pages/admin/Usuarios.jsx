@@ -79,7 +79,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, nombre, email, telefono, activo, created_at, updated_at')
+    .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo, created_at, updated_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
