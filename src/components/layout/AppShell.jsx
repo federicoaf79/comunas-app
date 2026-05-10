@@ -9,10 +9,17 @@ function primaryRole(roles) {
   return ROLE_PRIORITY.find(r => roles.includes(r)) ?? roles[0]
 }
 
+// Top-nav del header. El superadmin obtiene AMBOS atajos —
+// "Panel super" (su home) y "Panel comuna" (las rutas /admin/* que
+// usa para ver los módulos operativos de un municipio). Sin el
+// segundo el superadmin queda atrapado en /superadmin/* y solo
+// puede saltar a /admin tipeando la URL a mano.
 function navFor(roles) {
   const items = []
   if (roles?.includes('superadmin')) items.push({ to: '/superadmin', label: 'Panel super' })
-  if (roles?.some(r => r === 'admin_comuna' || r === 'operador')) items.push({ to: '/admin', label: 'Panel comuna' })
+  if (roles?.some(r => ['admin_comuna', 'operador', 'superadmin'].includes(r))) {
+    items.push({ to: '/admin', label: 'Panel comuna' })
+  }
   if (roles?.includes('vecino')) items.push({ to: '/portal', label: 'Mi portal' })
   return items
 }
