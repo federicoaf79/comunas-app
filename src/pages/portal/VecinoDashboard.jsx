@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { useTurnosVecino, useHCVecino } from '../../hooks/useVecinoData'
+import { useTurnosVecino, useHCVecino, useReclamosVecino } from '../../hooks/useVecinoData'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
@@ -38,10 +38,11 @@ const VINCULO_LABEL = {
 }
 
 const TABS = [
-  { key: 'turnos',  label: 'Mis turnos',  short: 'Turnos' },
-  { key: 'salud',   label: 'Mi salud',    short: 'Salud' },
-  { key: 'datos',   label: 'Mis datos',   short: 'Datos' },
-  { key: 'familia', label: 'Mi familia',  short: 'Familia' },
+  { key: 'turnos',   label: 'Mis turnos',   short: 'Turnos' },
+  { key: 'salud',    label: 'Mi salud',     short: 'Salud' },
+  { key: 'datos',    label: 'Mis datos',    short: 'Datos' },
+  { key: 'reclamos', label: 'Mis reclamos', short: 'Reclamos' },
+  { key: 'familia',  label: 'Mi familia',   short: 'Familia' },
 ]
 
 function nombreVecino(v) {
@@ -49,6 +50,17 @@ function nombreVecino(v) {
   if (v.nombre_completo) return v.nombre_completo
   if (v.nombre && v.apellido) return `${v.nombre} ${v.apellido}`
   return v.nombre || v.apellido || 'Vecino'
+}
+
+// Solo el primer token de `nombre` con casing parejo. La DB suele
+// guardar nombres en mayúsculas ("MARIANA VICTORIA"); pasamos a
+// formato Title (M + restos en minúscula) para que el saludo se
+// vea natural ("Hola, Mariana"). Si nombre viene vacío, devuelve
+// string vacío y el caller decide el fallback.
+function primerNombreLindo(nombre) {
+  const first = (nombre ?? '').trim().split(/\s+/)[0] ?? ''
+  if (!first) return ''
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase()
 }
 
 function Escudo({ className = 'h-9 w-9' }) {
@@ -105,11 +117,13 @@ function DashboardHeader({ vecino, onSignOut }) {
 
         <div className="mt-5 sm:mt-7">
           <h1 className="font-sora text-2xl font-bold leading-tight sm:text-3xl">
-            Hola, {nombreVecino(vecino)}
+            Hola, {primerNombreLindo(vecino.nombre) || 'vecino'}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/70">
             {vecino.dni && <span>DNI {vecino.dni}</span>}
-            {vecino.localidad && <span>· {vecino.localidad}</span>}
+            {(vecino.barrio || vecino.localidad) && (
+              <span>· {vecino.barrio || vecino.localidad}</span>
+            )}
           </div>
         </div>
       </div>
@@ -455,7 +469,7 @@ function DatosTab({ vecino }) {
           <DatoRow label="Teléfono" value={vecino.telefono} />
           <DatoRow label="Email" value={vecino.email} />
           <DatoRow label="Dirección" value={vecino.direccion} />
-          <DatoRow label="Localidad / Barrio" value={vecino.localidad} />
+          <DatoRow label="Localidad / Barrio" value={vecino.barrio || vecino.localidad} />
         </div>
       </div>
 
@@ -510,7 +524,116 @@ function DatosTab({ vecino }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// D) Mi familia — turnos sacados para familiares
+// D) Mis reclamos — denuncias del vecino
+// ─────────────────────────────────────────────────────────────────
+
+const ESTADO_RECLAMO_LABEL = {
+  abierto:    'Abierto',
+  en_proceso: 'En proceso',
+  resuelto:   'Resuelto',
+  cerrado:    'Cerrado',
+  rechazado:  'Rechazado',
+}
+
+// Colores por estado: azul OK / gold / navy / gris (cero verde).
+const ESTADO_RECLAMO_CLASS = {
+  abierto:    'inline-flex items-center rounded-full bg-ok-50 px-2.5 py-0.5 text-xs font-semibold text-ok-700 ring-1 ring-inset ring-ok-100',
+  en_proceso: 'inline-flex items-center rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100',
+  resuelto:   'inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-200',
+  cerrado:    'inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200',
+  rechazado:  'inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200',
+}
+
+const PRIORIDAD_BADGE = {
+  alta:    'inline-flex items-center rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-800 ring-1 ring-inset ring-accent-200',
+  urgente: 'inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-danger ring-1 ring-inset ring-red-200',
+}
+
+function truncate(text, max = 60) {
+  const s = (text ?? '').trim()
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
+}
+
+function ReclamosTab({ reclamos, isLoading, error }) {
+  return (
+    <section className="space-y-6">
+      <div>
+        <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mis reclamos</h2>
+        <p className="text-sm text-primary-500">
+          Denuncias y reclamos que registraste en el municipio.
+        </p>
+      </div>
+
+      {isLoading && (
+        <div className="card flex items-center justify-center p-12">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          No pudimos cargar tus reclamos. Probá de nuevo.
+        </div>
+      )}
+
+      {!isLoading && !error && reclamos.length === 0 && (
+        <div className="card p-10 text-center">
+          <p className="text-sm text-primary-500">
+            No tenés reclamos registrados.
+          </p>
+          <Link to="/portal/turno" className="btn-accent mt-4 inline-flex">
+            Hacer un reclamo
+          </Link>
+        </div>
+      )}
+
+      {!isLoading && !error && reclamos.length > 0 && (
+        <div className="card overflow-hidden p-0">
+          <ul className="divide-y divide-border">
+            {reclamos.map(r => {
+              const estadoCls = ESTADO_RECLAMO_CLASS[r.estado]
+                ?? ESTADO_RECLAMO_CLASS.abierto
+              const prioridadCls = PRIORIDAD_BADGE[r.prioridad] ?? null
+              return (
+                <li key={r.id} className="space-y-2 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">
+                        {dateOf(r.created_at)}
+                      </p>
+                      {r.tipo && (
+                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-accent-700">
+                          {r.tipo}
+                        </p>
+                      )}
+                      <p className="mt-1 text-sm text-primary-700 sm:text-base">
+                        {truncate(r.descripcion, 60)}
+                      </p>
+                      {r.ubicacion && (
+                        <p className="mt-0.5 text-xs text-primary-400">📍 {r.ubicacion}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={estadoCls}>
+                        {ESTADO_RECLAMO_LABEL[r.estado] ?? r.estado}
+                      </span>
+                      {prioridadCls && (
+                        <span className={prioridadCls}>{r.prioridad}</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// E) Mi familia — turnos sacados para familiares
 // ─────────────────────────────────────────────────────────────────
 
 function FamiliaTab({ turnos, isLoading, error }) {
@@ -604,6 +727,7 @@ export default function VecinoDashboard() {
     dni:      vecinoSession?.dni,
     telefono: vecinoSession?.telefono_login || vecinoSession?.telefono,
   })
+  const reclamosQ = useReclamosVecino(vecinoSession?.id)
 
   function handleSignOut() {
     clearVecinoSession()
@@ -635,8 +759,15 @@ export default function VecinoDashboard() {
             error={hcQ.error}
           />
         )}
-        {tab === 'datos'   && <DatosTab vecino={vecinoSession} />}
-        {tab === 'familia' && (
+        {tab === 'datos'    && <DatosTab vecino={vecinoSession} />}
+        {tab === 'reclamos' && (
+          <ReclamosTab
+            reclamos={reclamosQ.data ?? []}
+            isLoading={reclamosQ.isLoading}
+            error={reclamosQ.error}
+          />
+        )}
+        {tab === 'familia'  && (
           <FamiliaTab
             turnos={turnosQ.data ?? []}
             isLoading={turnosQ.isLoading}

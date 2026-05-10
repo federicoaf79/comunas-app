@@ -65,7 +65,7 @@ export async function refetchVecinoById(vecinoId) {
   if (!vecinoId) return null
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, municipio_id')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id')
     .eq('id', vecinoId)
     .maybeSingle()
   if (error) {
@@ -93,7 +93,7 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, municipio_id')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id')
     .eq('dni', dniClean)
     .limit(5)
   if (error) throw error
@@ -108,4 +108,40 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
     }
   }
   return null
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Reclamos del vecino (lectura desde el área "Mi cuenta")
+//
+// La policy "vecino ve sus reclamos" (migration
+// 20260509000004_reclamos_anon_select) abre SELECT a anon SOLO
+// para filas con vecino_id != null. El filtro por id-del-vecino se
+// hace en el cliente, así que vale el mismo trade-off que el
+// resto de "Mi cuenta": cualquiera con la anon key podría
+// enumerar reclamos vinculados a un vecino. Aceptable para un
+// portal sin auth real; si la privacidad lo requiere se puede
+// reemplazar por una RPC con verificación DNI+teléfono.
+// ─────────────────────────────────────────────────────────────────
+
+const RECLAMO_COLS_PUBLIC =
+  'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at'
+
+async function fetchReclamosByVecino(vecinoId) {
+  if (!vecinoId) return []
+  const { data, error } = await supabaseAnon
+    .from('reclamos')
+    .select(RECLAMO_COLS_PUBLIC)
+    .eq('vecino_id', vecinoId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data ?? []
+}
+
+export function useReclamosVecino(vecinoId) {
+  return useQuery({
+    queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__'],
+    queryFn:  () => fetchReclamosByVecino(vecinoId),
+    enabled:  !!vecinoId,
+  })
 }
