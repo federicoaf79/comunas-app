@@ -441,6 +441,123 @@ function PlanBSection({ disabled, municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Marco Legal y Normativo — referencias institucionales
+//
+// Solo se muestra a admin_comuna / superadmin (los operadores no
+// la necesitan en su día a día). Es informativa: 3 bloques con
+// íconos + texto + link a la fuente externa correspondiente.
+// ─────────────────────────────────────────────────────────────────
+
+const NORMATIVA_BLOQUES = [
+  {
+    titulo: 'Ley Provincial N° 6706',
+    texto:
+      'Regula el funcionamiento de las Comisiones Municipales de ' +
+      'Santiago del Estero. COMUNAS implementa los procesos ' +
+      'administrativos y financieros conforme a sus disposiciones, ' +
+      'con las mismas atribuciones reconocidas a los Municipios de ' +
+      'Tercera Categoría.',
+    linkLabel: 'Ver ley orgánica N° 5590 (supletoria)',
+    linkHref:  'http://municipios.unq.edu.ar/modules/mislibros/archivos/Ley_Organica_Santiago_del_Estero.pdf',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zM14 3v5h5" />
+        <path strokeLinecap="round" d="M9 13h6M9 17h4" />
+      </svg>
+    ),
+  },
+  {
+    titulo: 'SARC — Tribunal de Cuentas SGO',
+    texto:
+      'El Tribunal de Cuentas de Santiago del Estero implementó en ' +
+      '2022 el Sistema de Administración y Rendición de Cuentas ' +
+      '(SARC) para las 137 comisiones municipales. El módulo de ' +
+      'Administración de COMUNAS genera reportes compatibles con ' +
+      'los requerimientos de rendición de cuentas provinciales.',
+    linkLabel: 'Ir al Tribunal de Cuentas',
+    linkHref:  'http://www.tcse.gob.ar/index.php/rendiciones/municipalidades-y-comisiones/',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
+      </svg>
+    ),
+  },
+  {
+    titulo: 'Clasificación de Partidas Presupuestarias',
+    texto:
+      'El módulo financiero organiza los gastos según la ' +
+      'clasificación económica estándar: Partida 02 (Bienes de ' +
+      'consumo), Partida 03 (Servicios no personales), Partida 04 ' +
+      '(Bienes de capital) y Partida 05 (Transferencias). ' +
+      'Compatible con el esquema de rendición provincial.',
+    linkLabel: 'Ver clasificación presupuestaria municipal',
+    linkHref:  'https://rdi.uncoma.edu.ar/bitstream/handle/uncomaid/18526/presupuesto%20municipal-%20DANGELO-final%2020-5-2014.pdf',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7 14l4-4 4 4 5-6" />
+      </svg>
+    ),
+  },
+]
+
+function MarcoNormativoSection() {
+  return (
+    <section
+      aria-labelledby="marco-normativo-h2"
+      className="overflow-hidden rounded-xl border-2 border-accent bg-primary text-white shadow-card"
+    >
+      <header className="px-5 py-5 sm:px-6">
+        <h2 id="marco-normativo-h2" className="font-sora text-xl font-bold sm:text-2xl">
+          Marco Legal y Normativo
+        </h2>
+        <p className="mt-1 text-sm text-white/70 sm:text-base">
+          COMUNAS está construido en conformidad con la legislación vigente
+          para comisiones municipales de la Provincia de Santiago del Estero.
+        </p>
+      </header>
+
+      <div className="grid gap-3 px-5 pb-5 sm:px-6 lg:grid-cols-3">
+        {NORMATIVA_BLOQUES.map(b => (
+          <article
+            key={b.titulo}
+            className="flex h-full flex-col gap-3 rounded-lg bg-white/5 p-4 ring-1 ring-inset ring-white/10"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
+              {b.icon}
+            </div>
+            <h3 className="font-sora text-base font-bold leading-tight text-white">
+              {b.titulo}
+            </h3>
+            <p className="text-sm leading-relaxed text-white/75">
+              {b.texto}
+            </p>
+            <a
+              href={b.linkHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-auto inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
+            >
+              {b.linkLabel}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </a>
+          </article>
+        ))}
+      </div>
+
+      <footer className="border-t border-white/10 px-5 py-3 sm:px-6">
+        <p className="text-xs text-white/50">
+          Última revisión normativa: mayo 2026 · Ante dudas legales,
+          consultá al Tribunal de Cuentas de Santiago del Estero o a tu
+          asesor jurídico.
+        </p>
+      </footer>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página
 // ─────────────────────────────────────────────────────────────────
 
@@ -483,6 +600,10 @@ export default function ConfigGeneral() {
           <DatosMunicipioSection disabled={sinMunicipio} municipioId={municipioId} />
           <PlanBSection          disabled={sinMunicipio} municipioId={municipioId} />
         </div>
+      )}
+
+      {(hasRole('admin_comuna') || hasRole('superadmin')) && (
+        <MarcoNormativoSection />
       )}
     </div>
   )
