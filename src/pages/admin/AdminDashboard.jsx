@@ -141,22 +141,31 @@ async function fetchUltimasDenuncias(municipioId) {
   return data ?? []
 }
 
-const MEDICO_COLS = 'id, nombre, matricula, fecha_desde, fecha_hasta, horario_inicio, horario_fin, telefono'
+// Schema real de medicos_agenda:
+//   id, dependencia_id, usuario_id, semana_inicio, semana_fin,
+//   activo, created_at
+// No tiene municipio_id ni columnas de matrícula/horario — esos
+// datos viven en `usuarios` (el join trae nombre y email). Para
+// filtrar por municipio usamos el inner join sobre dependencia y
+// preguntamos por `dependencia.municipio_id`.
+const MEDICO_COLS = `
+  id, semana_inicio, semana_fin, activo,
+  dependencia:dependencia_id!inner ( id, tipo, municipio_id ),
+  usuario:usuario_id ( id, nombre, email )
+`
 
-// Médico de guardia rotativo — busca la fila de medicos_agenda
-// activa cuyo rango fecha_desde..fecha_hasta contiene a hoy.
-// Schema: id, municipio_id, nombre, matricula, fecha_desde,
-// fecha_hasta, horario_inicio, horario_fin, telefono, activo.
 async function fetchMedicoGuardia(municipioId, today) {
   let q = supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
-    .lte('fecha_desde', today)
-    .gte('fecha_hasta', today)
     .eq('activo', true)
-    .order('fecha_desde', { ascending: false })
+    .lte('semana_inicio', today)
+    .gte('semana_fin', today)
+    .order('semana_inicio', { ascending: false })
     .limit(1)
-  if (municipioId) q = q.eq('municipio_id', municipioId)
+  // Filtramos a través del !inner join sobre dependencia. PostgREST
+  // permite `.eq('dependencia.col', valor)` cuando el embed es inner.
+  if (municipioId) q = q.eq('dependencia.municipio_id', municipioId)
   const { data, error } = await q.maybeSingle()
   if (error) {
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
@@ -168,17 +177,16 @@ async function fetchMedicoGuardia(municipioId, today) {
 }
 
 // Próxima guardia futura — fallback cuando hoy no hay médico
-// asignado. Trae la fila activa con fecha_desde > today (la más
-// cercana). Devuelve null si no hay ninguna programada.
+// asignado. Trae la fila activa con semana_inicio > today.
 async function fetchProximoMedico(municipioId, today) {
   let q = supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
-    .gt('fecha_desde', today)
     .eq('activo', true)
-    .order('fecha_desde', { ascending: true })
+    .gt('semana_inicio', today)
+    .order('semana_inicio', { ascending: true })
     .limit(1)
-  if (municipioId) q = q.eq('municipio_id', municipioId)
+  if (municipioId) q = q.eq('dependencia.municipio_id', municipioId)
   const { data, error } = await q.maybeSingle()
   if (error) {
     if (!/permission|not allowed|policy/i.test(error.message ?? '')) {
@@ -557,11 +565,12 @@ function TurnosHoyCard({ turnos, isLoading, proximos = [], proximosLoading = fal
 // la guardia activa como la próxima programada cuando no hay médico
 // asignado esta semana. `tagInicio` es un texto chico arriba del
 // nombre ("Próxima guardia · 15 may" cuando estamos en fallback).
+//
+// Schema real de medicos_agenda: el nombre del médico vive en el
+// JOIN a usuarios (`usuario.nombre`); la fila trae solo el rango
+// semanal (semana_inicio/semana_fin) y estado.
 function MedicoFicha({ medico, tagInicio = null }) {
-  const trimHora = (h) => (h ? String(h).slice(0, 5) : '')
-  const hi = trimHora(medico?.horario_inicio)
-  const hf = trimHora(medico?.horario_fin)
-  const horario = hi && hf ? `${hi} – ${hf}` : (hi || hf || '')
+  const nombre = medico?.usuario?.nombre || 'Médico de guardia'
 
   return (
     <div className="flex items-start gap-4">
@@ -578,17 +587,11 @@ function MedicoFicha({ medico, tagInicio = null }) {
           </p>
         )}
         <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
-          {medico?.nombre || 'Sin nombre'}
+          {nombre}
         </p>
-        {medico?.matricula && (
-          <p className="mt-1 text-sm text-white/70">Matrícula {medico.matricula}</p>
-        )}
-        {horario && (
-          <p className="mt-3 text-xs text-white/60">Horario: {horario}</p>
-        )}
-        {(medico?.fecha_desde || medico?.fecha_hasta) && (
-          <p className="mt-1 text-xs text-white/50">
-            {medico.fecha_desde ? dateOf(medico.fecha_desde) : '—'} al {medico.fecha_hasta ? dateOf(medico.fecha_hasta) : '—'}
+        {(medico?.semana_inicio || medico?.semana_fin) && (
+          <p className="mt-2 text-xs text-white/60">
+            Semana: {medico.semana_inicio ? dateOf(medico.semana_inicio) : '—'} al {medico.semana_fin ? dateOf(medico.semana_fin) : '—'}
           </p>
         )}
       </div>
@@ -625,7 +628,7 @@ function MedicoGuardiaCard({ data, isLoading, proximo = null, proximoLoading = f
             </p>
             <MedicoFicha
               medico={proximo}
-              tagInicio={`Próxima guardia · ${proximo.fecha_desde ? dateOf(proximo.fecha_desde) : '—'}`}
+              tagInicio={`Próxima guardia · ${proximo.semana_inicio ? dateOf(proximo.semana_inicio) : '—'}`}
             />
           </div>
         ) : (
