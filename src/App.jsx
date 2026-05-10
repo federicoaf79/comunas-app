@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider }   from './context/AuthContext'
 import { VecinoProvider } from './context/VecinoContext'
@@ -18,7 +18,6 @@ import Register from './pages/auth/Register'
 import AdminDashboard      from './pages/admin/AdminDashboard'
 import CrmVecinos          from './pages/admin/CrmVecinos'
 import VecinoDetail        from './pages/admin/VecinoDetail'
-import TurnosDia           from './pages/admin/Turnos'
 import TablazoCross        from './pages/admin/TablazoCross'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
@@ -84,7 +83,11 @@ const router = createBrowserRouter([
                   { path: '/admin',            element: <AdminDashboard /> },
                   { path: '/admin/crm',        element: <CrmVecinos /> },
                   { path: '/admin/crm/:id',    element: <VecinoDetail /> },
-                  { path: '/admin/turnos',     element: <TurnosDia /> },
+                  // /admin/turnos se unificó dentro del Tablero
+                  // (que ya tiene filtros y vistas día/semana).
+                  // Mantenemos la ruta como redirect para no romper
+                  // bookmarks o links del producto anterior.
+                  { path: '/admin/turnos',     element: <Navigate to="/admin/tablero" replace /> },
                   { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/sala',       element: <SalaPrimerosAuxilios /> },
