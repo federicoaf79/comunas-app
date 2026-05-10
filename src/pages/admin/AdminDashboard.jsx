@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
-import { useTurnos } from '../../hooks/useTurnos'
+import { useTurnos, useProximosTurnos } from '../../hooks/useTurnos'
 import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
@@ -374,71 +374,124 @@ const ESTADO_CLASS = {
   atendido:   'estado-atendido',
 }
 
-function TurnosHoyCard({ turnos, isLoading }) {
-  const proximos = (turnos ?? [])
+// Formato "Lunes, 13 de mayo" para el header de "Próximos turnos".
+const fmtFechaProximo = new Intl.DateTimeFormat('es-AR', {
+  weekday: 'long', day: 'numeric', month: 'long',
+})
+function fechaTituloDe(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d)) return ''
+  // Capitalizamos el primer caracter — Intl devuelve "lunes" en
+  // minúsculas y queda mejor en el header como "Lunes".
+  const s = fmtFechaProximo.format(d)
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function TurnoRow({ t, mostrarHora = true }) {
+  const isFamiliar = !!t.metadata?.para_familiar
+  const nombre = isFamiliar
+    ? (t.metadata.familiar_nombre || vecinoNombre(t.vecino))
+    : vecinoNombre(t.vecino)
+  const depNombre = t.dependencia?.nombre ?? t.dependencia_nombre ?? '—'
+  return (
+    <tr>
+      <td className="whitespace-nowrap px-4 py-3 font-bold text-primary">
+        {mostrarHora
+          ? (timeOf(t.fecha_hora) || '—')
+          : (
+            <span className="inline-flex items-center rounded-full bg-accent/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700 ring-1 ring-inset ring-accent/30">
+              Próximo
+            </span>
+          )}
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={
+            'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ' +
+            depBadgeClass(t.dependencia?.tipo)
+          }
+        >
+          {depNombre}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span className="font-medium text-primary-700">{nombre}</span>
+        {isFamiliar && <span className="ml-1 text-[11px]" aria-hidden="true">👨‍👩‍👧</span>}
+      </td>
+      <td className="px-4 py-3">
+        <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
+          {ESTADO_LABEL[t.estado] ?? t.estado}
+        </span>
+      </td>
+    </tr>
+  )
+}
+
+function TurnosHoyCard({ turnos, isLoading, proximos = [], proximosLoading = false }) {
+  const filaHoy = (turnos ?? [])
     .filter(t => t.estado === 'pendiente' || t.estado === 'confirmado' || t.estado === 'en_curso')
     .sort((a, b) => (a.fecha_hora ?? '').localeCompare(b.fecha_hora ?? ''))
     .slice(0, 6)
 
+  // Si no hay turnos hoy, caemos a la lista de próximos turnos.
+  // El header se relabel para dejar claro que son a futuro y la
+  // primera celda muestra una badge "PRÓXIMO" en vez de la hora —
+  // así la info de la fecha (en el subtítulo) queda como ancla.
+  const usandoProximos = filaHoy.length === 0 && proximos.length > 0
+  const filas          = usandoProximos ? proximos : filaHoy
+  const fechaProximos  = usandoProximos ? fechaTituloDe(proximos[0]?.fecha_hora) : null
+
+  const titulo = usandoProximos ? 'Próximos turnos' : 'Turnos de hoy'
+  const subtitulo = usandoProximos
+    ? `No hay turnos para hoy · ${fechaProximos}`
+    : null
+
+  // Loading: si todavía esperamos turnos hoy, mostramos spinner.
+  // Si terminó turnos hoy y caímos al fallback, esperamos también
+  // el query de próximos antes de decidir el empty final.
+  const showSpinner = isLoading || (filaHoy.length === 0 && proximosLoading)
+
   return (
     <div className="card overflow-hidden p-0">
-      <header className="flex items-center justify-between border-b border-border bg-primary-50 px-5 py-3">
-        <h3 className="text-sm font-semibold text-primary">Turnos de hoy</h3>
-        <Link to="/admin/tablero" className="text-xs font-medium text-primary hover:underline">
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-primary-50 px-5 py-3">
+        <div className="min-w-0">
+          <h3 className="font-sora text-sm font-semibold text-primary">{titulo}</h3>
+          {subtitulo && (
+            <p className="mt-0.5 text-xs text-primary-500">{subtitulo}</p>
+          )}
+        </div>
+        <Link to="/admin/tablero" className="shrink-0 text-xs font-medium text-primary hover:underline">
           Ver todos →
         </Link>
       </header>
-      {isLoading ? (
+      {showSpinner ? (
         <div className="flex items-center justify-center p-8"><Spinner /></div>
-      ) : proximos.length === 0 ? (
-        <p className="p-6 text-center text-sm text-primary-400">
-          No hay turnos pendientes para hoy.
-        </p>
+      ) : filas.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 p-8 text-center">
+          <p className="text-sm text-primary-400">Sin turnos programados próximamente.</p>
+          <Link
+            to="/admin/tablero"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-primary-700"
+          >
+            Ir al tablero →
+          </Link>
+        </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-primary-50/40 text-xs uppercase tracking-wide text-primary-500">
               <tr>
-                <th className="px-4 py-2 font-semibold">Hora</th>
+                <th className="px-4 py-2 font-semibold">{usandoProximos ? '' : 'Hora'}</th>
                 <th className="px-4 py-2 font-semibold">Dependencia</th>
                 <th className="px-4 py-2 font-semibold">Vecino</th>
                 <th className="px-4 py-2 font-semibold">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {proximos.map(t => {
-                const isFamiliar = !!t.metadata?.para_familiar
-                const nombre = isFamiliar
-                  ? (t.metadata.familiar_nombre || vecinoNombre(t.vecino))
-                  : vecinoNombre(t.vecino)
-                const depNombre = t.dependencia?.nombre ?? t.dependencia_nombre ?? '—'
-                return (
-                  <tr key={t.id}>
-                    <td className="whitespace-nowrap px-4 py-3 font-bold text-primary">
-                      {timeOf(t.fecha_hora) || '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={
-                          'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ' +
-                          depBadgeClass(t.dependencia?.tipo)
-                        }
-                      >
-                        {depNombre}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-primary-700">{nombre}</span>
-                      {isFamiliar && <span className="ml-1 text-[11px]" aria-hidden="true">👨‍👩‍👧</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
-                        {ESTADO_LABEL[t.estado] ?? t.estado}
-                      </span>
-                    </td>
-                  </tr>
-                )
-              })}
+              {filas.map(t => (
+                <TurnoRow key={t.id} t={t} mostrarHora={!usandoProximos} />
+              ))}
             </tbody>
           </table>
         </div>
@@ -1045,6 +1098,15 @@ export default function AdminDashboard() {
   // aparecía vacío aunque hubiera filas.
   const turnosHoy        = turnosQ.turnos ?? []
   const turnosCount      = turnosHoy.length
+
+  // Fallback: si no hay turnos hoy, traemos los próximos 5 turnos
+  // futuros para mostrarlos en TurnosHoyCard. El query se enciende
+  // solo cuando hace falta (turnosHoy vacío + ya tenemos municipio).
+  const proximosTurnosQ = useProximosTurnos({
+    municipioId,
+    enabled: !turnosQ.isLoading && turnosHoy.length === 0 && !!municipioId,
+    limit:   5,
+  })
   const turnosAtendidos  = turnosHoy.filter(t => t.estado === 'completado' || t.estado === 'atendido').length
   const turnosPctAtendidos = turnosCount > 0 ? Math.round((turnosAtendidos / turnosCount) * 100) : 0
 
@@ -1124,7 +1186,12 @@ export default function AdminDashboard() {
 
       {/* Fila 2: Turnos del día (tabla) + Médico de guardia */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <TurnosHoyCard turnos={turnosHoy} isLoading={turnosQ.isLoading} />
+        <TurnosHoyCard
+          turnos={turnosHoy}
+          isLoading={turnosQ.isLoading}
+          proximos={proximosTurnosQ.data ?? []}
+          proximosLoading={proximosTurnosQ.isFetching}
+        />
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
           isLoading={medicoGuardiaQ.isLoading}

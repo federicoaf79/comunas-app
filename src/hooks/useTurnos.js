@@ -272,6 +272,55 @@ export function useTurnos({
   }
 }
 
+// =============================================================
+// useProximosTurnos — siguiente bloque de turnos a futuro.
+//
+// Lo consume el Dashboard cuando "turnos hoy" viene vacío: en vez
+// de mostrar un empty state seco, busca los próximos 5 turnos no
+// cancelados con fecha_hora > now() y los lista para que el
+// operador vea el siguiente día con actividad.
+//
+// Solo se dispara cuando `enabled === true` (por defecto false) —
+// el caller pasa true si turnosHoy.length === 0 y hay municipioId.
+// =============================================================
+
+async function fetchProximosTurnos({ municipioId, limit = 5 }) {
+  const controller = new AbortController()
+  const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    let q = supabase
+      .from('turnos')
+      .select(TURNO_SELECT)
+      .gt('fecha_hora', new Date().toISOString())
+      .neq('estado', 'cancelado')
+      .order('fecha_hora', { ascending: true })
+      .limit(limit)
+      .abortSignal(controller.signal)
+    if (municipioId) q = q.eq('municipio_id', municipioId)
+    const { data, error } = await q
+    clearTimeout(timeoutId)
+    if (error) {
+      console.error('[useTurnos] fetchProximosTurnos error:', error)
+      throw error
+    }
+    return (data ?? []).map(normalizeTurno)
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (controller.signal.aborted || e?.name === 'AbortError' || /abort/i.test(e?.message ?? '')) {
+      throw new Error(`fetchProximosTurnos timeout (${TIMEOUT_MS}ms)`)
+    }
+    throw e
+  }
+}
+
+export function useProximosTurnos({ municipioId, enabled = false, limit = 5 } = {}) {
+  return useQuery({
+    queryKey: ['turnos', 'proximos', municipioId ?? '__ALL__', limit],
+    queryFn:  () => fetchProximosTurnos({ municipioId, limit }),
+    enabled,
+  })
+}
+
 export function useTurnosByVecino(vecinoId) {
   const { perfil } = useAuth()
   const enabled = !!perfil && !!vecinoId
