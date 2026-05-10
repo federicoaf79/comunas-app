@@ -142,95 +142,52 @@ async function fetchUltimasDenuncias(municipioId) {
 }
 
 // Schema real de medicos_agenda:
-//   id, dependencia_id, usuario_id, semana_inicio, semana_fin,
-//   activo, created_at
-// No tiene municipio_id propio. El nombre del médico vive en
-// `usuarios` y se trae vía join.
-//
-// Para filtrar por municipio el flujo es de dos pasos: primero
-// fetchDepSalud resuelve la dependencia de salud del municipio
-// (caps/salud/sala), después medicos_agenda se filtra por ese
-// dependencia_id.
-const MEDICO_COLS = `
-  id, semana_inicio, semana_fin, activo,
-  usuario:usuario_id ( id, nombre, email )
-`
-
-const TIPOS_DEP_SALUD = ['caps', 'salud', 'sala']
-
-async function fetchDepSalud(municipioId) {
-  // Trace de input para debuggear casos donde el card aparece sin
-  // médico aunque hay datos cargados: si municipioId es null acá,
-  // el problema está aguas arriba (useEffectiveMunicipioId).
-  console.log('[Dashboard] fetchDepSalud input municipioId:', municipioId)
-  if (!municipioId) {
-    console.warn('[Dashboard] fetchDepSalud: sin municipioId, retornando null')
-    return null
-  }
-  // El campo es `activa` (femenino) en dependencias, vs `activo`
-  // (masculino) en usuarios y en medicos_agenda. Confirmado por
-  // schema. Filtro por municipio_id ya aplicado.
-  const { data, error } = await supabase
-    .from('dependencias')
-    .select('id, tipo, nombre, activa, municipio_id')
-    .eq('municipio_id', municipioId)
-    .in('tipo', TIPOS_DEP_SALUD)
-    .eq('activa', true)
-    .order('tipo', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (error) {
-    console.warn('[Dashboard] fetchDepSalud error:', error.message)
-    return null
-  }
-  if (!data) {
-    console.warn(`[Dashboard] fetchDepSalud: sin dep de salud para municipio ${municipioId} (tipos ${TIPOS_DEP_SALUD.join('/')} con activa=true)`)
-  } else {
-    console.log('[Dashboard] fetchDepSalud result:', data)
-  }
-  return data
-}
+//   id, municipio_id, dependencia_id, usuario_id,
+//   semana_inicio, semana_fin, activo, created_at
+// El nombre del médico vive en `usuarios` y se trae vía join.
+const MEDICO_COLS = 'id, semana_inicio, semana_fin, usuario:usuario_id(id, nombre, email)'
 
 // Médico activo esta semana — la fila de medicos_agenda cuyo
-// rango semana_inicio..semana_fin contiene a hoy.
-//
-// OJO: el campo se llama `activo` (masculino) en medicos_agenda,
-// distinto del `activa` (femenino) en dependencias.
-async function fetchMedicoGuardia(dependenciaId, today) {
-  console.log('[Dashboard] fetchMedicoGuardia input:', { dependenciaId, today })
-  if (!dependenciaId) {
-    console.warn('[Dashboard] fetchMedicoGuardia: sin dependenciaId, retornando null')
+// rango semana_inicio..semana_fin contiene a hoy, filtrada
+// directamente por municipio_id.
+async function fetchMedicoGuardia(municipioId, today) {
+  console.log('[Dashboard] fetchMedicoGuardia input:', { municipioId, today })
+  if (!municipioId) {
+    console.warn('[Dashboard] fetchMedicoGuardia: sin municipioId, retornando null')
     return null
   }
   const { data, error } = await supabase
-    .rpc('get_medico_guardia', {
-      p_dependencia_id: dependenciaId,
-      p_fecha: today,
-    })
+    .from('medicos_agenda')
+    .select(MEDICO_COLS)
+    .eq('municipio_id', municipioId)
+    .eq('activo', true)
+    .lte('semana_inicio', today)
+    .gte('semana_fin', today)
+    .limit(1)
+    .maybeSingle()
   if (error) {
     console.warn('[Dashboard] fetchMedicoGuardia error:', error.message)
     return null
   }
-  const medico = data?.[0] ?? null
-  if (!medico) {
-    console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para dep ${dependenciaId} cubriendo ${today}`)
+  if (!data) {
+    console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para municipio ${municipioId} cubriendo ${today}`)
   } else {
-    console.log('[Dashboard] fetchMedicoGuardia result:', medico)
+    console.log('[Dashboard] fetchMedicoGuardia result:', data)
   }
-  return medico
+  return data
 }
 
 // Próximas guardias — las siguientes filas activas con
 // semana_inicio > hoy, ordenadas ascendente.
-async function fetchProximasGuardias(dependenciaId, today, limit = 3) {
-  console.log('[Dashboard] fetchProximasGuardias input:', { dependenciaId, today, limit })
-  if (!dependenciaId) return []
+async function fetchProximasGuardias(municipioId, today, limit = 3) {
+  console.log('[Dashboard] fetchProximasGuardias input:', { municipioId, today, limit })
+  if (!municipioId) return []
   const { data, error } = await supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
-    .eq('dependencia_id', dependenciaId)
+    .eq('municipio_id', municipioId)
     .eq('activo', true)
-    .filter('semana_inicio', 'gt', today)
+    .gt('semana_inicio', today)
     .order('semana_inicio', { ascending: true })
     .limit(limit)
   if (error) {
@@ -630,7 +587,7 @@ function rangoSemanaTexto(desde, hasta) {
 // del médico vigente — las próximas guardias se listan con un
 // bullet más compacto debajo.
 function MedicoFicha({ medico }) {
-  const nombre = medico?.usuario_nombre || 'Médico de guardia'
+  const nombre = medico?.usuario?.nombre || 'Médico de guardia'
   const rango  = rangoSemanaTexto(medico?.semana_inicio, medico?.semana_fin)
 
   return (
@@ -1280,30 +1237,20 @@ export default function AdminDashboard() {
     enabled:  !!perfil,
   })
 
-  // Médico de guardia — flujo de 3 queries:
-  //   1) depSaludQ: resuelve la dependencia de salud del municipio.
-  //      medicos_agenda se filtra por dependencia_id, no por
-  //      municipio_id (no existe esa columna).
-  //   2) medicoGuardiaQ: médico activo esta semana.
-  //   3) proximasGuardiasQ: las próximas 3 guardias futuras. Se
+  // Médico de guardia — flujo de 2 queries, ambas filtradas
+  // directamente por municipio_id sobre medicos_agenda:
+  //   1) medicoGuardiaQ: médico activo esta semana.
+  //   2) proximasGuardiasQ: las próximas 3 guardias futuras. Se
   //      muestran SIEMPRE que existan, no solo como fallback.
-  const depSaludQ = useQuery({
-    queryKey: ['dashboard', 'dep-salud', municipioId ?? '__NONE__'],
-    queryFn:  () => fetchDepSalud(municipioId),
-    enabled:  !!perfil && !!municipioId,
-    staleTime: 60 * 60 * 1000,
-  })
-  const depSaludId = depSaludQ.data?.id ?? null
-
   const medicoGuardiaQ = useQuery({
-    queryKey: ['dashboard', 'medico-guardia', depSaludId ?? '__NONE__', today],
-    queryFn:  () => fetchMedicoGuardia(depSaludId, today),
-    enabled:  !!perfil && !!depSaludId,
+    queryKey: ['dashboard', 'medico-guardia', municipioId ?? '__NONE__', today],
+    queryFn:  () => fetchMedicoGuardia(municipioId, today),
+    enabled:  !!perfil && !!municipioId,
   })
   const proximasGuardiasQ = useQuery({
-    queryKey: ['dashboard', 'proximas-guardias', depSaludId ?? '__NONE__', today],
-    queryFn:  () => fetchProximasGuardias(depSaludId, today, 3),
-    enabled:  !!perfil && !!depSaludId,
+    queryKey: ['dashboard', 'proximas-guardias', municipioId ?? '__NONE__', today],
+    queryFn:  () => fetchProximasGuardias(municipioId, today, 3),
+    enabled:  !!perfil && !!municipioId,
   })
   const ultimosMensajesQ = useQuery({
     queryKey: ['dashboard', 'ultimos-mensajes', municipioId ?? '__ALL__'],
@@ -1420,7 +1367,7 @@ export default function AdminDashboard() {
         />
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
-          isLoading={depSaludQ.isLoading || medicoGuardiaQ.isLoading}
+          isLoading={medicoGuardiaQ.isLoading}
           proximas={proximasGuardiasQ.data ?? []}
           proximasLoading={proximasGuardiasQ.isFetching}
         />
