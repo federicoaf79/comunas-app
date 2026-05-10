@@ -213,12 +213,17 @@ export async function fetchDependencias(municipioId) {
 // Hooks React
 // =============================================================
 
+// `municipioIdOverride` permite al caller forzar un municipio
+// destino — caso superadmin con perfil.municipio_id = null que
+// cae a "primer municipio activo" via useEffectiveMunicipioId. Sin
+// este override el filtro queda en null y, según RLS, puede no
+// devolver filas (turnos del día vacío en el Dashboard).
 export function useTurnos({
   dependenciaId, fecha, fechaFrom, fechaTo, estado,
-} = {}) {
+} = {}, { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   const enabled = !!perfil
 
   const query = useQuery({

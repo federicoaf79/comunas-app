@@ -954,12 +954,23 @@ export default function AdminDashboard() {
   const anio  = currentYear()
   const monthStart = monthRange(mes).first
 
-  // Turnos del día
-  const turnosQ = useTurnos({ fecha: today })
+  // Turnos del día — usamos fechaFrom + fechaTo del mismo día en
+  // zona Argentina (fetchTurnos arma el rango con offset -03:00) en
+  // lugar del shorthand `fecha`. Es funcionalmente equivalente pero
+  // explicita el rango de timestamptz que se está consultando.
+  // Pasamos el municipioId efectivo para que el superadmin no quede
+  // con filtro null.
+  const turnosQ = useTurnos(
+    { fechaFrom: today, fechaTo: today },
+    { municipioIdOverride: municipioId },
+  )
 
   // Turnos del mes para el gráfico por dependencia
   const { first: monthFrom, next: monthEnd } = monthRange(mes)
-  const turnosMesQ = useTurnos({ fechaFrom: monthFrom, fechaTo: monthEnd })
+  const turnosMesQ = useTurnos(
+    { fechaFrom: monthFrom, fechaTo: monthEnd },
+    { municipioIdOverride: municipioId },
+  )
 
   // KPIs
   const vecinosTotalQ = useQuery({
