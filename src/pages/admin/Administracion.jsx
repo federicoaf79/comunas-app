@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
 import {
-  useGastos, useIngresos, usePresupuesto,
+  useGastos, useIngresos, usePresupuesto, usePresupuestoPartidas,
   useCreateGasto, useUpdateGastoEstado, useCreateIngreso,
+  useCreatePresupuestoPartida,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
+import { usePartidasTipo } from '../../hooks/useInventario'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -13,6 +15,8 @@ import Input from '../../components/ui/Input'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
+import Modal from '../../components/ui/Modal'
+import Button from '../../components/ui/Button'
 import GastoFormModal from '../../components/admin/GastoFormModal'
 import IngresoFormModal from '../../components/admin/IngresoFormModal'
 import { dateOf } from '../../lib/datetime'
@@ -34,6 +38,15 @@ const TABS = [
   { value: 'gastos',      label: 'Gastos' },
   { value: 'ingresos',    label: 'Ingresos' },
   { value: 'presupuesto', label: 'Presupuesto' },
+  { value: 'partidas',    label: 'Partidas' },
+]
+
+const FUENTES_PARTIDA = [
+  { value: 'coparticipacion',   label: 'Coparticipación' },
+  { value: 'recursos_propios',  label: 'Recursos propios' },
+  { value: 'aportes_no_reint',  label: 'Aportes no reintegrables' },
+  { value: 'tasas',             label: 'Tasas y servicios' },
+  { value: 'otros',             label: 'Otros' },
 ]
 
 const CATEGORIAS_GASTOS = [
@@ -683,6 +696,236 @@ function PresupuestoTab({ municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TAB 5 · Partidas (presupuesto fino por dependencia × partida)
+// ─────────────────────────────────────────────────────────────────
+
+function PartidasTab({ municipioId, dependencias }) {
+  const anio = currentYear()
+  const opts = { municipioIdOverride: municipioId }
+  const partQ   = usePresupuestoPartidas(anio, opts)
+  const tipoQ   = usePartidasTipo()
+  const { first: yearStart } = monthRange(`${anio}-01`)
+  const { next: yearEnd  }   = monthRange(`${anio}-12`)
+  const gastosQ = useGastos({ fechaFrom: yearStart, fechaTo: yearEnd, estado: 'aprobado' }, opts)
+
+  const [modalNew, setModalNew] = useState(false)
+  const createMut = useCreatePresupuestoPartida()
+
+  // Agrupamos por dependencia para que la tabla muestre las partidas
+  // bajo cada dependencia. El "ejecutado" se calcula por dependencia
+  // (no por partida) — los `gastos` no llevan partida_codigo en este
+  // schema; se prorratea por suma total de la dependencia.
+  const grupos = useMemo(() => {
+    const partidas = partQ.data ?? []
+    const gastosAprob = gastosQ.data ?? []
+    const partidasNombre = Object.fromEntries((tipoQ.data ?? []).map(p => [p.codigo, p.nombre]))
+    const gastoPorDep = new Map()
+    for (const g of gastosAprob) {
+      const k = g.dependencia_id
+      if (!k) continue
+      gastoPorDep.set(k, (gastoPorDep.get(k) ?? 0) + Number(g.monto ?? 0))
+    }
+    const porDep = new Map()
+    for (const p of partidas) {
+      const k = p.dependencia_id ?? '__sin__'
+      if (!porDep.has(k)) {
+        porDep.set(k, {
+          dependencia_id: p.dependencia_id,
+          dependencia:    p.dependencia?.nombre ?? '—',
+          asignadoTotal:  0,
+          ejecutadoTotal: gastoPorDep.get(p.dependencia_id) ?? 0,
+          partidas:       [],
+        })
+      }
+      const g = porDep.get(k)
+      g.asignadoTotal += Number(p.monto_asignado ?? 0)
+      g.partidas.push({
+        ...p,
+        partida_label: partidasNombre[p.partida_codigo] ?? p.partida_codigo,
+      })
+    }
+    return Array.from(porDep.values())
+  }, [partQ.data, gastosQ.data, tipoQ.data])
+
+  const totalAsignado  = grupos.reduce((s, g) => s + g.asignadoTotal, 0)
+  const totalEjecutado = grupos.reduce((s, g) => s + g.ejecutadoTotal, 0)
+  const totalPct       = totalAsignado > 0
+    ? Math.round((totalEjecutado / totalAsignado) * 100)
+    : 0
+
+  const isLoading = partQ.isLoading || gastosQ.isLoading || tipoQ.isLoading
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-primary">Presupuesto por partidas {anio}</h2>
+          <p className="text-sm text-primary-400">
+            Asignación fina de partidas por dependencia y fuente — alineado con la rendición provincial (SARC).
+          </p>
+        </div>
+        <Button onClick={() => setModalNew(true)}>+ Asignar partida</Button>
+      </header>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : grupos.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">
+          No hay partidas asignadas para {anio}.
+        </div>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Dependencia</Th>
+              <Th>Partida</Th>
+              <Th>Fuente</Th>
+              <Th className="text-right">Asignado</Th>
+              <Th className="text-right">Ejecutado (dep.)</Th>
+              <Th className="text-right">Disponible</Th>
+              <Th className="min-w-[160px]">% ejecución</Th>
+            </Tr>
+          </THead>
+          <tbody>
+            {grupos.map(g => {
+              const disponible = g.asignadoTotal - g.ejecutadoTotal
+              const pct = g.asignadoTotal > 0
+                ? Math.round((g.ejecutadoTotal / g.asignadoTotal) * 100)
+                : 0
+              return [
+                <Tr key={`${g.dependencia_id}-head`} className="bg-primary-50/40 font-semibold">
+                  <Td className="font-bold text-primary" colSpan={3}>{g.dependencia}</Td>
+                  <Td className="whitespace-nowrap text-right">{fmtMoney.format(g.asignadoTotal)}</Td>
+                  <Td className="whitespace-nowrap text-right">{fmtMoney.format(g.ejecutadoTotal)}</Td>
+                  <Td className={`whitespace-nowrap text-right ${disponible < 0 ? 'text-danger' : 'text-primary-700'}`}>
+                    {fmtMoney.format(disponible)}
+                  </Td>
+                  <Td>
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium text-primary-500">{pct}%</div>
+                      <ProgressBar pct={pct} />
+                    </div>
+                  </Td>
+                </Tr>,
+                ...g.partidas.map(p => (
+                  <Tr key={p.id}>
+                    <Td className="text-primary-400">↳</Td>
+                    <Td className="font-mono text-xs">{p.partida_codigo} — {p.partida_label}</Td>
+                    <Td className="text-xs">
+                      {FUENTES_PARTIDA.find(f => f.value === p.fuente)?.label ?? (p.fuente || '—')}
+                    </Td>
+                    <Td className="whitespace-nowrap text-right tabular-nums">{fmtMoney.format(p.monto_asignado)}</Td>
+                    <Td colSpan={3} className="text-primary-300" />
+                  </Tr>
+                )),
+              ]
+            }).flat()}
+            <Tr className="bg-primary-50/60 font-bold">
+              <Td className="font-bold text-primary" colSpan={3}>Total</Td>
+              <Td className="whitespace-nowrap text-right">{fmtMoney.format(totalAsignado)}</Td>
+              <Td className="whitespace-nowrap text-right">{fmtMoney.format(totalEjecutado)}</Td>
+              <Td className={`whitespace-nowrap text-right ${(totalAsignado - totalEjecutado) < 0 ? 'text-danger' : 'text-primary-700'}`}>
+                {fmtMoney.format(totalAsignado - totalEjecutado)}
+              </Td>
+              <Td>
+                <div className="space-y-1">
+                  <div className="text-xs font-medium text-primary-500">{totalPct}%</div>
+                  <ProgressBar pct={totalPct} />
+                </div>
+              </Td>
+            </Tr>
+          </tbody>
+        </Table>
+      )}
+
+      {modalNew && (
+        <PartidaFormModal
+          municipioId={municipioId}
+          dependencias={dependencias}
+          partidasTipo={tipoQ.data ?? []}
+          anioDefault={anio}
+          onClose={() => setModalNew(false)}
+          onSave={async (data) => {
+            await createMut.mutateAsync({ ...data, municipio_id: municipioId })
+            setModalNew(false)
+          }}
+          saving={createMut.isPending}
+        />
+      )}
+    </div>
+  )
+}
+
+function PartidaFormModal({ dependencias, partidasTipo, anioDefault, onClose, onSave, saving }) {
+  const [form, setForm] = useState({
+    dependencia_id: '', partida_codigo: '', fuente: '',
+    monto_asignado: '', anio: anioDefault,
+  })
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+
+  const canSubmit =
+    !!form.dependencia_id && !!form.partida_codigo && !!form.fuente &&
+    Number(form.monto_asignado) > 0 && !!form.anio
+
+  async function handle() {
+    setError('')
+    try {
+      await onSave({
+        dependencia_id: form.dependencia_id,
+        partida_codigo: form.partida_codigo,
+        fuente:         form.fuente,
+        monto_asignado: Number(form.monto_asignado),
+        anio:           Number(form.anio),
+      })
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="lg" title="Asignar partida presupuestaria"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handle} loading={saving} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select
+          label="Dependencia" value={form.dependencia_id} onChange={v => set('dependencia_id', v)}
+          placeholder="Seleccionar..."
+          options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+        />
+        <Select
+          label="Partida" value={form.partida_codigo} onChange={v => set('partida_codigo', v)}
+          placeholder="Seleccionar..."
+          options={partidasTipo.map(p => ({ value: p.codigo, label: `${p.codigo} — ${p.nombre}` }))}
+        />
+        <Select
+          label="Fuente" value={form.fuente} onChange={v => set('fuente', v)}
+          placeholder="Seleccionar..."
+          options={FUENTES_PARTIDA}
+        />
+        <Input
+          label="Monto asignado" type="number" min="0" step="0.01"
+          value={form.monto_asignado} onChange={e => set('monto_asignado', e.target.value)}
+          required
+        />
+        <Input
+          label="Año" type="number" min="2000" max="2099"
+          value={form.anio} onChange={e => set('anio', e.target.value)}
+          required
+        />
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">{error}</div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────────
 
@@ -720,6 +963,7 @@ export default function Administracion() {
         {tab === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
         {tab === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
         {tab === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
+        {tab === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
       </div>
     </div>
   )

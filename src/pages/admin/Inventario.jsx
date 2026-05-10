@@ -1,0 +1,723 @@
+import { useMemo, useState } from 'react'
+import { useDependencias } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useAuth } from '../../context/AuthContext'
+import {
+  useInventario, useMovimientos, useOrdenesCompra, usePartidasTipo,
+  useCreateInventarioItem, useUpdateInventarioItem,
+  useCreateMovimiento, useCreateOrdenCompra, useUpdateOrdenEstado,
+  LIMITE_COMPRA_DIRECTA,
+} from '../../hooks/useInventario'
+import Tabs from '../../components/ui/Tabs'
+import Select from '../../components/ui/Select'
+import Input from '../../components/ui/Input'
+import Modal from '../../components/ui/Modal'
+import Button from '../../components/ui/Button'
+import Spinner from '../../components/ui/Spinner'
+import StatCard from '../../components/ui/StatCard'
+import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
+import { dateOf, dateTimeOf, todayArgYMD } from '../../lib/datetime'
+
+// =============================================================
+// Inventario — stock, movimientos y órdenes de compra.
+// 3 tabs. Paleta COMUNAS estricta (cero verde).
+// =============================================================
+
+const fmtMoney = new Intl.NumberFormat('es-AR', {
+  style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
+})
+
+const TABS = [
+  { value: 'stock',       label: 'Stock general' },
+  { value: 'movimientos', label: 'Movimientos' },
+  { value: 'ordenes',     label: 'Órdenes de compra' },
+]
+
+const CATEGORIAS = ['Limpieza', 'Oficina', 'Salud', 'Construcción', 'Combustible', 'Repuestos', 'Otros']
+
+// ─────────────────────────────────────────────────────────────────
+// Página
+// ─────────────────────────────────────────────────────────────────
+
+export default function Inventario() {
+  const municipioId = useEffectiveMunicipioId()
+  const { hasRole } = useAuth()
+  const canEdit     = hasRole(['admin_comuna', 'superadmin'])
+  const canApprove  = canEdit
+  const [tab, setTab] = useState('stock')
+  const { data: dependencias = [] } = useDependencias()
+
+  return (
+    <div className="space-y-5">
+      <header>
+        <h1 className="text-2xl font-bold text-primary">Inventario</h1>
+        <p className="text-sm text-primary-400">
+          Stock por dependencia, movimientos y órdenes de compra.
+        </p>
+      </header>
+
+      {!municipioId && (
+        <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
+          No encontramos un municipio asignado ni un fallback activo.
+        </div>
+      )}
+
+      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+
+      <div>
+        {tab === 'stock' && (
+          <StockTab municipioId={municipioId} dependencias={dependencias} canEdit={canEdit} />
+        )}
+        {tab === 'movimientos' && (
+          <MovimientosTab municipioId={municipioId} dependencias={dependencias} />
+        )}
+        {tab === 'ordenes' && (
+          <OrdenesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Tab 1 — Stock general
+// ─────────────────────────────────────────────────────────────────
+
+function stockEstado(item) {
+  const a = Number(item.stock_actual ?? 0)
+  const m = Number(item.stock_minimo ?? 0)
+  if (a <= m)         return 'critico'
+  if (a <= m * 1.5)   return 'bajo'
+  return 'ok'
+}
+
+function StockBadge({ estado }) {
+  if (estado === 'critico') return <span className="badge-danger">Crítico</span>
+  if (estado === 'bajo')    return <span className="badge-accent">Bajo</span>
+  return <span className="badge-ok">OK</span>
+}
+
+function StockTab({ municipioId, dependencias, canEdit }) {
+  const [dependenciaId, setDependenciaId] = useState('')
+  const [categoria, setCategoria]         = useState('')
+  const [estadoFiltro, setEstadoFiltro]   = useState('')
+  const [modalNew, setModalNew]           = useState(false)
+  const [editing, setEditing]             = useState(null)
+  const [movItem, setMovItem]             = useState(null)
+  const [movTipo, setMovTipo]             = useState('entrada')
+
+  const filters = {
+    dependenciaId: dependenciaId || undefined,
+    categoria:     categoria     || undefined,
+  }
+  const { data: items = [], isLoading } = useInventario(filters, { municipioIdOverride: municipioId })
+
+  const filtered = useMemo(() => {
+    if (!estadoFiltro) return items
+    return items.filter(i => stockEstado(i) === estadoFiltro)
+  }, [items, estadoFiltro])
+
+  const totalItems    = items.length
+  const itemsCriticos = items.filter(i => stockEstado(i) === 'critico').length
+  const valorTotal    = items.reduce((acc, i) =>
+    acc + Number(i.stock_actual ?? 0) * Number(i.precio_referencia ?? 0), 0)
+
+  const createMut = useCreateInventarioItem()
+  const updateMut = useUpdateInventarioItem()
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Ítems totales" value={totalItems} accent="primary" />
+        <StatCard label="En estado crítico" value={itemsCriticos} accent={itemsCriticos > 0 ? 'danger' : 'primary'} />
+        <StatCard label="Valor estimado" value={fmtMoney.format(valorTotal)} accent="accent" />
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Select
+            label="Dependencia" value={dependenciaId} onChange={setDependenciaId}
+            placeholder="Todas"
+            options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+          />
+          <Select
+            label="Categoría" value={categoria} onChange={setCategoria}
+            placeholder="Todas"
+            options={CATEGORIAS.map(c => ({ value: c, label: c }))}
+          />
+          <Select
+            label="Estado de stock" value={estadoFiltro} onChange={setEstadoFiltro}
+            placeholder="Todos"
+            options={[
+              { value: 'critico', label: 'Crítico' },
+              { value: 'bajo',    label: 'Bajo' },
+              { value: 'ok',      label: 'Normal' },
+            ]}
+          />
+        </div>
+        {canEdit && (
+          <Button onClick={() => setModalNew(true)}>+ Agregar ítem</Button>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : filtered.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">No hay ítems con estos filtros.</div>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Dependencia</Th>
+              <Th>Ítem</Th>
+              <Th>Categoría</Th>
+              <Th>Unidad</Th>
+              <Th className="text-right">Stock</Th>
+              <Th className="text-right">Mínimo</Th>
+              <Th>Estado</Th>
+              <Th className="text-right">Precio ref.</Th>
+              <Th className="text-right">Acciones</Th>
+            </Tr>
+          </THead>
+          <tbody>
+            {filtered.map(i => {
+              const est = stockEstado(i)
+              return (
+                <Tr key={i.id}>
+                  <Td>{i.dependencia?.nombre ?? '—'}</Td>
+                  <Td className="font-medium text-primary">{i.nombre}</Td>
+                  <Td>{i.categoria || '—'}</Td>
+                  <Td>{i.unidad || '—'}</Td>
+                  <Td className="text-right tabular-nums">{i.stock_actual}</Td>
+                  <Td className="text-right tabular-nums text-primary-500">{i.stock_minimo}</Td>
+                  <Td><StockBadge estado={est} /></Td>
+                  <Td className="text-right tabular-nums">
+                    {i.precio_referencia ? fmtMoney.format(i.precio_referencia) : '—'}
+                  </Td>
+                  <Td className="whitespace-nowrap text-right text-xs">
+                    <button
+                      onClick={() => { setMovItem(i); setMovTipo('entrada') }}
+                      className="font-medium text-ok-700 hover:underline"
+                    >Entrada</button>
+                    <span className="mx-1 text-primary-200">·</span>
+                    <button
+                      onClick={() => { setMovItem(i); setMovTipo('salida') }}
+                      className="font-medium text-accent-700 hover:underline"
+                    >Salida</button>
+                    {canEdit && (
+                      <>
+                        <span className="mx-1 text-primary-200">·</span>
+                        <button
+                          onClick={() => setEditing(i)}
+                          className="font-medium text-primary-500 hover:underline"
+                        >Editar</button>
+                      </>
+                    )}
+                  </Td>
+                </Tr>
+              )
+            })}
+          </tbody>
+        </Table>
+      )}
+
+      {modalNew && (
+        <ItemFormModal
+          onClose={() => setModalNew(false)}
+          onSave={async (data) => {
+            await createMut.mutateAsync({ ...data, municipio_id: municipioId })
+            setModalNew(false)
+          }}
+          dependencias={dependencias}
+          saving={createMut.isPending}
+        />
+      )}
+      {editing && (
+        <ItemFormModal
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (data) => {
+            await updateMut.mutateAsync({ id: editing.id, ...data })
+            setEditing(null)
+          }}
+          dependencias={dependencias}
+          saving={updateMut.isPending}
+        />
+      )}
+      {movItem && (
+        <MovimientoFormModal
+          item={movItem}
+          tipo={movTipo}
+          onClose={() => setMovItem(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function ItemFormModal({ editing = null, onClose, onSave, dependencias, saving }) {
+  const [form, setForm] = useState(() => editing ?? {
+    dependencia_id: '', nombre: '', categoria: '', unidad: '',
+    stock_actual: '', stock_minimo: '', precio_referencia: '', partida_codigo: '',
+  })
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+  const { data: partidas = [] } = usePartidasTipo()
+
+  const canSubmit = !!form.nombre?.trim() && !!form.dependencia_id && !!form.unidad
+
+  async function handle() {
+    setError('')
+    try {
+      await onSave({
+        dependencia_id:    form.dependencia_id,
+        nombre:            form.nombre.trim(),
+        categoria:         form.categoria || null,
+        unidad:            form.unidad,
+        stock_actual:      Number(form.stock_actual ?? 0) || 0,
+        stock_minimo:      Number(form.stock_minimo ?? 0) || 0,
+        precio_referencia: form.precio_referencia ? Number(form.precio_referencia) : null,
+        partida_codigo:    form.partida_codigo || null,
+      })
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="lg"
+      title={editing ? 'Editar ítem' : 'Nuevo ítem de inventario'}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handle} loading={saving} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Select
+          label="Dependencia" value={form.dependencia_id} onChange={v => set('dependencia_id', v)}
+          placeholder="Seleccionar..."
+          options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+        />
+        <Select
+          label="Categoría" value={form.categoria ?? ''} onChange={v => set('categoria', v)}
+          placeholder="Seleccionar..."
+          options={CATEGORIAS.map(c => ({ value: c, label: c }))}
+        />
+        <div className="sm:col-span-2">
+          <Input label="Nombre del ítem" value={form.nombre} onChange={e => set('nombre', e.target.value)} required />
+        </div>
+        <Input label="Unidad" value={form.unidad ?? ''} onChange={e => set('unidad', e.target.value)} placeholder="ej. unidad, lts, kg" required />
+        <Select
+          label="Partida presupuestaria" value={form.partida_codigo ?? ''} onChange={v => set('partida_codigo', v)}
+          placeholder="Sin asignar"
+          options={partidas.map(p => ({ value: p.codigo, label: `${p.codigo} — ${p.nombre}` }))}
+        />
+        <Input label="Stock actual" type="number" min="0" value={form.stock_actual ?? ''} onChange={e => set('stock_actual', e.target.value)} />
+        <Input label="Stock mínimo" type="number" min="0" value={form.stock_minimo ?? ''} onChange={e => set('stock_minimo', e.target.value)} />
+        <div className="sm:col-span-2">
+          <Input
+            label="Precio de referencia (opcional)"
+            type="number" min="0" step="0.01"
+            value={form.precio_referencia ?? ''}
+            onChange={e => set('precio_referencia', e.target.value)}
+          />
+        </div>
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">
+            {error}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function MovimientoFormModal({ item, tipo, onClose }) {
+  const [cantidad, setCantidad] = useState('')
+  const [motivo, setMotivo]     = useState('')
+  const [error, setError]       = useState('')
+  const create = useCreateMovimiento()
+  const titulo = tipo === 'entrada' ? 'Registrar entrada' : 'Registrar salida'
+  const canSubmit = Number(cantidad) > 0
+
+  async function handle() {
+    setError('')
+    try {
+      await create.mutateAsync({
+        inventarioId: item.id, tipo, cantidad: Number(cantidad), motivo,
+      })
+      onClose()
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="md" title={titulo}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
+          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="rounded-lg border border-border bg-primary-50/40 p-3 text-sm">
+          <div className="font-semibold text-primary">{item.nombre}</div>
+          <div className="text-primary-500">
+            Stock actual: <b className="tabular-nums">{item.stock_actual}</b> {item.unidad}
+          </div>
+        </div>
+        <Input
+          label={`Cantidad (${item.unidad ?? 'unid.'})`}
+          type="number" min="0.01" step="0.01"
+          value={cantidad} onChange={e => setCantidad(e.target.value)} required autoFocus
+        />
+        <Input
+          label="Motivo (opcional)"
+          value={motivo} onChange={e => setMotivo(e.target.value)}
+          placeholder={tipo === 'entrada' ? 'Ej: Compra OC #123' : 'Ej: Consumo en obra'}
+        />
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Tab 2 — Movimientos
+// ─────────────────────────────────────────────────────────────────
+
+const TIPO_MOV_BADGE = {
+  entrada: { label: 'Entrada', cls: 'badge-ok' },
+  salida:  { label: 'Salida',  cls: 'badge-accent' },
+  ajuste:  { label: 'Ajuste',  cls: 'badge-neutral' },
+}
+
+function MovimientosTab({ municipioId, dependencias }) {
+  const [dependenciaId, setDependenciaId] = useState('')
+  const [tipo, setTipo]                   = useState('')
+  const [fechaDesde, setFechaDesde]       = useState('')
+  const [fechaHasta, setFechaHasta]       = useState('')
+
+  const { data: movimientos = [], isLoading } = useMovimientos({
+    dependenciaId: dependenciaId || undefined,
+    tipo:          tipo || undefined,
+    fechaDesde:    fechaDesde || undefined,
+    fechaHasta:    fechaHasta || undefined,
+    limit:         50,
+  }, { municipioIdOverride: municipioId })
+
+  function exportCSV() {
+    const headers = ['Fecha', 'Dependencia', 'Ítem', 'Tipo', 'Cantidad', 'Stock anterior', 'Stock posterior', 'Motivo']
+    const rows = movimientos.map(m => [
+      dateTimeOf(m.fecha),
+      m.inventario?.dependencia?.nombre ?? '',
+      m.inventario?.nombre ?? '',
+      m.tipo,
+      m.cantidad,
+      m.stock_anterior,
+      m.stock_posterior,
+      (m.motivo ?? '').replace(/"/g, '""'),
+    ])
+    const csv = [headers, ...rows]
+      .map(r => r.map(c => `"${c}"`).join(','))
+      .join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `movimientos-${todayArgYMD()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Select
+            label="Dependencia" value={dependenciaId} onChange={setDependenciaId}
+            placeholder="Todas"
+            options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+          />
+          <Select
+            label="Tipo" value={tipo} onChange={setTipo}
+            placeholder="Todos"
+            options={[
+              { value: 'entrada', label: 'Entrada' },
+              { value: 'salida',  label: 'Salida' },
+              { value: 'ajuste',  label: 'Ajuste' },
+            ]}
+          />
+          <Input label="Desde" type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} />
+          <Input label="Hasta" type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} />
+        </div>
+        <Button variant="secondary" onClick={exportCSV} disabled={movimientos.length === 0}>
+          Exportar CSV
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : movimientos.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">No hay movimientos.</div>
+      ) : (
+        <ol className="space-y-2">
+          {movimientos.map(m => {
+            const badge = TIPO_MOV_BADGE[m.tipo] ?? { label: m.tipo, cls: 'badge-neutral' }
+            return (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-white px-4 py-3 text-sm shadow-card"
+              >
+                <span className="whitespace-nowrap font-mono text-xs text-primary-400">
+                  {dateTimeOf(m.fecha)}
+                </span>
+                <span className={badge.cls}>{badge.label}</span>
+                <span className="font-semibold text-primary">{m.inventario?.nombre ?? '—'}</span>
+                <span className="text-primary-500">·</span>
+                <span className="text-primary-500">{m.inventario?.dependencia?.nombre ?? '—'}</span>
+                <span className="text-primary-500">·</span>
+                <span className="tabular-nums">
+                  <b>{m.cantidad}</b> {m.inventario?.unidad ?? ''}
+                </span>
+                <span className="text-primary-400">
+                  {m.stock_anterior} → <b className="text-primary">{m.stock_posterior}</b>
+                </span>
+                {m.motivo && (
+                  <>
+                    <span className="text-primary-500">·</span>
+                    <span className="text-primary-500">{m.motivo}</span>
+                  </>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Tab 3 — Órdenes de compra
+// ─────────────────────────────────────────────────────────────────
+
+const OC_ESTADO_BADGE = {
+  pendiente:  { label: 'Pendiente',  cls: 'estado-pendiente' },
+  aprobada:   { label: 'Aprobada',   cls: 'estado-confirmado' },
+  rechazada:  { label: 'Rechazada',  cls: 'estado-cancelado' },
+}
+
+function OrdenesTab({ municipioId, dependencias, canApprove }) {
+  const [dependenciaId, setDependenciaId] = useState('')
+  const [estado, setEstado]               = useState('')
+  const [modalNew, setModalNew]           = useState(false)
+
+  const { data: ordenes = [], isLoading } = useOrdenesCompra({
+    dependenciaId: dependenciaId || undefined,
+    estado:        estado        || undefined,
+  }, { municipioIdOverride: municipioId })
+
+  const updateEst = useUpdateOrdenEstado()
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <Select
+            label="Dependencia" value={dependenciaId} onChange={setDependenciaId}
+            placeholder="Todas"
+            options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+          />
+          <Select
+            label="Estado" value={estado} onChange={setEstado}
+            placeholder="Todos"
+            options={Object.entries(OC_ESTADO_BADGE).map(([v, b]) => ({ value: v, label: b.label }))}
+          />
+        </div>
+        <Button onClick={() => setModalNew(true)}>+ Nueva orden</Button>
+      </div>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : ordenes.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">No hay órdenes.</div>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>N°</Th>
+              <Th>Dependencia</Th>
+              <Th>Proveedor</Th>
+              <Th className="text-right">Monto</Th>
+              <Th>Partida</Th>
+              <Th>Tipo</Th>
+              <Th>Estado</Th>
+              <Th>Fecha</Th>
+              {canApprove && <Th className="text-right">Acciones</Th>}
+            </Tr>
+          </THead>
+          <tbody>
+            {ordenes.map(o => {
+              const badge = OC_ESTADO_BADGE[o.estado] ?? { label: o.estado, cls: 'estado-pendiente' }
+              return (
+                <Tr key={o.id}>
+                  <Td className="font-mono text-xs">{o.numero ?? `OC-${o.id.slice(0, 6)}`}</Td>
+                  <Td>{o.dependencia?.nombre ?? '—'}</Td>
+                  <Td className="font-medium text-primary">{o.proveedor ?? '—'}</Td>
+                  <Td className="whitespace-nowrap text-right font-semibold tabular-nums">
+                    {fmtMoney.format(o.monto_total ?? 0)}
+                  </Td>
+                  <Td className="font-mono text-xs">{o.partida_codigo ?? '—'}</Td>
+                  <Td className="text-xs">{o.tipo === 'cotizacion' ? 'Cotización' : 'Directa'}</Td>
+                  <Td><span className={badge.cls}>{badge.label}</span></Td>
+                  <Td className="whitespace-nowrap">{o.fecha ? dateOf(o.fecha) : '—'}</Td>
+                  {canApprove && (
+                    <Td className="whitespace-nowrap text-right text-xs">
+                      {o.estado === 'pendiente' && (
+                        <div className="flex justify-end gap-3 font-medium">
+                          <button
+                            onClick={() => updateEst.mutate({ id: o.id, estado: 'aprobada' })}
+                            className="text-ok-700 hover:underline"
+                          >Aprobar</button>
+                          <button
+                            onClick={() => updateEst.mutate({ id: o.id, estado: 'rechazada' })}
+                            className="text-danger hover:underline"
+                          >Rechazar</button>
+                        </div>
+                      )}
+                      {o.comprobante_url && (
+                        <a
+                          href={o.comprobante_url} target="_blank" rel="noopener noreferrer"
+                          className="ml-2 text-primary-500 hover:underline"
+                        >Comprob.</a>
+                      )}
+                    </Td>
+                  )}
+                </Tr>
+              )
+            })}
+          </tbody>
+        </Table>
+      )}
+
+      {modalNew && (
+        <OrdenFormModal
+          municipioId={municipioId}
+          dependencias={dependencias}
+          onClose={() => setModalNew(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function OrdenFormModal({ municipioId, dependencias, onClose }) {
+  const [form, setForm] = useState({
+    dependencia_id: '', proveedor: '', descripcion: '',
+    partida_codigo: '', monto_total: '',
+    tipo: 'directa', comprobante_url: '', numero: '',
+    fecha: todayArgYMD(),
+  })
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+  const create = useCreateOrdenCompra()
+  const { data: partidas = [] } = usePartidasTipo()
+  const { perfil } = useAuth()
+
+  // Si el monto supera el límite forzamos cotización y mostramos el aviso.
+  const monto = Number(form.monto_total ?? 0)
+  const superaLimite = monto > LIMITE_COMPRA_DIRECTA
+  const tipoEfectivo = superaLimite ? 'cotizacion' : form.tipo
+
+  const canSubmit =
+    !!form.dependencia_id &&
+    !!form.proveedor.trim() &&
+    !!form.descripcion.trim() &&
+    !!form.partida_codigo &&
+    monto > 0
+
+  async function handle() {
+    setError('')
+    try {
+      await create.mutateAsync({
+        municipio_id:    municipioId,
+        dependencia_id:  form.dependencia_id,
+        numero:          form.numero.trim() || null,
+        proveedor:       form.proveedor.trim(),
+        descripcion:     form.descripcion.trim(),
+        monto_total:     monto,
+        partida_codigo:  form.partida_codigo,
+        tipo:            tipoEfectivo,
+        estado:          'pendiente',
+        comprobante_url: form.comprobante_url.trim() || null,
+        fecha:           form.fecha,
+        created_by:      perfil?.id ?? null,
+      })
+      onClose()
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="lg" title="Nueva orden de compra"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
+          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label="N° de orden (opcional)" value={form.numero} onChange={e => set('numero', e.target.value)} />
+        <Input label="Fecha" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} required />
+        <Select
+          label="Dependencia" value={form.dependencia_id} onChange={v => set('dependencia_id', v)}
+          placeholder="Seleccionar..."
+          options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+        />
+        <Input label="Proveedor" value={form.proveedor} onChange={e => set('proveedor', e.target.value)} required />
+        <div className="sm:col-span-2">
+          <Input
+            label="Descripción" value={form.descripcion}
+            onChange={e => set('descripcion', e.target.value)} required
+          />
+        </div>
+        <Input
+          label="Monto total" type="number" min="0" step="0.01"
+          value={form.monto_total} onChange={e => set('monto_total', e.target.value)} required
+        />
+        <Select
+          label="Partida" value={form.partida_codigo} onChange={v => set('partida_codigo', v)}
+          placeholder="Seleccionar..."
+          options={partidas.map(p => ({ value: p.codigo, label: `${p.codigo} — ${p.nombre}` }))}
+        />
+        <Select
+          label="Tipo" value={tipoEfectivo} onChange={v => set('tipo', v)}
+          options={[
+            { value: 'directa',    label: 'Compra directa' },
+            { value: 'cotizacion', label: 'Cotización / Licitación' },
+          ]}
+        />
+        <Input
+          label="Comprobante (URL, opcional)"
+          value={form.comprobante_url} onChange={e => set('comprobante_url', e.target.value)}
+          placeholder="https://..."
+        />
+        {superaLimite && (
+          <div className="rounded-md border border-accent-200 bg-accent-50 p-3 text-xs text-accent-700 sm:col-span-2">
+            <b>Supera el límite de compra directa</b> ({fmtMoney.format(LIMITE_COMPRA_DIRECTA)}).
+            Se registrará como <b>cotización</b>.
+          </div>
+        )}
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">{error}</div>
+        )}
+      </div>
+    </Modal>
+  )
+}

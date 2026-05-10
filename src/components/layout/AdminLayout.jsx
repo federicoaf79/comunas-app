@@ -339,6 +339,58 @@ function NavGroup({ label, icon, subitems }) {
   )
 }
 
+// Sección "RECURSOS" — inventario y flota. Va siempre visible para
+// cualquier rol staff; el superadmin/admin_comuna también la ve.
+function RecursosSection() {
+  const items = [
+    {
+      to: '/admin/inventario',
+      label: 'Inventario',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8 12 3 3 8v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8" />
+        </svg>
+      ),
+    },
+    {
+      to: '/admin/flota',
+      label: 'Flota',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14V9l3-4h7l3 5h4a1 1 0 0 1 1 1v3M3 14h18" />
+          <circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" />
+        </svg>
+      ),
+    },
+  ]
+
+  return (
+    <div className="mt-1 border-t border-border pt-2">
+      <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary-500">
+        Recursos
+      </div>
+      <div className="flex flex-col gap-0.5">
+        {items.map(item => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                isActive
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+              }`
+            }
+          >
+            <span aria-hidden="true">{item.icon}</span>
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Sección "SUPERADMIN" — visible solo cuando el usuario tiene ese
 // rol. Se monta arriba del NAV principal y agrupa las pantallas
 // cross-municipio (gestión de municipios, panel global). Visualmente
@@ -429,6 +481,7 @@ export default function AdminLayout() {
               degradación para no duplicar nav layout. */}
           <div className="hidden lg:block">
             <OtrasDependenciasSection />
+            <RecursosSection />
           </div>
         </nav>
       </aside>

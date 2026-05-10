@@ -24,6 +24,8 @@ import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
 import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
+import Inventario          from './pages/admin/Inventario'
+import Flota               from './pages/admin/Flota'
 import Noticias            from './pages/admin/Noticias'
 import Administracion      from './pages/admin/Administracion'
 import ConfigPortal        from './pages/admin/ConfigPortal'
@@ -99,6 +101,8 @@ const router = createBrowserRouter([
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
+                  { path: '/admin/inventario',           element: <Inventario /> },
+                  { path: '/admin/flota',                element: <Flota /> },
                   { path: '/admin/noticias',             element: <Noticias /> },
                   { path: '/admin/administracion', element: <Administracion /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },

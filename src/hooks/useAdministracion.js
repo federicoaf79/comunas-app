@@ -253,6 +253,64 @@ export function usePresupuesto(anio = currentYear(), { municipioIdOverride } = {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Presupuesto por partidas — granularidad fina (dependencia + partida
+// + fuente). Convive con `presupuesto` (monto anual por dependencia)
+// que sigue siendo la fuente del tab Presupuesto clásico. La nueva
+// tabla `presupuesto_partidas` es la que el sistema usa para alinear
+// con la rendición provincial (SARC).
+// ─────────────────────────────────────────────────────────────────
+
+const PARTIDAS_COLS = `
+  id, municipio_id, dependencia_id, partida_codigo, fuente,
+  monto_asignado, anio,
+  dependencia:dependencia_id ( id, nombre )
+`
+
+export async function fetchPresupuestoPartidas({ municipioId, anio } = {}) {
+  const { signal, clear } = withTimeout()
+  try {
+    let q = supabase.from('presupuesto_partidas').select(PARTIDAS_COLS).abortSignal(signal)
+    if (municipioId) q = q.eq('municipio_id', municipioId)
+    if (anio)        q = q.eq('anio', anio)
+    const { data, error } = await q
+    clear()
+    if (error) {
+      console.error('[useAdministracion] fetchPresupuestoPartidas:', error)
+      throw error
+    }
+    return data ?? []
+  } catch (e) {
+    clear()
+    rethrowAbort(e, signal, 'fetchPresupuestoPartidas')
+  }
+}
+
+export function usePresupuestoPartidas(anio = currentYear(), { municipioIdOverride } = {}) {
+  const { perfil } = useAuth()
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
+  return useQuery({
+    queryKey: ['presupuesto-partidas', municipioId ?? '__ALL__', anio],
+    queryFn:  () => fetchPresupuestoPartidas({ municipioId, anio }),
+    enabled:  !!perfil,
+  })
+}
+
+export async function createPresupuestoPartida(data) {
+  const { data: row, error } = await supabase
+    .from('presupuesto_partidas').insert(data).select(PARTIDAS_COLS).single()
+  if (error) throw error
+  return row
+}
+
+export function useCreatePresupuestoPartida() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: createPresupuestoPartida,
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['presupuesto-partidas'] }),
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Mutations React-friendly — invalidan los queries afectados
 // ─────────────────────────────────────────────────────────────────
 
