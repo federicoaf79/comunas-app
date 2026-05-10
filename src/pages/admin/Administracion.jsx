@@ -5,6 +5,7 @@ import {
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
 import { useDependencias } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import Tabs from '../../components/ui/Tabs'
 import Select from '../../components/ui/Select'
@@ -187,9 +188,10 @@ function DashboardTab({ municipioId }) {
   const { next: yearEnd   } = monthRange(`${anio}-12`)
 
   // Gastos e ingresos del año en curso (suficiente para KPIs y chart).
-  const gastosQ   = useGastos({   fechaFrom: yearStart, fechaTo: yearEnd })
-  const ingresosQ = useIngresos({ fechaFrom: yearStart, fechaTo: yearEnd })
-  const presQ     = usePresupuesto(anio)
+  const opts = { municipioIdOverride: municipioId }
+  const gastosQ   = useGastos({   fechaFrom: yearStart, fechaTo: yearEnd }, opts)
+  const ingresosQ = useIngresos({ fechaFrom: yearStart, fechaTo: yearEnd }, opts)
+  const presQ     = usePresupuesto(anio, opts)
 
   const gastos      = gastosQ.data   ?? []
   const ingresos    = ingresosQ.data ?? []
@@ -310,7 +312,7 @@ function GastosTab({ municipioId, dependencias, canApprove }) {
     dependenciaId: dependenciaId || undefined,
     estado:        estado || undefined,
   }
-  const gastosQ      = useGastos(filters)
+  const gastosQ      = useGastos(filters, { municipioIdOverride: municipioId })
   const createMut    = useCreateGasto()
   const updateEstMut = useUpdateGastoEstado()
   const gastos       = gastosQ.data ?? []
@@ -472,7 +474,7 @@ function IngresosTab({ municipioId }) {
   const [mes, setMes]             = useState(currentMonthYYYYMM())
   const [modalOpen, setModalOpen] = useState(false)
 
-  const ingresosQ = useIngresos({ mes: mes || undefined })
+  const ingresosQ = useIngresos({ mes: mes || undefined }, { municipioIdOverride: municipioId })
   const createMut = useCreateIngreso()
   const ingresos  = ingresosQ.data ?? []
 
@@ -567,12 +569,13 @@ function ProgressBar({ pct }) {
   )
 }
 
-function PresupuestoTab() {
+function PresupuestoTab({ municipioId }) {
   const anio = currentYear()
-  const presQ   = usePresupuesto(anio)
+  const opts = { municipioIdOverride: municipioId }
+  const presQ   = usePresupuesto(anio, opts)
   const { first: yearStart } = monthRange(`${anio}-01`)
   const { next: yearEnd  }   = monthRange(`${anio}-12`)
-  const gastosQ = useGastos({ fechaFrom: yearStart, fechaTo: yearEnd, estado: 'aprobado' })
+  const gastosQ = useGastos({ fechaFrom: yearStart, fechaTo: yearEnd, estado: 'aprobado' }, opts)
 
   // Para cada presupuesto, sumamos los gastos aprobados de su dependencia.
   // Tomamos las refs originales (presQ.data / gastosQ.data) en deps —
@@ -684,8 +687,11 @@ function PresupuestoTab() {
 // ─────────────────────────────────────────────────────────────────
 
 export default function Administracion() {
-  const { perfil, hasRole } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  const { hasRole } = useAuth()
+  // useEffectiveMunicipioId resuelve el municipio destino — el del
+  // perfil para admin_comuna/operador, o el primer municipio activo
+  // como fallback para superadmin (perfil.municipio_id null).
+  const municipioId = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
 
   const [tab, setTab] = useState('dashboard')
@@ -700,13 +706,20 @@ export default function Administracion() {
         </p>
       </header>
 
+      {!municipioId && (
+        <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
+          No encontramos un municipio asignado ni un municipio activo de fallback.
+          Pedile al administrador que configure al menos un municipio.
+        </div>
+      )}
+
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
       <div>
         {tab === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
         {tab === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
         {tab === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
-        {tab === 'presupuesto' && <PresupuestoTab />}
+        {tab === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
       </div>
     </div>
   )

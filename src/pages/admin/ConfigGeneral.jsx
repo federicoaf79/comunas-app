@@ -1,43 +1,12 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import {
   useConfigClaveAdmin, useUpsertConfigClave,
 } from '../../hooks/useConfigPortal'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
-import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
-
-// Para superadmin (perfil.municipio_id = null), tomamos el primer
-// municipio activo como destino del upsert. Sin esto, todas las
-// secciones tirarían "Tu usuario no tiene un municipio asignado"
-// al guardar.
-function useEffectiveMunicipioId() {
-  const { perfil, hasRole } = useAuth()
-  const propio = perfil?.municipio_id ?? null
-  const necesitaFallback = !propio && hasRole('superadmin')
-  const fallbackQ = useQuery({
-    queryKey: ['first-active-municipio'],
-    queryFn:  async () => {
-      const { data, error } = await supabase
-        .from('municipios')
-        .select('id')
-        .eq('activo', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle()
-      if (error) {
-        console.warn('[ConfigGeneral] fallback municipio fetch error:', error.message)
-        return null
-      }
-      return data?.id ?? null
-    },
-    enabled:  necesitaFallback,
-    staleTime: 60 * 60 * 1000,
-  })
-  return propio ?? fallbackQ.data ?? null
-}
 
 // =============================================================
 // /admin/config-general — settings institucionales del portal.

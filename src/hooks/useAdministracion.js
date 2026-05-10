@@ -111,9 +111,12 @@ export async function fetchGastos({
   }
 }
 
-export function useGastos(filters = {}) {
+// `municipioIdOverride` permite al caller forzar un municipio
+// destino (caso superadmin con perfil.municipio_id null que cae
+// a "primer municipio activo" via useEffectiveMunicipioId).
+export function useGastos(filters = {}, { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useQuery({
     queryKey: [
       'gastos',
@@ -187,9 +190,9 @@ export async function fetchIngresos({
   }
 }
 
-export function useIngresos(filters = {}) {
+export function useIngresos(filters = {}, { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useQuery({
     queryKey: [
       'ingresos',
@@ -239,9 +242,9 @@ export async function fetchPresupuesto({ municipioId, anio } = {}) {
   }
 }
 
-export function usePresupuesto(anio = currentYear()) {
+export function usePresupuesto(anio = currentYear(), { municipioIdOverride } = {}) {
   const { perfil } = useAuth()
-  const municipioId = perfil?.municipio_id ?? null
+  const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useQuery({
     queryKey: ['presupuesto', municipioId ?? '__ALL__', anio],
     queryFn: () => fetchPresupuesto({ municipioId, anio }),

@@ -107,14 +107,21 @@ const NAV = [
       </svg>
     ),
   },
+  // Portal Web — carpeta colapsable. Antes era un solo link a
+  // /admin/noticias; ahora agrupa noticias + configuración RSS
+  // bajo un acordeón anidado para que el sidebar sea más
+  // explorable cuando crezcan las opciones del portal.
   {
-    to: '/admin/noticias',
     label: 'Portal Web',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
       </svg>
     ),
+    subitems: [
+      { to: '/admin/noticias', label: 'Noticias' },
+      { to: '/admin/config',   label: 'Configuración RSS' },
+    ],
   },
   {
     to: '/admin/administracion',
@@ -125,16 +132,6 @@ const NAV = [
         <circle cx="3" cy="7"  r="0.6" fill="currentColor" />
         <circle cx="3" cy="12" r="0.6" fill="currentColor" />
         <circle cx="3" cy="17" r="0.6" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    to: '/admin/config',
-    label: 'Configuración',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <circle cx="12" cy="12" r="3" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
       </svg>
     ),
   },
@@ -278,27 +275,83 @@ function OtrasDependenciasSection() {
   )
 }
 
-export default function AdminLayout() {
+// Carpeta colapsable del NAV — el header no navega, solo abre/
+// cierra. Si la URL actual coincide con uno de los sub-items, el
+// grupo arranca abierto para que el ítem activo sea visible sin
+// que el usuario tenga que clickear el chevron.
+function NavGroup({ label, icon, subitems }) {
+  const location = useLocation()
+  const hasActive = subitems.some(s => location.pathname === s.to || location.pathname.startsWith(`${s.to}/`))
+  const [open, setOpen] = useState(hasActive)
+
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <aside className="lg:w-56 lg:shrink-0">
-        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:overflow-visible">
-          {NAV.map(item => (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-primary-500 transition-colors hover:bg-primary-50 hover:text-primary"
+      >
+        <span aria-hidden="true">{icon}</span>
+        <span className="flex-1 text-left">{label}</span>
+        <svg
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+          className={'h-3 w-3 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && (
+        <div className="mt-0.5 flex flex-col gap-0.5">
+          {subitems.map(s => (
             <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
+              key={s.to}
+              to={s.to}
+              end={s.end}
               className={({ isActive }) =>
-                `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 pl-7 text-sm font-medium transition-colors ${
                   isActive
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
                 }`
               }
             >
-              <span aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
+              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+              <span className="truncate">{s.label}</span>
             </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function AdminLayout() {
+  return (
+    <div className="flex flex-col gap-6 lg:flex-row">
+      <aside className="lg:w-56 lg:shrink-0">
+        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:overflow-visible">
+          {NAV.map(item => (
+            item.subitems
+              ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
+              : (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+                    }`
+                  }
+                >
+                  <span aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                </NavLink>
+              )
           ))}
           {/* En desktop la sección colapsable se ve naturalmente al pie
               del nav vertical. En mobile (overflow-x scroll) puede
