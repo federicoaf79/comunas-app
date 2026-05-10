@@ -8,7 +8,7 @@ import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
-import { todayArgYMD, dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
+import { todayArgYMD, dateOf, timeOf } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -208,28 +208,26 @@ function ResumenDelDia({ perfil, turnosHoy }) {
   const nombre = primerNombre(perfil?.nombre)
 
   return (
-    <section className="overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary-700 to-primary-900 p-5 text-white shadow-card sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="font-sora text-xl font-bold sm:text-2xl">
-            {saludoSegunHora()}{nombre ? `, ${nombre}` : ''}.
-          </p>
-          {/* Sin `capitalize` — el formato es-AR de Intl ya devuelve
-              "sábado, 9 de mayo de 2026" en minúsculas, y la
-              tipografía de la oración corre desde "Hoy es" capitalizado. */}
-          <p className="mt-1 text-sm text-white/70 sm:text-base">
-            Hoy es {fechaLarga}.
-          </p>
-        </div>
+    <section className="overflow-hidden rounded-xl bg-gradient-to-br from-primary via-primary-700 to-primary-900 px-5 py-4 text-white shadow-card sm:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* Saludo + fecha en una sola línea con separador · — formato
+            es-AR de Intl ya devuelve "sábado, 9 de mayo de 2026" en
+            minúsculas, no usamos `capitalize`. */}
+        <p className="min-w-0 flex-1 truncate font-sora text-base font-bold sm:text-lg">
+          {saludoSegunHora()}{nombre ? `, ${nombre}` : ''}.
+          <span className="ml-1 font-normal text-white/70">
+            · Hoy es {fechaLarga}.
+          </span>
+        </p>
         {pendientes > 0 && (
-          <div className="inline-flex items-center gap-2.5 rounded-lg bg-accent/15 px-4 py-2.5 ring-1 ring-inset ring-accent/30">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 shrink-0 text-accent" aria-hidden="true">
+          <div className="inline-flex items-center gap-2 rounded-lg bg-accent/15 px-3 py-1.5 text-sm ring-1 ring-inset ring-accent/30">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-accent" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path strokeLinecap="round" d="M12 7v5l3 2" />
             </svg>
-            <p className="text-sm font-medium text-white">
+            <p className="font-medium text-white">
               <span className="font-bold text-accent">{pendientes}</span>{' '}
-              turno{pendientes === 1 ? '' : 's'} pendiente{pendientes === 1 ? '' : 's'} para hoy
+              turno{pendientes === 1 ? '' : 's'} pendiente{pendientes === 1 ? '' : 's'}
             </p>
           </div>
         )}
@@ -263,23 +261,9 @@ function TrendBadge({ delta }) {
   )
 }
 
-function MiniProgress({ pct, color = 'primary' }) {
-  const clamped = Math.max(0, Math.min(100, pct ?? 0))
-  const fill = color === 'danger' ? 'bg-danger'
-            : color === 'accent' ? 'bg-accent'
-            : color === 'ok'     ? 'bg-ok'
-            : 'bg-primary'
-  return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary-50">
-      <div className={`h-full ${fill}`} style={{ width: `${clamped}%` }} />
-    </div>
-  )
-}
-
 function KpiCard({
   label, value, icon, accent = 'primary',
-  hint, delta, progressPct, progressColor,
-  isLoading,
+  hint, delta, isLoading,
 }) {
   // Colores según el accent — el ícono lleva fondo navy con
   // glyph en gold para los KPIs neutros, y rojo / rojo para
@@ -294,31 +278,32 @@ function KpiCard({
 
   if (isLoading) {
     return (
-      <div className="card flex flex-col gap-2 p-5">
-        <p className="text-sm font-medium text-primary-500">{label}</p>
+      <div className="card flex items-center gap-3 p-4">
         <Spinner size="sm" />
+        <p className="text-sm font-medium text-primary-500">{label}</p>
       </div>
     )
   }
 
+  const hasMeta = !!hint || (delta != null && Number.isFinite(delta))
+
   return (
-    <div className="card flex flex-col gap-3 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-primary-500">{label}</p>
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconWrap}`}>
-          {icon}
-        </div>
+    <div className="card flex items-center gap-3 p-4">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconWrap}`}>
+        {icon}
       </div>
-      <p className={`-mt-1 text-3xl font-bold ${valueColor}`}>
-        {value}
-      </p>
-      <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-primary-400">
-          {hint ? <span>{hint}</span> : <span />}
-          <TrendBadge delta={delta} />
-        </div>
-        {Number.isFinite(progressPct) && (
-          <MiniProgress pct={progressPct} color={progressColor ?? accent} />
+      <div className="min-w-0 flex-1">
+        <p className={`text-4xl font-bold leading-none ${valueColor}`}>
+          {value}
+        </p>
+        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-primary-500">
+          {label}
+        </p>
+        {hasMeta && (
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-primary-400">
+            {hint && <span className="truncate">{hint}</span>}
+            <TrendBadge delta={delta} />
+          </div>
         )}
       </div>
     </div>
@@ -388,9 +373,9 @@ function TurnosHoyCard({ turnos, isLoading }) {
         </Link>
       </header>
       {isLoading ? (
-        <div className="flex items-center justify-center p-8"><Spinner /></div>
+        <div className="flex items-center justify-center p-6"><Spinner /></div>
       ) : proximos.length === 0 ? (
-        <p className="p-6 text-center text-sm text-primary-400">
+        <p className="px-5 py-4 text-center text-sm text-primary-400">
           No hay turnos pendientes para hoy.
         </p>
       ) : (
@@ -463,9 +448,9 @@ function MedicoGuardiaCard({ data, isLoading }) {
           Ver agenda →
         </Link>
       </header>
-      <div className="p-5 sm:p-6">
+      <div className="p-4">
         {isLoading ? (
-          <div className="flex items-center justify-center p-4">
+          <div className="flex items-center justify-center p-2">
             <Spinner />
           </div>
         ) : !data ? (
@@ -473,23 +458,26 @@ function MedicoGuardiaCard({ data, isLoading }) {
             Sin guardia asignada esta semana.
           </p>
         ) : (
-          <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-accent">
-              {/* Estetoscopio inline */}
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10 text-accent">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-6 w-6" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 3v8a4 4 0 0 0 8 0V3M5 3H3M13 3h-2M9 15v3a4 4 0 0 0 8 0v-2" />
                 <circle cx="17" cy="13" r="2" />
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-sora text-xl font-bold leading-tight sm:text-2xl">
+              {/* Línea 1: nombre + especialidad inline */}
+              <p className="font-sora text-base font-bold leading-tight sm:text-lg">
                 {nombre || 'Sin nombre'}
+                {especialidad && (
+                  <span className="ml-2 text-sm font-normal text-white/70">
+                    · {especialidad}
+                  </span>
+                )}
               </p>
-              {especialidad && (
-                <p className="mt-1 text-sm text-white/70">{especialidad}</p>
-              )}
+              {/* Línea 2: rango semanal */}
               {(data.semana_inicio || data.semana_fin) && (
-                <p className="mt-3 text-xs text-white/60">
+                <p className="mt-1 text-xs text-white/60">
                   Semana: {data.semana_inicio ? dateOf(data.semana_inicio) : '—'} al {data.semana_fin ? dateOf(data.semana_fin) : '—'}
                 </p>
               )}
@@ -649,19 +637,20 @@ function ResumenFinancieroCard({ ingresos, gastos, isLoading }) {
   const saldo    = totalIng - totalGas
   const max      = Math.max(totalIng, totalGas, 1)
 
-  // SVG bar chart — 2 barras pareadas en la mitad derecha, eje Y
-  // a la izquierda con ticks 0/25/50/75/100% del max.
+  // SVG bar chart — barras anchas pareadas, sin eje Y de %.
+  // Mantenemos solo gridlines sutiles para orientación visual; los
+  // valores en pesos ya van encima de cada barra.
   const W       = 600
-  const H       = 240
-  const PAD_L   = 60
-  const PAD_R   = 20
-  const PAD_TOP = 30
+  const H       = 220
+  const PAD_L   = 16
+  const PAD_R   = 16
+  const PAD_TOP = 28
   const PAD_BOT = 36
   const innerH  = H - PAD_TOP - PAD_BOT
   const innerW  = W - PAD_L - PAD_R
-  const barW    = innerW * 0.18
-  const xCenterIng = PAD_L + innerW * 0.30
-  const xCenterGas = PAD_L + innerW * 0.70
+  const barW    = Math.min(160, innerW * 0.32)
+  const xCenterIng = PAD_L + innerW * 0.28
+  const xCenterGas = PAD_L + innerW * 0.72
   const hIng    = (totalIng / max) * innerH
   const hGas    = (totalGas / max) * innerH
 
@@ -724,29 +713,26 @@ function ResumenFinancieroCard({ ingresos, gastos, isLoading }) {
               role="img"
               aria-label="Gráfico de ingresos vs gastos del mes"
             >
-              {/* Eje Y con ticks 0/25/50/75/100% */}
-              {[0, 25, 50, 75, 100].map(pct => {
+              {/* Gridlines sutiles para orientación — sin labels.
+                  Quitamos el eje Y de % porque al dashboard no le
+                  llega historia suficiente para que tenga sentido. */}
+              {[25, 50, 75].map(pct => {
                 const y = PAD_TOP + innerH - (pct / 100) * innerH
-                const valueAtTick = (max * pct) / 100
                 return (
-                  <g key={pct}>
-                    <line
-                      x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
-                      stroke="#DDE0EC"
-                      strokeDasharray={pct === 0 ? '0' : '2 4'}
-                      strokeWidth="1"
-                    />
-                    <text
-                      x={PAD_L - 8} y={y + 4}
-                      textAnchor="end"
-                      fontSize="11"
-                      fill="#475A7C"
-                    >
-                      {fmtCompacto.format(valueAtTick)}
-                    </text>
-                  </g>
+                  <line
+                    key={pct}
+                    x1={PAD_L} y1={y} x2={W - PAD_R} y2={y}
+                    stroke="#DDE0EC"
+                    strokeDasharray="2 4"
+                    strokeWidth="1"
+                  />
                 )
               })}
+              <line
+                x1={PAD_L} y1={PAD_TOP + innerH}
+                x2={W - PAD_R} y2={PAD_TOP + innerH}
+                stroke="#DDE0EC" strokeWidth="1"
+              />
 
               {/* Bar Ingresos (navy) */}
               <rect
@@ -898,34 +884,31 @@ function ActividadTimelineCard({ noticias, gastos, denuncias, turnosHoy, isLoadi
           Sin actividad registrada todavía.
         </p>
       ) : (
-        <div className="relative px-5 py-5">
+        <div className="relative px-5 py-4">
           {/* Línea vertical navy */}
-          <div className="absolute bottom-5 left-[26px] top-5 w-0.5 bg-primary-100" aria-hidden="true" />
-          <ul className="space-y-4">
+          <div className="absolute bottom-4 left-[26px] top-4 w-0.5 bg-primary-100" aria-hidden="true" />
+          <ul className="space-y-2">
             {eventos.map(e => {
               const dotCls = TIMELINE_COLOR[e.tipo] ?? 'bg-primary-300'
               return (
-                <li key={e.id} className="relative flex gap-3 pl-8">
+                <li key={e.id} className="relative flex gap-2 pl-7">
                   {/* Punto */}
                   <span
-                    className={`absolute left-[14px] top-1.5 inline-block h-3 w-3 rounded-full ring-2 ring-white ${dotCls}`}
+                    className={`absolute left-[14px] top-1.5 inline-block h-2.5 w-2.5 rounded-full ring-2 ring-white ${dotCls}`}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="line-clamp-1 text-sm font-medium text-primary-700">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="line-clamp-1 text-xs font-medium text-primary-700">
+                        <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wide text-primary-400">
+                          {TIMELINE_LABEL[e.tipo]}
+                        </span>
                         {e.texto}
                       </p>
-                      <span className="text-[11px] uppercase tracking-wide text-primary-400">
-                        {TIMELINE_LABEL[e.tipo]}
+                      <span className="shrink-0 text-[10px] text-primary-400">
+                        {timeOf(e.ts) || dateOf(e.ts)}
                       </span>
                     </div>
-                    <p className="line-clamp-1 text-xs text-primary-400">
-                      {e.sub}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-primary-300">
-                      {dateTimeOf(e.ts)}
-                    </p>
                   </div>
                 </li>
               )
@@ -1016,30 +999,19 @@ export default function AdminDashboard() {
   // próxima iteración (ej: % ejecución como KPI quinto).
   usePresupuesto(anio)
 
-  // Métricas derivadas para los KPIs
+  // Métricas derivadas para los KPIs.
   const turnosHoy        = turnosQ.data ?? []
   const turnosCount      = turnosHoy.length
   const turnosAtendidos  = turnosHoy.filter(t => t.estado === 'completado' || t.estado === 'atendido').length
-  const turnosPctAtendidos = turnosCount > 0 ? Math.round((turnosAtendidos / turnosCount) * 100) : 0
 
   const vecinosTotal     = vecinosTotalQ.data ?? 0
   const vecinosNuevos    = vecinosNuevosQ.data ?? 0
-  // Barra mini: % de nuevos del mes sobre el total — chico pero
-  // suficiente para indicar crecimiento visual.
-  const vecinosPct = vecinosTotal > 0
-    ? Math.min(100, Math.round((vecinosNuevos / vecinosTotal) * 100))
-    : 0
 
-  const mensajesMes = mensajesMesQ.data ?? 0
+  const mensajesMes  = mensajesMesQ.data  ?? 0
   const mensajesPrev = mensajesPrevQ.data ?? 0
   const mensajesDelta = mensajesMes - mensajesPrev
-  const mensajesPct = mensajesMes + mensajesPrev > 0
-    ? Math.round((mensajesMes / (mensajesMes + mensajesPrev)) * 100)
-    : 0
 
   const denunciasAb = denunciasAbQ.data ?? 0
-  // "Severity meter": cap a 10. Si hay 5 denuncias = 50% de barra.
-  const denunciasPct = Math.min(100, denunciasAb * 10)
 
   return (
     <div className="space-y-6">
@@ -1054,15 +1026,13 @@ export default function AdminDashboard() {
       <ResumenDelDia perfil={perfil} turnosHoy={turnosHoy} />
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           isLoading={turnosQ.isLoading}
           label="Turnos hoy"
           value={turnosCount}
           icon={ICONS.calendar}
           hint={`${turnosAtendidos} atendido${turnosAtendidos === 1 ? '' : 's'}`}
-          progressPct={turnosPctAtendidos}
-          progressColor="ok"
         />
         <KpiCard
           isLoading={vecinosTotalQ.isLoading || vecinosNuevosQ.isLoading}
@@ -1071,8 +1041,6 @@ export default function AdminDashboard() {
           icon={ICONS.people}
           hint="Padrón actual"
           delta={vecinosNuevos > 0 ? vecinosNuevos : null}
-          progressPct={vecinosPct}
-          progressColor="primary"
         />
         <KpiCard
           isLoading={mensajesMesQ.isLoading || mensajesPrevQ.isLoading}
@@ -1081,8 +1049,6 @@ export default function AdminDashboard() {
           icon={ICONS.chat}
           hint="SMS + WhatsApp"
           delta={mensajesDelta}
-          progressPct={mensajesPct}
-          progressColor="accent"
         />
         <KpiCard
           isLoading={denunciasAbQ.isLoading}
@@ -1091,49 +1057,51 @@ export default function AdminDashboard() {
           icon={ICONS.alert}
           accent={denunciasAb > 0 ? 'danger' : 'primary'}
           hint="Sin resolver"
-          progressPct={denunciasAb > 0 ? denunciasPct : 0}
-          progressColor={denunciasAb > 0 ? 'danger' : 'primary'}
         />
       </div>
 
-      {/* Fila 2: Turnos del día (tabla) + Médico de guardia */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TurnosHoyCard turnos={turnosQ.data} isLoading={turnosQ.isLoading} />
+      {/* Grid compacto a 3 columnas — las cards "anchas" (TurnosHoy,
+          Financiero, ActividadReciente) usan col-span-2 para tener
+          aire; las laterales (MedicoGuardia, UltimosMensajes,
+          TurnosPorDep) ocupan 1 col. items-start evita que cards
+          cortas se estiren a la altura de las largas en su fila. */}
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <TurnosHoyCard turnos={turnosQ.data} isLoading={turnosQ.isLoading} />
+        </div>
         <MedicoGuardiaCard
           data={medicoGuardiaQ.data}
           isLoading={medicoGuardiaQ.isLoading}
         />
-      </div>
 
-      {/* Fila 3: Turnos por dependencia + Últimos mensajes */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TurnosPorDependenciaCard
-          turnosMes={turnosMesQ.turnos}
-          isLoading={turnosMesQ.isLoading}
-        />
+        <div className="lg:col-span-2">
+          <ResumenFinancieroCard
+            ingresos={ingresosMesQ.data}
+            gastos={gastosMesQ.data}
+            isLoading={ingresosMesQ.isLoading || gastosMesQ.isLoading}
+          />
+        </div>
         <UltimosMensajesCard
           mensajes={ultimosMensajesQ.data}
           isLoading={ultimosMensajesQ.isLoading}
         />
-      </div>
 
-      {/* Fila 4: Resumen financiero + Actividad reciente */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ResumenFinancieroCard
-          ingresos={ingresosMesQ.data}
-          gastos={gastosMesQ.data}
-          isLoading={ingresosMesQ.isLoading || gastosMesQ.isLoading}
+        <TurnosPorDependenciaCard
+          turnosMes={turnosMesQ.turnos}
+          isLoading={turnosMesQ.isLoading}
         />
-        <ActividadTimelineCard
-          noticias={noticiasQ.data}
-          gastos={gastosRecientesQ.data}
-          denuncias={ultimasDenunciasQ.data}
-          turnosHoy={turnosQ.data}
-          isLoading={
-            noticiasQ.isLoading || gastosRecientesQ.isLoading ||
-            ultimasDenunciasQ.isLoading || turnosQ.isLoading
-          }
-        />
+        <div className="lg:col-span-2">
+          <ActividadTimelineCard
+            noticias={noticiasQ.data}
+            gastos={gastosRecientesQ.data}
+            denuncias={ultimasDenunciasQ.data}
+            turnosHoy={turnosQ.data}
+            isLoading={
+              noticiasQ.isLoading || gastosRecientesQ.isLoading ||
+              ultimasDenunciasQ.isLoading || turnosQ.isLoading
+            }
+          />
+        </div>
       </div>
     </div>
   )
