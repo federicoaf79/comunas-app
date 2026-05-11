@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   useConfigClaveAdmin, useUpsertConfigClave,
 } from '../../hooks/useConfigPortal'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -155,6 +156,160 @@ function RedesSocialesForm({ initial, disabled, municipioId }) {
       </div>
     </SectionShell>
   )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sección 0 — Identidad visual (logo)
+// ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_IDENTIDAD = { logo_url: '', favicon_url: '' }
+
+// Sube el archivo al bucket 'avatares' con path
+// `<municipioId>/logo_oficial`. upsert=true para que la misma ruta
+// se sobreescriba en cada upload (no acumulamos archivos). Devuelve
+// la URL pública con cache-buster — sin él, el browser conserva el
+// PNG anterior porque la URL no cambia entre uploads.
+async function uploadLogoToStorage({ file, municipioId }) {
+  if (!municipioId) throw new Error('Tu usuario no tiene un municipio asignado.')
+  const path = `${municipioId}/logo_oficial`
+  const { error } = await supabase.storage
+    .from('avatares')
+    .upload(path, file, {
+      contentType: file.type || 'application/octet-stream',
+      upsert:      true,
+    })
+  if (error) {
+    console.error('[IdentidadVisual] upload error:', error)
+    throw new Error(error.message ?? 'No pudimos subir el logo.')
+  }
+  const { data } = supabase.storage.from('avatares').getPublicUrl(path)
+  return `${data.publicUrl}?v=${Date.now()}`
+}
+
+function IdentidadVisualForm({ initial, disabled, municipioId }) {
+  const upsertMut = useUpsertConfigClave('identidad_visual', { municipioIdOverride: municipioId })
+  const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? '')
+  const [file, setFile]       = useState(null)
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [uploading, setUploading]   = useState(false)
+  const [error, setError]           = useState('')
+  const [ok, setOk]                 = useState('')
+  const inputRef = useRef(null)
+
+  function onPickFile(e) {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setError(''); setOk('')
+    // Liberamos el URL del preview anterior antes de crear uno nuevo
+    // para no leakear blobs en cada selección.
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setFile(f)
+    setPreviewUrl(URL.createObjectURL(f))
+  }
+
+  async function handleUpload() {
+    if (!file) {
+      inputRef.current?.click()
+      return
+    }
+    setError(''); setOk(''); setUploading(true)
+    try {
+      const url = await uploadLogoToStorage({ file, municipioId })
+      await upsertMut.mutateAsync({
+        ...DEFAULT_IDENTIDAD,
+        ...(initial ?? {}),
+        logo_url: url,
+      })
+      setLogoUrl(url)
+      setFile(null)
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      setPreviewUrl('')
+      setOk('Logo actualizado. Va a aparecer en el portal, header del sistema y página de ingreso.')
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos subir el logo.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const mostrado = previewUrl || logoUrl
+
+  return (
+    <SectionShell
+      title="Identidad visual"
+      desc="Logo institucional del municipio. Se usa en el portal ciudadano, el sistema de gestión y los documentos generados."
+      error={error}
+      ok={ok}
+    >
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+        {/* Preview circular 120px */}
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          <div className="flex h-[120px] w-[120px] items-center justify-center overflow-hidden rounded-full border-2 border-accent bg-primary-50 shadow-inner">
+            {mostrado ? (
+              <img
+                src={mostrado}
+                alt="Logo del municipio"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="h-12 w-12 text-primary-300" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="9" cy="9" r="1.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
+              </svg>
+            )}
+          </div>
+          {previewUrl && (
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700">
+              Sin guardar
+            </span>
+          )}
+        </div>
+
+        {/* Controles */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/*,image/svg+xml"
+            onChange={onPickFile}
+            disabled={disabled || uploading}
+            className="block w-full text-sm text-primary-700 file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+          />
+          <p className="text-xs text-primary-400">
+            PNG o SVG. Mínimo 200×200px. Se usa en el portal, documentos y encabezados.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              onClick={handleUpload}
+              loading={uploading || upsertMut.isPending}
+              disabled={disabled || (!file && !!logoUrl) || uploading}
+            >
+              {file ? 'Subir logo' : 'Elegir archivo'}
+            </Button>
+            {logoUrl && !file && (
+              <a
+                href={logoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold text-accent hover:underline"
+              >
+                Ver archivo actual →
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </SectionShell>
+  )
+}
+
+function IdentidadVisualSection({ disabled, municipioId }) {
+  const { data, isLoading } = useConfigClaveAdmin(
+    'identidad_visual', DEFAULT_IDENTIDAD, { municipioIdOverride: municipioId },
+  )
+  if (isLoading) return <LoadingShell title="Cargando identidad visual..." />
+  return <IdentidadVisualForm initial={data ?? DEFAULT_IDENTIDAD} disabled={disabled} municipioId={municipioId} />
 }
 
 function RedesSocialesSection({ disabled, municipioId }) {
@@ -596,9 +751,10 @@ export default function ConfigGeneral() {
 
       {!esperandoFallback && !sinMunicipio && (
         <div className="space-y-5">
-          <RedesSocialesSection  disabled={sinMunicipio} municipioId={municipioId} />
-          <DatosMunicipioSection disabled={sinMunicipio} municipioId={municipioId} />
-          <PlanBSection          disabled={sinMunicipio} municipioId={municipioId} />
+          <IdentidadVisualSection disabled={sinMunicipio} municipioId={municipioId} />
+          <RedesSocialesSection   disabled={sinMunicipio} municipioId={municipioId} />
+          <DatosMunicipioSection  disabled={sinMunicipio} municipioId={municipioId} />
+          <PlanBSection           disabled={sinMunicipio} municipioId={municipioId} />
         </div>
       )}
 

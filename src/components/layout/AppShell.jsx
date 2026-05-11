@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { RoleBadge } from '../ui/Badge'
 
 const ROLE_PRIORITY = ['superadmin', 'admin_comuna', 'operador', 'vecino']
@@ -26,6 +27,8 @@ function navFor(roles) {
 
 export default function AppShell() {
   const { perfil, municipio, signOut } = useAuth()
+  const { identidad } = useDatosMunicipio()
+  const logoUrl = identidad?.logo_url || null
   const navigate = useNavigate()
   const role = primaryRole(perfil?.roles)
   const nav = navFor(perfil?.roles)
@@ -39,7 +42,16 @@ export default function AppShell() {
     <div className="flex h-svh flex-col bg-background">
       <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3 shadow-card">
         <div className="flex items-center gap-6">
-          <span className="text-lg font-bold text-primary">COMUNAS</span>
+          <div className="flex items-center gap-2.5">
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt="Logo municipio"
+                className="h-8 w-8 shrink-0 rounded-full bg-primary-50 object-cover ring-1 ring-inset ring-border"
+              />
+            )}
+            <span className="text-lg font-bold text-primary">COMUNAS</span>
+          </div>
           {municipio?.nombre && (
             <span className="hidden text-sm text-primary-400 md:inline">{municipio.nombre}</span>
           )}

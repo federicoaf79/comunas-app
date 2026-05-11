@@ -189,9 +189,15 @@ export function useUpsertFuentesRss() {
 export function useDatosMunicipio() {
   const datosQ = useConfigClavePublica('datos_municipio', null)
   const redesQ = useConfigClavePublica('redes_sociales', null)
+  // identidad_visual: { logo_url, favicon_url } — agregado al
+  // whitelist anon en la migration 20260509000002 para que el
+  // header del portal y la página de login puedan leerlo sin
+  // sesión.
+  const identQ = useConfigClavePublica('identidad_visual', null)
   return {
     datos:     (datosQ.data && typeof datosQ.data === 'object') ? datosQ.data : null,
     redes:     (redesQ.data && typeof redesQ.data === 'object') ? redesQ.data : null,
-    isLoading: datosQ.isLoading || redesQ.isLoading,
+    identidad: (identQ.data && typeof identQ.data === 'object') ? identQ.data : null,
+    isLoading: datosQ.isLoading || redesQ.isLoading || identQ.isLoading,
   }
 }

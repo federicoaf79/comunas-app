@@ -398,12 +398,24 @@ function IngresarButton({ onClick, mobile = false }) {
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = () => setMenuOpen(false)
+  // El logo institucional viene de configuracion_portal clave
+  // 'identidad_visual'. Si no está cargado caemos al Escudo SVG.
+  const { identidad } = useDatosMunicipio()
+  const logoUrl = identidad?.logo_url || null
   return (
     <header className="sticky top-0 z-40 border-b border-primary-900 bg-primary text-white shadow-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         {/* Marca */}
         <Link to="/portal" className="flex items-center gap-3 text-white">
-          <Escudo className="h-11 w-11 shrink-0" />
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={`Logo de ${MUNICIPIO_NOMBRE}`}
+              className="h-11 w-11 shrink-0 rounded-full bg-white/10 object-cover ring-1 ring-inset ring-white/20"
+            />
+          ) : (
+            <Escudo className="h-11 w-11 shrink-0" />
+          )}
           <div className="leading-tight">
             <p className="font-sora text-base font-bold sm:text-lg">{MUNICIPIO_NOMBRE}</p>
             <p className="text-[11px] font-medium uppercase tracking-wide text-white/60">

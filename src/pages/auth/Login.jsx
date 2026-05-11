@@ -1,12 +1,15 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
+import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
 export default function Login() {
   const { signIn } = useAuth()
+  const { identidad } = useDatosMunicipio()
+  const logoUrl = identidad?.logo_url || null
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -93,8 +96,16 @@ export default function Login() {
         </Link>
 
         <div className="card w-full p-8">
-        <div className="mb-6 text-center">
-          <span className="text-2xl font-bold text-primary">COMUNAS</span>
+        <div className="mb-6 flex flex-col items-center text-center">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Logo del municipio"
+              className="mb-2 h-16 w-16 rounded-full bg-primary-50 object-cover ring-1 ring-inset ring-border"
+            />
+          ) : (
+            <span className="text-2xl font-bold text-primary">COMUNAS</span>
+          )}
           <p className="mt-1 text-sm text-primary-400">Ingresá al sistema</p>
         </div>
 
