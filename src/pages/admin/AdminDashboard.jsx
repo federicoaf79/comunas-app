@@ -165,7 +165,7 @@ async function fetchUltimasDenuncias(municipioId) {
 //
 // (Reemplaza/coexiste con la policy basada en helpers según el
 // estado real del schema — ver supabase/migrations/...comunas_schema.sql.)
-const MEDICO_COLS = 'id, semana_inicio, semana_fin, usuario_id, municipio_id'
+const MEDICO_COLS = 'id, semana_inicio, semana_fin, activo, usuario_id'
 
 async function attachUsuarios(rows) {
   if (!rows?.length) return rows ?? []
@@ -192,7 +192,10 @@ async function fetchMedicoGuardia(municipioId, today) {
     console.warn('[Dashboard] fetchMedicoGuardia: sin municipioId, retornando null')
     return null
   }
-  const { data, error } = await supabase
+  // PASO 1: la fila de medicos_agenda. Usamos .maybeSingle() —
+  // cuando no hay match devuelve { data: null } sin lanzar error,
+  // que es el comportamiento que esperamos.
+  const { data: medico, error } = await supabase
     .from('medicos_agenda')
     .select(MEDICO_COLS)
     .eq('municipio_id', municipioId)
@@ -201,15 +204,19 @@ async function fetchMedicoGuardia(municipioId, today) {
     .filter('semana_fin', 'gte', today)
     .order('semana_inicio', { ascending: false })
     .limit(1)
+    .maybeSingle()
   if (error) {
     console.warn('[Dashboard] fetchMedicoGuardia error:', error.message)
     return null
   }
-  if (!data?.length) {
+  if (!medico) {
     console.warn(`[Dashboard] fetchMedicoGuardia: sin médico activo para municipio ${municipioId} cubriendo ${today}`)
     return null
   }
-  const [withUsuario] = await attachUsuarios(data)
+  // PASO 2: usuario en public.usuarios. El embed PostgREST a
+  // auth.users no devuelve `nombre` porque ese campo vive en
+  // public.usuarios — por eso el fetch va en dos pasos.
+  const [withUsuario] = await attachUsuarios([medico])
   console.log('[Dashboard] fetchMedicoGuardia result:', withUsuario)
   return withUsuario ?? null
 }
