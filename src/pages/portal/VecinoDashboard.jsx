@@ -92,12 +92,12 @@ function Escudo({ className = 'h-9 w-9' }) {
 function DashboardHeader({ vecino, onSignOut }) {
   return (
     <header className="border-b border-primary-900 bg-primary text-white">
-      <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <Link to="/portal" className="flex items-center gap-3 text-white">
-            <Escudo className="h-9 w-9 shrink-0" />
+      <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link to="/portal" className="flex items-center gap-2.5 text-white">
+            <Escudo className="h-8 w-8 shrink-0" />
             <div className="leading-tight">
-              <p className="font-sora text-sm font-bold sm:text-base">{MUNICIPIO_NOMBRE}</p>
+              <p className="font-sora text-sm font-bold">{MUNICIPIO_NOMBRE}</p>
               <p className="text-[10px] font-medium uppercase tracking-wide text-white/60">
                 Mi cuenta
               </p>
@@ -106,7 +106,7 @@ function DashboardHeader({ vecino, onSignOut }) {
           <button
             type="button"
             onClick={onSignOut}
-            className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-white/10"
           >
             Cerrar sesión
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
@@ -115,11 +115,13 @@ function DashboardHeader({ vecino, onSignOut }) {
           </button>
         </div>
 
-        <div className="mt-5 sm:mt-7">
-          <h1 className="font-sora text-2xl font-bold leading-tight sm:text-3xl">
+        {/* Saludo + datos breves en una sola línea (flex-wrap permite
+            que en mobile, si no entra, el DNI/barrio caigan abajo). */}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="font-sora text-xl font-bold leading-tight sm:text-2xl">
             Hola, {primerNombreLindo(vecino.nombre) || 'vecino'}
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/70">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-white/70">
             {vecino.dni && <span>DNI {vecino.dni}</span>}
             {(vecino.barrio || vecino.localidad) && (
               <span>· {vecino.barrio || vecino.localidad}</span>
@@ -152,7 +154,7 @@ function Tabs({ active, onChange }) {
               aria-selected={isActive}
               onClick={() => onChange(t.key)}
               className={
-                'shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors sm:text-base ' +
+                'shrink-0 border-b-2 px-4 py-2 text-sm font-semibold transition-colors ' +
                 (isActive
                   ? 'border-primary text-primary'
                   : 'border-transparent text-primary-400 hover:text-primary-700')
@@ -256,10 +258,10 @@ function TurnosTab({ turnos, isLoading, error }) {
   }, [turnos, ahora])
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mis turnos</h2>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis turnos</h2>
           <p className="text-sm text-primary-500">
             {turnos.length === 0 ? 'Todavía no tenés turnos solicitados.' : `${turnos.length} turno${turnos.length === 1 ? '' : 's'} en total`}
           </p>
@@ -270,7 +272,7 @@ function TurnosTab({ turnos, isLoading, error }) {
       </div>
 
       {isLoading && (
-        <div className="card flex items-center justify-center p-12">
+        <div className="card flex items-center justify-center p-8">
           <Spinner size="lg" />
         </div>
       )}
@@ -294,7 +296,7 @@ function TurnosTab({ turnos, isLoading, error }) {
       )}
 
       {!isLoading && !error && turnos.length === 0 && (
-        <div className="card p-10 text-center">
+        <div className="card p-8 text-center">
           <p className="text-sm text-primary-500">
             Cuando saques tu primer turno aparecerá acá.
           </p>
@@ -340,16 +342,16 @@ function SaludTab({ consultas, isLoading, error }) {
   const [verConsulta, setVerConsulta] = useState(null)
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div>
-        <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mi historia clínica</h2>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi historia clínica</h2>
         <p className="text-sm text-primary-500">
           Resumen de tus últimas atenciones en la Sala de Primeros Auxilios.
         </p>
       </div>
 
       {isLoading && (
-        <div className="card flex items-center justify-center p-12">
+        <div className="card flex items-center justify-center p-8">
           <Spinner size="lg" />
         </div>
       )}
@@ -360,7 +362,7 @@ function SaludTab({ consultas, isLoading, error }) {
       )}
 
       {!isLoading && !error && consultas.length === 0 && (
-        <div className="card p-10 text-center text-sm text-primary-400">
+        <div className="card p-8 text-center text-sm text-primary-400">
           No tenés consultas registradas todavía.
         </div>
       )}
@@ -390,7 +392,7 @@ function SaludTab({ consultas, isLoading, error }) {
       )}
 
       {/* Documentos — placeholder hasta que tengamos RLS + storage para anon */}
-      <div className="card p-5 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
@@ -428,9 +430,9 @@ function SaludTab({ consultas, isLoading, error }) {
 
 function DatoRow({ label, value }) {
   return (
-    <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:justify-between sm:gap-4 last:border-b-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-primary-400 sm:text-sm">{label}</p>
-      <p className="text-sm font-semibold text-primary sm:text-base">{value || '—'}</p>
+    <div className="flex flex-col gap-0.5 border-b border-border py-2 sm:flex-row sm:justify-between sm:gap-4 last:border-b-0">
+      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">{label}</p>
+      <p className="text-sm font-semibold text-primary">{value || '—'}</p>
     </div>
   )
 }
@@ -438,15 +440,15 @@ function DatoRow({ label, value }) {
 function DatosTab({ vecino }) {
   const [showAviso, setShowAviso] = useState(false)
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div>
-        <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mis datos</h2>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis datos</h2>
         <p className="text-sm text-primary-500">
           Información personal registrada en la Comisión Municipal.
         </p>
       </div>
 
-      <div className="card p-5 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
           Datos personales
         </h3>
@@ -461,7 +463,7 @@ function DatosTab({ vecino }) {
         </div>
       </div>
 
-      <div className="card p-5 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
           Datos de contacto
         </h3>
@@ -473,7 +475,7 @@ function DatosTab({ vecino }) {
         </div>
       </div>
 
-      <div className="card p-5 sm:p-6">
+      <div className="card p-4 sm:p-5">
         <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
           Datos de salud
         </h3>
@@ -556,16 +558,16 @@ function truncate(text, max = 60) {
 
 function ReclamosTab({ reclamos, isLoading, error }) {
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div>
-        <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mis reclamos</h2>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reclamos</h2>
         <p className="text-sm text-primary-500">
           Denuncias y reclamos que registraste en el municipio.
         </p>
       </div>
 
       {isLoading && (
-        <div className="card flex items-center justify-center p-12">
+        <div className="card flex items-center justify-center p-8">
           <Spinner size="lg" />
         </div>
       )}
@@ -577,7 +579,7 @@ function ReclamosTab({ reclamos, isLoading, error }) {
       )}
 
       {!isLoading && !error && reclamos.length === 0 && (
-        <div className="card p-10 text-center">
+        <div className="card p-8 text-center">
           <p className="text-sm text-primary-500">
             No tenés reclamos registrados.
           </p>
@@ -643,16 +645,16 @@ function FamiliaTab({ turnos, isLoading, error }) {
   )
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-4">
       <div>
-        <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mi familia</h2>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi familia</h2>
         <p className="text-sm text-primary-500">
           Turnos que sacaste para otros miembros de tu familia.
         </p>
       </div>
 
       {isLoading && (
-        <div className="card flex items-center justify-center p-12">
+        <div className="card flex items-center justify-center p-8">
           <Spinner size="lg" />
         </div>
       )}
@@ -663,7 +665,7 @@ function FamiliaTab({ turnos, isLoading, error }) {
       )}
 
       {!isLoading && !error && familiares.length === 0 && (
-        <div className="card p-10 text-center">
+        <div className="card p-8 text-center">
           <p className="text-sm text-primary-500">
             Todavía no sacaste turnos para familiares.
           </p>
