@@ -458,7 +458,13 @@ export default function AdminLayout() {
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <aside className="lg:w-56 lg:shrink-0">
-        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:overflow-visible">
+        {/* En mobile: nav horizontal con scroll-x (los chips de cada
+            sección desfilan a lo ancho). En desktop: nav vertical
+            con scroll-y propio acotado al alto del viewport — sin
+            esto, con muchas dependencias o pantallas chicas el nav
+            crecía más allá de la altura visible y los últimos items
+            quedaban inaccesibles sin scrollear la página entera. */}
+        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
           <SuperadminSection />
           {NAV.map(item => (
             item.subitems
