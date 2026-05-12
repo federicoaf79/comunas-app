@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useSearchParams } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
@@ -336,67 +336,103 @@ function SidebarDepLink({ tipo, label }) {
 //   - Otros roles → solo ven las dependencias cuyo `id` aparece en
 //     perfil.dependencias_acceso[].dependencia_id. Si el array está
 //     vacío o no existe, no muestran ninguna.
-// Carpeta colapsable del NAV — el header no navega, solo abre/
-// cierra. Si la URL actual coincide con uno de los sub-items, el
-// grupo arranca abierto para que el ítem activo sea visible sin
-// que el usuario tenga que clickear el chevron.
-// Helper: pathname puro de un `to` que puede llevar query string.
-// `/admin/sala?tab=admin` → `/admin/sala`. Lo usa NavGroup para
-// resolver el auto-expand sin matchear contra el ?tab.
-function basePathOf(to) {
-  if (!to) return ''
-  const i = to.indexOf('?')
-  return i === -1 ? to : to.slice(0, i)
+// Parsea `to` en { path, tab }. `/admin/juez?tab=expedientes` →
+// { path: '/admin/juez', tab: 'expedientes' }. Sin query → tab null.
+function parseSubTo(to) {
+  const [path, query] = (to ?? '').split('?')
+  const tab = query ? new URLSearchParams(query).get('tab') : null
+  return { path, tab }
 }
 
+// Carpeta del NAV con dos comportamientos:
+//   - Desktop (lg+): header colapsable inline. El chevron abre/cierra
+//     y los sub-items se renderizan debajo. El grupo arranca abierto
+//     si alguno de sus sub-items está activo.
+//   - Mobile (< lg): se degrada a un NavLink plano que navega al
+//     primer sub-item. Sin chevron, sin expansión, sin dropdown
+//     flotante (el sidebar mobile es un scroll horizontal de chips).
+//
+// Active state EXACTO por sub-item:
+//   /admin/juez?tab=expedientes está activo solo si pathname coincide
+//   exactamente Y el ?tab actual coincide. Para sub-items sin ?tab,
+//   se exige que NO haya ?tab en la URL (sino "Agenda" y
+//   "Administración" matchearían ambos en /admin/sala).
 function NavGroup({ label, icon, subitems }) {
   const location = useLocation()
-  const hasActive = subitems.some(s => {
-    const p = basePathOf(s.to)
-    return location.pathname === p || location.pathname.startsWith(`${p}/`)
-  })
+  const [searchParams] = useSearchParams()
+  const currentTab = searchParams.get('tab')
+
+  const isSubActive = (subTo) => {
+    const { path, tab } = parseSubTo(subTo)
+    if (location.pathname !== path) return false
+    return tab ? currentTab === tab : !currentTab
+  }
+
+  const hasActive = subitems.some(s => isSubActive(s.to))
   const [open, setOpen] = useState(hasActive)
+  const firstSubTo = subitems[0]?.to ?? '#'
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-primary-500 transition-colors hover:bg-primary-50 hover:text-primary"
+    <>
+      {/* Mobile: link plano al primer sub-item. */}
+      <NavLink
+        to={firstSubTo}
+        className={
+          `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors lg:hidden ${
+            hasActive
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+          }`
+        }
       >
         <span aria-hidden="true">{icon}</span>
-        <span className="flex-1 text-left">{label}</span>
-        <svg
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          className={'h-3 w-3 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
-          aria-hidden="true"
+        <span className="truncate">{label}</span>
+      </NavLink>
+
+      {/* Desktop: header colapsable + sub-items inline. */}
+      <div className="hidden lg:block">
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-primary-500 transition-colors hover:bg-primary-50 hover:text-primary"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      {open && (
-        <div className="mt-0.5 flex flex-col gap-0.5">
-          {subitems.map(s => (
-            <NavLink
-              key={s.to}
-              to={s.to}
-              end={s.end}
-              className={({ isActive }) =>
-                `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 pl-7 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
-                }`
-              }
-            >
-              <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-              <span className="truncate">{s.label}</span>
-            </NavLink>
-          ))}
-        </div>
-      )}
-    </div>
+          <span aria-hidden="true">{icon}</span>
+          <span className="flex-1 text-left">{label}</span>
+          <svg
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+            className={'h-3 w-3 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        {open && (
+          <div className="mt-0.5 flex flex-col gap-0.5">
+            {subitems.map(s => {
+              const active = isSubActive(s.to)
+              return (
+                <NavLink
+                  key={s.to}
+                  to={s.to}
+                  end={s.end}
+                  className={
+                    `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 pl-7 text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+                    }`
+                  }
+                >
+                  <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                  <span className="truncate">{s.label}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
