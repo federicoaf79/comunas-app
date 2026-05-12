@@ -9,7 +9,10 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
-import CalendarioSemanal from '../../components/turnos/CalendarioSemanal'
+import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+
+// Color estándar de los turnos del Juzgado de Paz — navy primary.
+const COLOR_TURNO_JUEZ = '#0F1C35'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
 import ExpedienteFormModal from '../../components/admin/ExpedienteFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
@@ -232,36 +235,36 @@ function AgendaSemanalTab({ depJuez }) {
     dependenciaId: depJuez?.id,
   })
 
+  const eventos = useMemo(() => (turnos ?? []).map(t => ({
+    id:          t.id,
+    tipo:        'turno_juez',
+    fecha_hora:  t.fecha_hora,
+    titulo:      vecinoNombre(t.vecino),
+    subtitulo:   t.motivo || 'Juzgado de Paz',
+    estado:      t.estado,
+    numero:      t.numero_turno,
+    duracion_min: 30,
+  })), [turnos])
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-primary-500">
-          {shortDateOf(weekStart)} – {shortDateOf(weekEnd)}
-        </p>
-        <div className="inline-flex gap-2">
-          <button onClick={() => setWeekStart(p => addDays(p, -7))} className="btn-secondary px-3 py-1.5 text-xs">
-            ← Anterior
-          </button>
-          <button onClick={() => setWeekStart(startOfWeekMonday(new Date()))} className="btn-secondary px-3 py-1.5 text-xs">
-            Hoy
-          </button>
-          <button onClick={() => setWeekStart(p => addDays(p, 7))} className="btn-secondary px-3 py-1.5 text-xs">
-            Siguiente →
-          </button>
-        </div>
-      </div>
-
       {error && (
         <div className="card border-red-100 bg-red-50 p-4 text-sm text-danger">
           No pudimos cargar la agenda: {error.message}
         </div>
       )}
 
-      {isLoading ? (
-        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
-      ) : (
-        <CalendarioSemanal weekStart={weekStart} turnos={turnos ?? []} />
-      )}
+      <CalendarioSemanal
+        weekStart={weekStart}
+        loading={isLoading}
+        onPrev={() => setWeekStart(p => addDays(p, -7))}
+        onToday={() => setWeekStart(startOfWeekMonday(new Date()))}
+        onNext={() => setWeekStart(p => addDays(p, 7))}
+        weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
+        colorPorTipo={{ turno_juez: COLOR_TURNO_JUEZ }}
+        leyenda={[{ label: 'Turno juzgado', color: COLOR_TURNO_JUEZ }]}
+        eventos={eventos}
+      />
     </div>
   )
 }

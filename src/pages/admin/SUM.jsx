@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../lib/supabase'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -13,7 +15,25 @@ import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import SumReservaFormModal from '../../components/admin/SumReservaFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
-import { dateOf } from '../../lib/datetime'
+import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+import { dateOf, shortDateOf } from '../../lib/datetime'
+
+// Color estándar para reservas SUM en el calendario semanal — gold
+// (#C9A84C). Texto auto-derivado por luminancia (queda navy).
+const COLOR_RESERVA_SUM = '#C9A84C'
+
+// Mapeo slot → { hi, hf, duracion_min } usado por la grilla semanal.
+// La columna `horario` de sum_reservas guarda estos 4 valores; los
+// extremos coinciden con HORARIO_OPTS del modal de alta.
+const HORARIO_SLOTS = {
+  manana:       { hi: '08:00', duracion_min: 5 * 60 },
+  tarde:        { hi: '14:00', duracion_min: 4 * 60 },
+  noche:        { hi: '19:00', duracion_min: 4 * 60 },
+  dia_completo: { hi: '08:00', duracion_min: 15 * 60 },
+}
+function slotDe(reserva) {
+  return HORARIO_SLOTS[(reserva?.horario ?? '').toLowerCase()] ?? HORARIO_SLOTS.manana
+}
 
 // =============================================================
 // SUM — Salón de Usos Múltiples.
@@ -47,6 +67,23 @@ const ESTADO_CLASS = {
   rechazada: 'estado-cancelado',
   cancelada: 'estado-cancelado',
   realizada: 'estado-completado',
+}
+
+// Lunes 00:00 local de la semana que contiene `date` — mismo
+// patrón que el resto de los tableros del proyecto.
+function startOfWeekMonday(date) {
+  const d = new Date(date)
+  d.setHours(12, 0, 0, 0)
+  const dow = d.getDay()
+  const diff = dow === 0 ? -6 : 1 - dow
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
+function ymdLocal(d) {
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
 function vecinoNombre(v) {
@@ -276,6 +313,75 @@ function MonthCalendar({ year, month, reservasByDate }) {
   )
 }
 
+// ─────────────────────────────────────────────────────────────────
+// TAB 1b · Vista semanal de reservas (calendario estándar)
+//
+// Muestra las reservas del SUM en la misma grilla semanal que usan
+// Sala PA y Juez de Paz. Útil para chequear de un vistazo qué
+// franjas están comprometidas durante la semana.
+// ─────────────────────────────────────────────────────────────────
+
+function ReservasSemanalTab() {
+  const municipioId = useEffectiveMunicipioId()
+  const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
+  const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
+  const fechaFrom = ymdLocal(weekStart)
+  const fechaTo   = ymdLocal(weekEnd)
+
+  const reservasQ = useQuery({
+    queryKey: ['sum_reservas_semana', municipioId ?? '__ALL__', fechaFrom, fechaTo],
+    queryFn:  async () => {
+      let q = supabase
+        .from('sum_reservas')
+        .select('id, fecha, horario, solicitante, motivo, estado, costo')
+        .gte('fecha', fechaFrom)
+        .lte('fecha', fechaTo)
+      if (municipioId) q = q.eq('municipio_id', municipioId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!fechaFrom && !!fechaTo,
+  })
+
+  const eventos = useMemo(() => (reservasQ.data ?? []).map(r => {
+    const { hi, duracion_min } = slotDe(r)
+    return {
+      id:           r.id,
+      tipo:         'reserva_sum',
+      fecha:        r.fecha,
+      hora:         hi,
+      duracion_min,
+      titulo:       r.solicitante || 'Reserva SUM',
+      subtitulo:    r.motivo || 'Salón de Usos Múltiples',
+      estado:       r.estado,
+    }
+  }), [reservasQ.data])
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-lg font-bold text-primary">Vista semanal</h2>
+        <p className="mt-0.5 text-sm text-primary-500">
+          Bloques por franja (mañana / tarde / noche / día completo) — click
+          en un bloque para verlo en la lista de arriba.
+        </p>
+      </div>
+      <CalendarioSemanal
+        weekStart={weekStart}
+        loading={reservasQ.isLoading}
+        onPrev={() => setWeekStart(p => addDays(p, -7))}
+        onToday={() => setWeekStart(startOfWeekMonday(new Date()))}
+        onNext={() => setWeekStart(p => addDays(p, 7))}
+        weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
+        colorPorTipo={{ reserva_sum: COLOR_RESERVA_SUM }}
+        leyenda={[{ label: 'Reserva SUM', color: COLOR_RESERVA_SUM }]}
+        eventos={eventos}
+      />
+    </div>
+  )
+}
+
 function CalendarioTab() {
   const today = useMemo(() => new Date(), [])
   const [year, setYear]   = useState(today.getFullYear())
@@ -501,6 +607,7 @@ export default function SUM() {
                 </p>
               </div>
             )}
+          {depSum && <ReservasSemanalTab />}
           {depSum && <CalendarioTab />}
           <TarifasTab />
         </div>

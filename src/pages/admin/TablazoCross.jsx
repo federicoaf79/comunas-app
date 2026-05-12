@@ -7,6 +7,23 @@ import { todayArgYMD, timeOf, shortDateOf } from '../../lib/datetime'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
+import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+
+// Colores estándar por tipo de evento — alineados con Sala PA /
+// Juez de Paz / SUM para que el operador reconozca de un vistazo
+// la dependencia detrás del bloque.
+const COLOR_SALA  = '#1D4ED8'  // azul ok — turnos clínicos
+const COLOR_JUEZ  = '#0F1C35'  // navy primary — Juez de Paz
+const COLOR_SUM   = '#C9A84C'  // gold accent — reservas SUM
+const COLOR_OTRA  = '#64748B'  // slate-500 — resto de las dependencias
+
+function colorPorTipoDep(tipo) {
+  const t = (tipo ?? '').toLowerCase()
+  if (/caps|salud|sala/.test(t))    return COLOR_SALA
+  if (/juzgado|juez|paz/.test(t))   return COLOR_JUEZ
+  if (/sum|sal[oó]n/.test(t))       return COLOR_SUM
+  return COLOR_OTRA
+}
 
 // =============================================================
 // Tablero de Turnos y Reservas — toggle Día / Semana.
@@ -128,8 +145,6 @@ const CANAL_CLASS = {
   presencial: 'canal-presencial',
 }
 
-const DOW_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie']
-
 // Color del badge de dependencia según `tipo`. Cero verde — todas
 // las variantes caen a navy / azul OK / gold / gris / slate.
 function depBadgeClass(tipo) {
@@ -186,16 +201,6 @@ function addDays(d, n) {
   const r = new Date(d)
   r.setDate(r.getDate() + n)
   return r
-}
-
-// Devuelve los 5 días de la semana laborable (Lun-Vie) que contiene
-// `fecha` (YYYY-MM-DD). Cada item: { date: Date, ymd: string, dow: 'Lun'... }.
-function semanaLaboralDe(fechaYmd) {
-  const lunes = startOfWeekMonday(parseYmd(fechaYmd))
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = addDays(lunes, i)
-    return { date: d, ymd: ymd(d), dow: DOW_LABELS[i] }
-  })
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -326,60 +331,9 @@ function ReservaRow({ reserva }) {
   )
 }
 
-function ReservaLineaCompacta({ reserva }) {
-  return (
-    <li className="border-t border-border first:border-t-0 border-l-4 border-l-[#C9A84C] bg-[#C9A84C]/8 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-sora text-sm font-bold text-primary">
-          {horarioSumHi(reserva.horario)}
-        </span>
-        <span className="text-[10px] font-bold uppercase tracking-wide text-[#7E682B]">
-          SUM
-        </span>
-      </div>
-      <p className="mt-0.5 line-clamp-1 text-xs font-medium text-primary-700">
-        <span aria-hidden="true">🏛️</span>{' '}
-        {reserva.solicitante || 'Reserva SUM'}
-      </p>
-      <p className="mt-0.5 line-clamp-1 text-[10px] text-primary-500">
-        {horarioSumLabel(reserva.horario)}
-      </p>
-    </li>
-  )
-}
-
-// Línea compacta para Vista Semana — solo lo esencial.
-function TurnoLineaCompacta({ turno }) {
-  const isFamiliar = !!turno.metadata?.para_familiar
-  const nombre = isFamiliar
-    ? (turno.metadata.familiar_nombre || vecinoNombre(turno.vecino))
-    : vecinoNombre(turno.vecino)
-  const depNombre = turno.dependencia?.nombre ?? turno.dependencia_nombre ?? '—'
-  const depCls    = depBadgeClass(turno.dependencia?.tipo)
-  return (
-    <li className="border-t border-border first:border-t-0 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="font-sora text-sm font-bold text-primary">
-          {timeOf(turno.fecha_hora) || '—'}
-        </span>
-        {turno.numero_turno && (
-          <span className="text-[10px] text-primary-400">#{turno.numero_turno}</span>
-        )}
-      </div>
-      <p className="mt-0.5 line-clamp-1 text-xs font-medium text-primary-700">
-        {nombre}
-      </p>
-      <span
-        className={
-          'mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset ' +
-          depCls
-        }
-      >
-        {depNombre}
-      </span>
-    </li>
-  )
-}
+// (La vista semana ahora usa CalendarioSemanal — los renderers
+//  compactos TurnoLineaCompacta y ReservaLineaCompacta quedaron
+//  obsoletos y se removieron.)
 
 // ─────────────────────────────────────────────────────────────────
 // Vista Día — lista por franja horaria
@@ -532,14 +486,17 @@ function VistaDia({
 // ─────────────────────────────────────────────────────────────────
 
 function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }) {
-  const dias = useMemo(() => semanaLaboralDe(fecha), [fecha])
-  const today = todayArgYMD()
+  // Para alinearnos con el estándar Mon-Sun de CalendarioSemanal,
+  // calculamos el lunes de la semana que contiene `fecha` y armamos
+  // el rango Lun-Dom. La grilla del componente se encarga de la
+  // distribución y posicionamiento por hora.
+  const weekStart = useMemo(() => startOfWeekMonday(parseYmd(fecha)), [fecha])
+  const weekEnd   = useMemo(() => addDays(weekStart, 6), [weekStart])
+  const fechaFrom = ymd(weekStart)
+  const fechaTo   = ymd(weekEnd)
 
-  const fechaFrom = dias[0]?.ymd
-  const fechaTo   = dias[4]?.ymd
-
-  const skipTurnos = soloReservas
-  const mostrarReservas = !dependenciaId || soloReservas
+  const skipTurnos       = soloReservas
+  const mostrarReservas  = !dependenciaId || soloReservas
 
   const { turnos = [], isLoading: turnosLoading, isFetching: turnosFetching, error: turnosError } = useTurnos({
     fechaFrom:     skipTurnos ? undefined : fechaFrom,
@@ -559,38 +516,44 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
     [mostrarReservas, reservasQ.data],
   )
 
-  // Agrupamos turnos + reservas por fecha (YYYY-MM-DD). Cada item en
-  // el array por día lleva { kind, sortKey, data } para renderizar
-  // luego con la variante visual correcta.
-  const eventosPorDia = useMemo(() => {
-    const map = new Map(dias.map(d => [d.ymd, []]))
+  // Eventos unificados para CalendarioSemanal. Color por tipo:
+  // turnos se mapean al color de SU dependencia; reservas SUM van
+  // siempre gold para diferenciarlas. El bloque pendiente queda con
+  // borde punteado, el cancelado con opacidad y tachado — lógica
+  // ya implementada dentro del componente.
+  const eventos = useMemo(() => {
+    const out = []
     if (!skipTurnos) {
       for (const t of (turnos ?? [])) {
-        const k = (t.fecha_hora ?? '').slice(0, 10)
-        if (map.has(k)) {
-          map.get(k).push({
-            kind: 'turno',
-            sortKey: t.fecha_hora ?? '',
-            data: t,
-          })
-        }
-      }
-    }
-    for (const r of reservas) {
-      const k = (r.fecha ?? '').slice(0, 10)
-      if (map.has(k)) {
-        map.get(k).push({
-          kind: 'reserva',
-          sortKey: `${r.fecha}T${horarioSumHi(r.horario)}`,
-          data: r,
+        out.push({
+          id:          t.id,
+          tipo:        'turno',
+          fecha_hora:  t.fecha_hora,
+          titulo:      vecinoNombre(t.vecino),
+          subtitulo:   t.dependencia?.nombre ?? t.dependencia_nombre ?? 'Turno',
+          estado:      t.estado,
+          numero:      t.numero_turno,
+          duracion_min: 30,
+          color:       colorPorTipoDep(t.dependencia?.tipo),
         })
       }
     }
-    for (const arr of map.values()) {
-      arr.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    for (const r of reservas) {
+      const slotHi = horarioSumHi(r.horario)
+      out.push({
+        id:          r.id,
+        tipo:        'reserva',
+        fecha:       r.fecha,
+        hora:        slotHi,
+        duracion_min: 60 * 2,  // bloque visible 2hs; los slots reales pueden ser más largos
+        titulo:      r.solicitante || 'Reserva SUM',
+        subtitulo:   r.motivo || 'Salón de Usos Múltiples',
+        estado:      r.estado,
+        color:       COLOR_SUM,
+      })
     }
-    return map
-  }, [turnos, reservas, dias, skipTurnos])
+    return out
+  }, [turnos, reservas, skipTurnos])
 
   const totalTurnos   = skipTurnos ? 0 : (turnos ?? []).length
   const totalReservas = reservas.length
@@ -598,6 +561,19 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
   const isLoading     = (!skipTurnos && turnosLoading) || (mostrarReservas && reservasQ.isLoading)
   const isFetching    = turnosFetching || reservasQ.isFetching
   const error         = turnosError || reservasQ.error
+
+  const leyenda = useMemo(() => {
+    const out = []
+    if (!skipTurnos) {
+      out.push({ label: 'Sala PA',     color: COLOR_SALA })
+      out.push({ label: 'Juez de Paz', color: COLOR_JUEZ })
+      out.push({ label: 'Otras deps.', color: COLOR_OTRA })
+    }
+    if (mostrarReservas) {
+      out.push({ label: 'Reserva SUM', color: COLOR_SUM })
+    }
+    return out
+  }, [skipTurnos, mostrarReservas])
 
   return (
     <div className="space-y-4">
@@ -610,7 +586,6 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
             </span>
           )}
         </span>
-        <span className="text-primary-300">{shortDateOf(dias[0].date)} – {shortDateOf(dias[4].date)}</span>
         {isFetching && !isLoading && <span className="text-primary-300">(actualizando…)</span>}
       </div>
 
@@ -620,63 +595,13 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
         </div>
       )}
 
-      {isLoading && (
-        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
-      )}
-
-      {!isLoading && !error && (
-        <div className="-mx-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
-          <div className="grid min-w-[800px] grid-cols-5 gap-3 lg:min-w-0">
-            {dias.map(d => {
-              const items = eventosPorDia.get(d.ymd) ?? []
-              const isToday      = d.ymd === today
-              const isHistorico  = d.ymd < today
-              const borderCls    = isToday
-                ? 'border-accent ring-2 ring-accent/30'
-                : 'border-border'
-              return (
-                <div
-                  key={d.ymd}
-                  className={`flex flex-col rounded-xl border bg-white shadow-card ${borderCls}`}
-                >
-                  <header className={
-                    'flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 ' +
-                    (isToday ? 'border-accent bg-accent-50' : 'border-border bg-primary-50/60')
-                  }>
-                    <div>
-                      <p className="font-sora text-sm font-bold text-primary">{d.dow}</p>
-                      <p className="text-[11px] font-medium text-primary-400">{shortDateOf(d.date)}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className={
-                        'rounded-full px-2 py-0.5 text-[10px] font-bold ' +
-                        (isToday
-                          ? 'bg-accent text-primary-900'
-                          : 'bg-primary-100 text-primary-700')
-                      }>
-                        {items.length}
-                      </span>
-                      {isHistorico && <HistoricoBadge small />}
-                    </div>
-                  </header>
-                  <ul className="flex-1">
-                    {items.length === 0 ? (
-                      <li className="p-4 text-center text-xs italic text-primary-300">
-                        Sin eventos
-                      </li>
-                    ) : (
-                      items.map(e => e.kind === 'reserva'
-                        ? <ReservaLineaCompacta key={`r-${e.data.id}`} reserva={e.data} />
-                        : <TurnoLineaCompacta   key={`t-${e.data.id}`} turno={e.data} />,
-                      )
-                    )}
-                  </ul>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      <CalendarioSemanal
+        weekStart={weekStart}
+        loading={isLoading}
+        weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
+        leyenda={leyenda}
+        eventos={eventos}
+      />
     </div>
   )
 }

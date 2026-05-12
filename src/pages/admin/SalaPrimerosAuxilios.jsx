@@ -14,10 +14,12 @@ import RecetaUploader from '../../components/hc/RecetaUploader'
 import AdministracionTab from '../../components/admin/AdministracionTab'
 import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
 import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
-import CalendarioSemanal, {
-  COLOR_BY_SPEC,
-  SPEC_LABEL,
-} from '../../components/turnos/CalendarioSemanal'
+import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+
+// Color estándar de los turnos clínicos en Sala PA — azul ok
+// (#1D4ED8). Centralizado acá para que la leyenda y los bloques del
+// calendario compartan la misma fuente de verdad.
+const COLOR_TURNO_SALA = '#1D4ED8'
 
 // Etiqueta de sección activa para el breadcrumb del header.
 // No se renderiza una barra de tabs: el usuario navega entre
@@ -369,57 +371,33 @@ export default function SalaPrimerosAuxilios() {
 
       {vista === 'semana' && (
         <>
-          {/* Navegación */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button onClick={prevWeek} className="btn-secondary">← Semana anterior</button>
-            <div className="flex items-center gap-3 text-sm">
-              <button onClick={thisWeek} className="font-medium text-primary hover:underline">
-                Esta semana
-              </button>
-              <span className="font-semibold text-primary">
-                {shortDateOf(weekStart)} – {shortDateOf(weekEnd)}
-              </span>
-            </div>
-            <button onClick={nextWeek} className="btn-secondary">Semana siguiente →</button>
-          </div>
-
-          {/* Leyenda */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-white px-4 py-2 text-xs text-primary-500">
-            {Object.keys(COLOR_BY_SPEC).map(key => (
-              <span key={key} className="inline-flex items-center gap-1.5">
-                <span className={`inline-block h-3 w-3 rounded ${COLOR_BY_SPEC[key].solid}`} />
-                <span>{SPEC_LABEL[key]}</span>
-              </span>
-            ))}
-            <span className="ml-auto inline-flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-1">
-                <span className="inline-block h-3 w-5 rounded bg-primary" />
-                Confirmado
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <span className="inline-block h-3 w-5 rounded border-2 border-dashed border-primary" />
-                Pendiente
-              </span>
-              <span className="inline-flex items-center gap-1 line-through opacity-50">
-                <span className="inline-block h-3 w-5 rounded bg-primary opacity-50" />
-                Cancelado
-              </span>
-            </span>
-          </div>
-
           {weekError && (
             <div className="card border-red-100 bg-red-50 p-4 text-sm text-danger">
               No pudimos cargar los turnos de la semana: {weekError.message}
             </div>
           )}
 
-          {weekLoading ? (
-            <div className="card flex items-center justify-center p-10">
-              <Spinner size="lg" />
-            </div>
-          ) : (
-            <CalendarioSemanal weekStart={weekStart} turnos={turnosSemana} />
-          )}
+          <CalendarioSemanal
+            weekStart={weekStart}
+            loading={weekLoading}
+            onPrev={prevWeek}
+            onToday={thisWeek}
+            onNext={nextWeek}
+            weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
+            colorPorTipo={{ turno_sala: COLOR_TURNO_SALA }}
+            leyenda={[{ label: 'Turno clínico', color: COLOR_TURNO_SALA }]}
+            onEventoClick={(e) => navigate(`/admin/sala/atencion/${e.id}`)}
+            eventos={(turnosSemana ?? []).map(t => ({
+              id:          t.id,
+              tipo:        'turno_sala',
+              fecha_hora:  t.fecha_hora,
+              titulo:      vecinoLabel(t),
+              subtitulo:   t.profesional?.nombre || t.motivo || 'Sala PA',
+              estado:      t.estado,
+              numero:      t.numero_turno,
+              duracion_min: 30,
+            }))}
+          />
         </>
       )}
       </>}
