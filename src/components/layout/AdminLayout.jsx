@@ -20,20 +20,25 @@ const TIPOS_CON_MODULO_PROPIO = new Set([
 // agrupados con un solo nombre. Si el tipo no está acá, cae al
 // nombre de la primera dependencia con ese tipo.
 const LABEL_BY_TIPO = {
-  obras:          'Obras Públicas',
-  obras_publicas: 'Obras Públicas',
-  deporte:        'Polideportivo',
-  polideportivo:  'Polideportivo',
-  cementerio:     'Cementerio',
-  velatorio:      'Velatorio',
-  policia:        'Delegación Policial',
-  educacion:      'Educación',
-  jardin:         'Jardín de Infantes',
-  primaria:       'Escuela Primaria',
-  secundaria:     'Escuela Secundaria',
-  bienes:         'Bienes',
-  ayuda_social:   'Ayuda Social',
-  social:         'Ayuda Social',
+  obras:                'Obras Públicas',
+  obras_publicas:       'Obras Públicas',
+  deporte:              'Polideportivo',
+  polideportivo:        'Polideportivo',
+  cementerio:           'Cementerio',
+  velatorio:            'Velatorio',
+  policia:              'Delegación Policial',
+  policial:             'Delegación Policial',
+  delegacion_policial:  'Delegación Policial',
+  educacion:            'Educación',
+  educacion_sec:        'Educación Secundaria',
+  escuela:              'Escuela',
+  jardin:               'Jardín de Infantes',
+  jardin_infantes:      'Jardín de Infantes',
+  primaria:             'Escuela Primaria',
+  secundaria:           'Escuela Secundaria',
+  bienes:               'Bienes',
+  ayuda_social:         'Ayuda Social',
+  social:               'Ayuda Social',
 }
 
 // NAV_TOP — links planos del header del sidebar. Dashboard +
@@ -137,12 +142,16 @@ const CIC_BLUEPRINT = [
 // para no duplicar la entrada.
 const TIPOS_CIC = new Set(['caps', 'salud', 'sala', 'juzgado', 'sum', 'salon', 'social', 'ayuda_social'])
 
-// Tipos solo-informativos — un solo link "Información", sin
-// gestión ni administración. No verificamos permisos por dep para
-// estos (son meramente informativos en el sidebar).
+// Tipos solo-informativos — un solo link al detalle, sin gestión
+// ni administración. Se renderizan al final del bloque DEPENDENCIAS
+// bajo un mini-rótulo "Solo información" para diferenciarlos de las
+// dependencias operativas. No verificamos permisos por dep para
+// estos (son informativos en el sidebar).
 const TIPOS_INFO_ONLY = new Set([
-  'policia', 'policial',
-  'educacion', 'educacion_sec', 'jardin', 'primaria', 'secundaria',
+  'policia', 'policial', 'delegacion_policial',
+  'educacion', 'educacion_sec', 'escuela',
+  'jardin', 'jardin_infantes',
+  'primaria', 'secundaria',
 ])
 
 // Sub-items por NavGroup de cada tipo de dependencia. `kind`
@@ -593,9 +602,14 @@ export default function AdminLayout() {
   // DEPENDENCIAS dinámicas: el resto de filas de la tabla que NO
   // están en CIC. Dedupe por tipo (un tipo = una entrada aunque
   // existan varias filas).
-  const depEntries = useMemo(() => {
+  //
+  // Devolvemos dos listas: las "principales" (con gestión y/o
+  // administración) y las "info-only" (policial / educativas) que
+  // se renderizan al final del bloque bajo un mini-separador.
+  const { depsPrincipales, depsInfo } = useMemo(() => {
     const seenTipo = new Set()
-    const out = []
+    const principales = []
+    const info = []
     for (const d of (deps ?? [])) {
       if (d.activa === false) continue
       const t = (d.tipo ?? '').toLowerCase().trim()
@@ -605,10 +619,13 @@ export default function AdminLayout() {
       const label = LABEL_BY_TIPO[t] ?? d.nombre
       const basePath = `/admin/dependencia/${t}`
       const entry = entryParaDep({ tipo: t, label, basePath, dep: d })
-      if (entry) out.push(entry)
+      if (!entry) continue
+      if (TIPOS_INFO_ONLY.has(t)) info.push(entry)
+      else                         principales.push(entry)
     }
-    out.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
-    return out
+    principales.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
+    info.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
+    return { depsPrincipales: principales, depsInfo: info }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deps, accesoByDepId, esDirector, tieneModulo])
 
@@ -642,8 +659,25 @@ export default function AdminLayout() {
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
 
-          {depEntries.length > 0 && <Rotulo>Dependencias</Rotulo>}
-          {depEntries.map(item => (
+          {(depsPrincipales.length > 0 || depsInfo.length > 0) && <Rotulo>Dependencias</Rotulo>}
+          {depsPrincipales.map(item => (
+            item.kind === 'link'
+              ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
+              : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
+          ))}
+
+          {/* Sub-rótulo "Solo información" — separa las dependencias
+              informativas (policial, educativas) de las operativas.
+              Usa gris suave para señalar que son enlaces secundarios.
+              Hidden en mobile (mismo patrón que los demás rótulos). */}
+          {depsInfo.length > 0 && (
+            <div className="hidden px-3 pb-1 pt-3 lg:block">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 opacity-70">
+                Solo información
+              </span>
+            </div>
+          )}
+          {depsInfo.map(item => (
             item.kind === 'link'
               ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
