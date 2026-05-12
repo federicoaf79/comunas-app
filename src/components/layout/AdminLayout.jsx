@@ -178,23 +178,92 @@ const NAV_FOOTER = [
   },
 ]
 
-// Item plano del sidebar (usado tanto en "Otras" como en sub-items
-// de Educación, con un nivel extra de indent en el segundo caso).
-function SidebarDepLink({ tipo, label, indent = false }) {
+// Ícono por tipo de dependencia para el sidebar. Cada tipo tiene su
+// glifo propio; los que no matchean caen al cuadrado genérico. El
+// criterio es el mismo que el del Portal Público (ServiciosSection)
+// para que la identidad visual sea consistente entre admin y portal.
+function iconForDepTipo(tipo) {
+  const t = (tipo ?? '').toLowerCase()
+  const cls = 'h-4 w-4'
+  const base = {
+    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
+    strokeWidth: '2', 'aria-hidden': 'true', className: cls,
+  }
+
+  // Salud / Sala — cruz dentro de círculo.
+  if (/caps|salud|sala/.test(t)) return (
+    <svg {...base}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
+  )
+  // Juzgado / Juez de Paz — balanza.
+  if (/juzgado|paz|justicia/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" /></svg>
+  )
+  // SUM / salón — edificio con techo a dos aguas.
+  if (/sum|sal[oó]n|cultural/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" /></svg>
+  )
+  // Social / Ayuda Social — manos abiertas / corazón.
+  if (/social|ayuda|familia|comunidad|asisten/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" /></svg>
+  )
+  // Obras Públicas — casco de construcción con herramienta.
+  if (/obra|construc|infra|catastro/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M3 18h18M5 18v-3a7 7 0 0 1 14 0v3M9 7v4M15 7v4M9 11h6" /></svg>
+  )
+  // Deporte / Polideportivo — pelota.
+  if (/deport|polideport|recreaci/.test(t)) return (
+    <svg {...base}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" strokeLinejoin="round" d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg>
+  )
+  // Cementerio — cruz/lápida.
+  if (/cementerio|necr/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M8 21v-9a4 4 0 0 1 8 0v9M12 8V4M10 6h4M5 21h14" /></svg>
+  )
+  // Velatorio — llama de vela.
+  if (/velatorio|despedida|f[uú]nebre/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2 3 4 5 4 8a4 4 0 0 1-8 0c0-3 2-5 4-8zM8 21h8M10 18h4" /></svg>
+  )
+  // Educación — libro abierto.
+  if (/educ|escuel|jardi|primaria|secundaria|biblioteca/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h7a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H3V5zM21 5h-7a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h7V5z" /></svg>
+  )
+  // Alumbrado Público — rayo / electricidad.
+  if (/alumbrado|elect/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg>
+  )
+  // Espacios Verdes / jardín — hoja.
+  if (/verde|jardin|parque|plaza/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M11 20A7 7 0 0 1 4 13c0-6 6-9 16-9 0 6-3 16-9 16zM4 20l6-6" /></svg>
+  )
+  // Policía / Delegación Policial — escudo.
+  if (/polic|seguridad|defensa/.test(t)) return (
+    <svg {...base}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z" /></svg>
+  )
+  // Bienes / catastro — edificio con ventanas.
+  if (/bienes|inmueble|patrim/.test(t)) return (
+    <svg {...base}><rect x="4" y="4" width="16" height="16" rx="1.5" /><path strokeLinecap="round" d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01M9 17h.01M15 17h.01" /></svg>
+  )
+  // Default — cuadrado genérico (edificio simple).
+  return (
+    <svg {...base}><rect x="4" y="4" width="16" height="16" rx="2" /><path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" /></svg>
+  )
+}
+
+// Item del sidebar para una dependencia dinámica — visualmente
+// idéntico a los NavLinks fijos del NAV (Sala, Juez de Paz, SUM):
+// mismo padding (py-2), ícono propio según el tipo, y sin bullet.
+function SidebarDepLink({ tipo, label }) {
   return (
     <NavLink
       to={`/admin/dependencia/${tipo}`}
       className={({ isActive }) =>
-        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-          indent ? 'pl-7' : ''
-        } ${
+        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
           isActive
             ? 'bg-primary text-white shadow-sm'
             : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
         }`
       }
     >
-      <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+      <span aria-hidden="true">{iconForDepTipo(tipo)}</span>
       <span className="truncate">{label}</span>
     </NavLink>
   )
