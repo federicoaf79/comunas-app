@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -432,10 +432,14 @@ export default function SUM() {
   const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
                        ? 'administracion'
                        : 'reservas'
-  // Busca la dependencia "sum" del municipio del operador. Si es
-  // superadmin (municipio_id = null), useDependenciaByTipo cae a la
-  // primera dependencia activa con ese tipo en cualquier municipio.
-  const { data: depSum = null, isLoading: depsLoading } = useDependenciaByTipo('sum')
+  // Busca la dependencia del SUM en el municipio efectivo. El find
+  // tolera variaciones del seed (sum / salon / salon_usos_multiples).
+  const depsQ = useDependencias(municipioId)
+  const depsLoading = depsQ.isLoading
+  const depSum = useMemo(() => {
+    const tipos = ['sum', 'salon', 'salon_usos_multiples']
+    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+  }, [depsQ.data])
 
   // Gating por dependencias_acceso. Directores ven todo.
   const miAcceso = useMemo(() => {
@@ -474,9 +478,11 @@ export default function SUM() {
 
       {!depsLoading && !depSum && seccion !== 'reservas' && (
         <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
-          <p className="font-semibold">No hay un SUM configurado en este municipio.</p>
+          <p className="font-semibold">No se encontró la dependencia del SUM.</p>
           <p className="mt-1 text-xs">
-            Pedile al administrador que cree una dependencia con tipo <code>sum</code>.
+            Verificá que exista una dependencia de tipo
+            {' '}<code>sum</code>, <code>salon</code> o <code>salon_usos_multiples</code>{' '}
+            en este municipio.
           </p>
         </div>
       )}
@@ -487,9 +493,11 @@ export default function SUM() {
             ? <ReservasTab depSum={depSum} canApprove={canApprove} />
             : (
               <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
-                <p className="font-semibold">No hay un SUM configurado en este municipio.</p>
+                <p className="font-semibold">No se encontró la dependencia del SUM.</p>
                 <p className="mt-1 text-xs">
-                  Pedile al administrador que cree una dependencia con tipo <code>sum</code>.
+                  Verificá que exista una dependencia de tipo
+                  {' '}<code>sum</code>, <code>salon</code> o <code>salon_usos_multiples</code>{' '}
+                  en este municipio.
                 </p>
               </div>
             )}

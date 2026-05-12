@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { medicoGuardia } from '../../lib/mockData'
-import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
@@ -10,6 +11,8 @@ import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
 import RecetaUploader from '../../components/hc/RecetaUploader'
 import AdministracionTab from '../../components/admin/AdministracionTab'
+import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
+import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
 import CalendarioSemanal, {
   COLOR_BY_SPEC,
   SPEC_LABEL,
@@ -83,15 +86,25 @@ export default function SalaPrimerosAuxilios() {
                        : 'agenda'
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
+  const [turnoModalOpen, setTurnoModalOpen] = useState(false)
+  // Fecha que se imprime — por default hoy. El usuario puede cambiarla
+  // con el date picker chico junto al botón de impresión.
+  const [printDate, setPrintDate] = useState(() => todayArgYMD())
+  const qc = useQueryClient()
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
 
   // Dependencia de salud para restringir las queries de turnos a
-  // la Sala PA. La navegación a la página de atención lleva
-  // turno_id como param — el municipioId se resuelve dentro de
-  // AtencionDetalle.
-  const depSaludQ  = useDependenciaByTipo('caps')
-  const dependenciaSaludId = depSaludQ.data?.id ?? null
-  const depSaludNombre     = depSaludQ.data?.nombre ?? null
+  // la Sala PA. Buscamos sobre varios `tipo` posibles porque las
+  // bases viejas usan 'caps' / 'sala' / 'primeros_auxilios' y las
+  // nuevas tienden a 'salud'. Resolver por listado evita falsos
+  // negativos del filtro estricto `tipo='caps'`.
+  const depsQ = useDependencias(municipioId)
+  const depSalud = useMemo(() => {
+    const tipos = ['salud', 'caps', 'sala', 'primeros_auxilios']
+    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+  }, [depsQ.data])
+  const dependenciaSaludId = depSalud?.id ?? null
+  const depSaludNombre     = depSalud?.nombre ?? null
 
   // Gating por dependencias_acceso. Directores ven todo; otros roles
   // ven Agenda solo si tienen `puede_gestionar` y Administración solo
@@ -135,6 +148,22 @@ export default function SalaPrimerosAuxilios() {
   function nextWeek() { setWeekStart(prev => addDays(prev,  7)) }
   function thisWeek() { setWeekStart(startOfWeekMonday(new Date())) }
 
+  // Imprime la planilla del día seleccionado. La sub-vista
+  // <PlanillaImprimir> queda montada en background y siempre
+  // suscripta a `printDate`; acá nos aseguramos de que la query
+  // esté fresca antes de abrir el diálogo del sistema.
+  async function handleImprimir() {
+    if (!dependenciaSaludId) return
+    try {
+      await qc.invalidateQueries({ queryKey: ['turnos'] })
+    } catch { /* sin red, igual intentamos imprimir lo que haya en cache */ }
+    // requestAnimationFrame para asegurar que el DOM con los datos
+    // ya esté pintado cuando el navegador toma la captura.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.print())
+    })
+  }
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -150,23 +179,54 @@ export default function SalaPrimerosAuxilios() {
           </p>
         </div>
         {seccion === 'agenda' && (
-          <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
+              <button
+                onClick={() => setVista('dia')}
+                className={`rounded px-3 py-1 font-medium transition-colors ${
+                  vista === 'dia' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
+                }`}
+              >
+                Vista día
+              </button>
+              <button
+                onClick={() => setVista('semana')}
+                className={`rounded px-3 py-1 font-medium transition-colors ${
+                  vista === 'semana' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
+                }`}
+              >
+                Vista semana
+              </button>
+            </div>
+
             <button
-              onClick={() => setVista('dia')}
-              className={`rounded px-3 py-1 font-medium transition-colors ${
-                vista === 'dia' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-              }`}
+              type="button"
+              onClick={() => setTurnoModalOpen(true)}
+              disabled={!dependenciaSaludId}
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              title={dependenciaSaludId ? '' : 'Configurá una dependencia de salud para crear turnos'}
             >
-              Vista día
+              + Turno presencial
             </button>
-            <button
-              onClick={() => setVista('semana')}
-              className={`rounded px-3 py-1 font-medium transition-colors ${
-                vista === 'semana' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-              }`}
-            >
-              Vista semana
-            </button>
+
+            <div className="inline-flex items-stretch overflow-hidden rounded-md border border-border bg-white shadow-sm">
+              <input
+                type="date"
+                value={printDate}
+                onChange={e => setPrintDate(e.target.value || todayArgYMD())}
+                aria-label="Fecha a imprimir"
+                className="border-0 bg-transparent px-2 text-sm text-primary-700 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleImprimir}
+                disabled={!dependenciaSaludId}
+                className="border-l border-border bg-accent-50 px-3 py-1.5 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-100 disabled:cursor-not-allowed disabled:opacity-50"
+                title={dependenciaSaludId ? `Imprimir planilla del ${printDate}` : 'Configurá una dependencia de salud'}
+              >
+                🖨 Imprimir planilla
+              </button>
+            </div>
           </div>
         )}
       </header>
@@ -178,13 +238,24 @@ export default function SalaPrimerosAuxilios() {
       )}
 
       {seccion === 'administracion' && (
-        <AdministracionTab
-          dependenciaId={dependenciaSaludId}
-          dependenciaNombre={depSaludNombre}
-          municipioId={municipioId}
-          canApprove={canApprove}
-          canCreate={canCreate}
-        />
+        !depsQ.isLoading && !dependenciaSaludId ? (
+          <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
+            <p className="font-semibold">No se encontró la dependencia de salud.</p>
+            <p className="mt-1 text-xs">
+              Verificá que exista una dependencia de tipo
+              {' '}<code>salud</code>, <code>caps</code>, <code>sala</code> o{' '}
+              <code>primeros_auxilios</code> en este municipio.
+            </p>
+          </div>
+        ) : (
+          <AdministracionTab
+            dependenciaId={dependenciaSaludId}
+            dependenciaNombre={depSaludNombre}
+            municipioId={municipioId}
+            canApprove={canApprove}
+            canCreate={canCreate}
+          />
+        )
       )}
 
       {seccion === 'agenda' && <>
@@ -341,6 +412,72 @@ export default function SalaPrimerosAuxilios() {
       )}
       </>}
 
+      {/* Modal de turno presencial — vive fuera del flujo de tabs
+          para que se pueda abrir desde cualquier estado de la página. */}
+      <TurnoPresencialModal
+        open={turnoModalOpen}
+        onClose={() => setTurnoModalOpen(false)}
+        dependencia={depSalud}
+        profesionalId={perfil?.id ?? null}
+        municipioId={municipioId}
+        onCreated={() => qc.invalidateQueries({ queryKey: ['turnos'] })}
+      />
+
+      {/* Planilla imprimible — siempre montada (oculta en pantalla),
+          se hace visible solo en @media print. Carga los turnos del
+          día seleccionado vía el cache de react-query. */}
+      <PlanillaImprimir
+        fecha={printDate}
+        dependenciaId={dependenciaSaludId}
+        dependenciaNombre={depSaludNombre}
+      />
+
+      {/* Estilos de impresión: oculta TODO el chrome del admin durante
+          la impresión y deja visible solo la planilla. La planilla en
+          pantalla queda con display:none — Tailwind no tiene un util
+          mobile-first para esto, así que va por CSS plano. */}
+      <style>{`
+        .planilla-print { display: none; }
+        @media print {
+          @page { size: A4 portrait; margin: 12mm; }
+          body * { visibility: hidden !important; }
+          .planilla-print, .planilla-print * { visibility: visible !important; }
+          .planilla-print {
+            display: block !important;
+            position: absolute !important;
+            left: 0; top: 0;
+            width: 100%;
+            color: #000;
+            background: #fff;
+            font-family: 'Sora', system-ui, sans-serif;
+            font-size: 11pt;
+          }
+          .planilla-header { margin-bottom: 12mm; }
+          .planilla-header-row { display: flex; align-items: center; gap: 10mm; }
+          .planilla-logo { max-height: 18mm; max-width: 30mm; object-fit: contain; }
+          .planilla-muni { margin: 0; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; }
+          .planilla-title { margin: 1mm 0 0; font-size: 14pt; font-weight: 800; color: #0F1C35; }
+          .planilla-sub { margin: 1mm 0 0; font-size: 10pt; color: #555; }
+          .planilla-meta { margin-top: 6mm; font-size: 10pt; line-height: 1.4; }
+          .planilla-meta p { margin: 0; }
+          .planilla-table { width: 100%; border-collapse: collapse; margin-top: 6mm; }
+          .planilla-table th, .planilla-table td {
+            border: 0.5pt solid #333;
+            padding: 2mm 2.5mm;
+            text-align: left;
+            vertical-align: top;
+          }
+          .planilla-table th {
+            background: #f0eee7;
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 700;
+          }
+          .planilla-footer { margin-top: 8mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9pt; color: #444; }
+          .planilla-footer-meta { font-style: italic; }
+        }
+      `}</style>
     </div>
   )
 }

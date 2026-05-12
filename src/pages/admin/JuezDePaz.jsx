@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
@@ -610,9 +610,17 @@ export default function JuezDePaz() {
   const [modalOpen, setModalOpen] = useState(false)
 
   // Busca la dependencia "juzgado" del municipio del operador. Si
-  // es superadmin (municipio_id = null), useDependenciaByTipo cae a
-  // la primera dependencia activa con ese tipo en cualquier municipio.
-  const { data: depJuez = null, isLoading: depsLoading } = useDependenciaByTipo('juzgado')
+  // es superadmin (municipio_id = null), useDependencias cae al
+  // primer municipio activo via useEffectiveMunicipioId — el override
+  // se lo pasamos explícito acá.
+  // El find acepta varios `tipo` posibles para tolerar variaciones
+  // del seed inicial entre municipios (juzgado / juez_paz / juez).
+  const depsQ = useDependencias(municipioId)
+  const depsLoading = depsQ.isLoading
+  const depJuez = useMemo(() => {
+    const tipos = ['juzgado', 'juez_paz', 'juez']
+    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+  }, [depsQ.data])
 
   // Gating de tabs por dependencias_acceso. Directores ven todo.
   const miAcceso = useMemo(() => {
@@ -651,9 +659,10 @@ export default function JuezDePaz() {
 
       {!depsLoading && !depJuez && (
         <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
-          <p className="font-semibold">No hay un Juzgado de Paz configurado en este municipio.</p>
+          <p className="font-semibold">No se encontró la dependencia del Juzgado de Paz.</p>
           <p className="mt-1 text-xs">
-            Pedile al administrador que cree una dependencia con tipo <code>juzgado</code>.
+            Verificá que exista una dependencia de tipo
+            {' '}<code>juzgado</code>, <code>juez_paz</code> o <code>juez</code> en este municipio.
           </p>
         </div>
       )}
