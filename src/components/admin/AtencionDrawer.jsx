@@ -420,6 +420,14 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
 // Tab 2 — Insumos utilizados
 // ─────────────────────────────────────────────────────────────────
 
+// Normaliza texto para búsqueda: minúsculas + sin acentos. Así
+// "ibuprofeno" matchea "Ibuprofeno" e "ibuprófeno".
+function normalizar(s) {
+  return (s ?? '').toString()
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
 export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const insumosQ   = useAtencionInsumos(atencion?.id)
   const catalogoQ  = useInsumosDisponibles({ municipioId, dependenciaId: dependenciaSaludId })
@@ -427,6 +435,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const deleteMut  = useDeleteAtencionInsumo()
   const [inventarioId, setInventarioId] = useState('')
   const [cantidad, setCantidad]         = useState('')
+  const [busqueda, setBusqueda]         = useState('')
   const [error, setError]               = useState('')
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
@@ -444,8 +453,53 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
     }, 0)
   }, [insumosQ.data, catalogoQ.data])
 
-  const items   = insumosQ.data   ?? []
-  const catalog = catalogoQ.data  ?? []
+  const items = insumosQ.data ?? []
+
+  // Filtrado por nombre / categoría, normalizando acentos. Si el
+  // término está vacío devuelve el catálogo entero. Si el insumo
+  // seleccionado quedó fuera del filtro lo dejamos al frente
+  // igual — sino el <select> mostraría su id pero label vacío.
+  const catalogFiltrado = useMemo(() => {
+    const q = normalizar(busqueda.trim())
+    const base = catalogoQ.data ?? []
+    if (!q) return base
+    const filtrados = base.filter(c =>
+      normalizar(c.nombre).includes(q) || normalizar(c.categoria).includes(q),
+    )
+    const selObj = base.find(c => c.id === inventarioId)
+    if (selObj && !filtrados.some(c => c.id === selObj.id)) {
+      return [selObj, ...filtrados]
+    }
+    return filtrados
+  }, [catalogoQ.data, busqueda, inventarioId])
+
+  // Dep en .data raw para evitar identity-flip del array nuevo.
+  const selected = useMemo(() => {
+    const base = catalogoQ.data ?? []
+    return base.find(c => c.id === inventarioId) ?? null
+  }, [catalogoQ.data, inventarioId])
+  // Texto de la opción: "[Categoría] Nombre — Stock: X unidad",
+  // prefijo ⚠ si crítico.
+  function optionLabel(c) {
+    const cat = c.categoria ? `[${c.categoria}] ` : ''
+    const critico = Number(c.stock_actual ?? 0) <= Number(c.stock_minimo ?? 0)
+    const flag = critico ? '⚠️ ' : ''
+    const unidad = c.unidad ? ` ${c.unidad}` : ''
+    return `${flag}${cat}${c.nombre} — Stock: ${c.stock_actual ?? 0}${unidad}`
+  }
+
+  // Si el filtro deja la lista vacía, dejamos UNA opción disabled
+  // que sirve de feedback al usuario.
+  const selectOptions = catalogFiltrado.length === 0
+    ? [{ value: '__none__', label: 'Sin coincidencias', disabled: true }]
+    : catalogFiltrado.map(c => ({ value: c.id, label: optionLabel(c) }))
+
+  function handlePickInsumo(id) {
+    if (id === '__none__') return
+    setInventarioId(id)
+    // Reset búsqueda — el insumo elegido sigue visible por su id.
+    setBusqueda('')
+  }
 
   async function handleAgregar() {
     setError('')
@@ -457,7 +511,6 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
       setError('Elegí un insumo y una cantidad > 0.')
       return
     }
-    const selected = catalog.find(c => c.id === inventarioId)
     try {
       await createMut.mutateAsync({
         atencion_id:   atencion.id,
@@ -467,6 +520,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
       })
       setInventarioId('')
       setCantidad('')
+      setBusqueda('')
     } catch (e) {
       setError(e?.message ?? 'No pudimos agregar el insumo.')
     }
@@ -523,31 +577,54 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
           <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
             Agregar insumo
           </h3>
+
+          {/* Buscador — filtra catálogo en tiempo real por nombre o
+              categoría. Sin debounce: el filtrado es client-side y
+              el set de catálogo es chico (decenas de filas), responde
+              inmediato. */}
+          <div className="mt-3">
+            <label className="text-sm font-medium text-primary-700">Buscar</label>
+            <input
+              type="text"
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar insumo... (ej: gasas, alcohol)"
+              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm placeholder:text-primary-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
           <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
             <Select
-              label="Insumo"
+              label={
+                catalogFiltrado.length > 0
+                  ? `Insumo (${catalogFiltrado.length} ${catalogFiltrado.length === 1 ? 'resultado' : 'resultados'})`
+                  : 'Insumo'
+              }
               value={inventarioId}
-              onChange={setInventarioId}
+              onChange={handlePickInsumo}
               placeholder={catalogoQ.isLoading ? 'Cargando...' : 'Seleccionar...'}
-              options={catalog.map(c => ({
-                value: c.id,
-                label: `${c.nombre} (stock ${c.stock_actual}${c.unidad ? ' ' + c.unidad : ''})`,
-              }))}
+              options={selectOptions}
             />
-            <Input
-              label="Cantidad"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={cantidad}
-              onChange={e => setCantidad(e.target.value)}
-              className="min-w-[100px]"
-            />
-            <div className="flex items-end">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-primary-700">Cantidad</label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={cantidad}
+                onChange={e => setCantidad(e.target.value)}
+                placeholder="Cantidad"
+                className="input-field min-w-[100px]"
+              />
+              <p className="text-[11px] text-primary-400">
+                {selected?.unidad ? `Unidad: ${selected.unidad}` : 'Elegí un insumo para ver la unidad.'}
+              </p>
+            </div>
+            <div className="flex items-start sm:items-end">
               <Button
                 onClick={handleAgregar}
                 loading={createMut.isPending}
-                disabled={!atencion || !inventarioId || !(Number(cantidad) > 0)}
+                disabled={!atencion || !inventarioId || inventarioId === '__none__' || !(Number(cantidad) > 0)}
               >
                 + Agregar
               </Button>
