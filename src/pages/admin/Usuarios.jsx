@@ -492,17 +492,39 @@ const GRUPO_LABEL = {
   info: 'Solo información',
 }
 
+// Saved row de dependencias_acceso para (usuarioId, depId), o
+// `{ puede_gestionar: false, puede_administrar: false }` por defecto.
+function savedRowFor(usuario, depId) {
+  const lista = Array.isArray(usuario?.dependencias_acceso) ? usuario.dependencias_acceso : []
+  return lista.find(d => d?.dependencia_id === depId) ?? null
+}
+
+// Compara un toggle "next" contra el saved state. Si igual, el
+// cambio se cancela (key se elimina de cambiosPendientes).
+function savedFlag(usuario, depId, kind) {
+  const r = savedRowFor(usuario, depId)
+  return kind === 'gestion' ? !!r?.puede_gestionar : !!r?.puede_administrar
+}
+
 function PermisosPorPersona({
   usuarios, dependencias, isLoading,
   puedeEditarUsuario, onInvitar, onError,
 }) {
-  const [query, setQuery]           = useState('')
-  const [selectedId, setSelectedId] = useState(null)
-  const [okMsg, setOkMsg]           = useState('')
+  const updateMut = useUpdatePermisosUsuario()
+  const [query, setQuery]                       = useState('')
+  const [selectedId, setSelectedId]             = useState(null)
+  const [okMsg, setOkMsg]                       = useState('')
+  // Cambios sin guardar acumulados a través del wizard. Shape:
+  //   { [usuarioId]: { [dependenciaId]: { puede_gestionar?, puede_administrar? } } }
+  // Solo se guarda la flag que efectivamente cambió respecto del
+  // snapshot persistido; si una flag vuelve a igualar el saved value,
+  // la key se elimina (y si la fila queda vacía, también).
+  const [cambiosPendientes, setCambiosPendientes] = useState({})
+  const [saving, setSaving]                       = useState(false)
 
   useEffect(() => {
     if (!okMsg) return
-    const t = setTimeout(() => setOkMsg(''), 1500)
+    const t = setTimeout(() => setOkMsg(''), 2000)
     return () => clearTimeout(t)
   }, [okMsg])
 
@@ -527,6 +549,144 @@ function PermisosPorPersona({
   )
   const esDirector = rolPrincipal(selectedUser?.roles) === 'admin_comuna'
   const editable   = !!selectedUser && puedeEditarUsuario(selectedUser)
+
+  // Total global de toggles pendientes (puede_gestionar + puede_administrar
+  // cuentan por separado). Lo mostramos junto al botón Guardar.
+  const totalCambios = useMemo(() => {
+    let n = 0
+    for (const userMap of Object.values(cambiosPendientes)) {
+      for (const depMap of Object.values(userMap ?? {})) {
+        if ('puede_gestionar'   in (depMap ?? {})) n++
+        if ('puede_administrar' in (depMap ?? {})) n++
+      }
+    }
+    return n
+  }, [cambiosPendientes])
+
+  // True si un usuario tiene al menos un toggle pendiente. Se usa
+  // para el indicador "punto gold" en su card del buscador.
+  function userHasPending(userId) {
+    const m = cambiosPendientes[userId]
+    if (!m) return false
+    for (const depMap of Object.values(m)) {
+      if ('puede_gestionar'   in (depMap ?? {})) return true
+      if ('puede_administrar' in (depMap ?? {})) return true
+    }
+    return false
+  }
+
+  // Toggle de un checkbox: actualiza solo el estado local. Si el
+  // próximo valor coincide con el saved, eliminamos la key (no es
+  // un cambio real); si la fila queda vacía, eliminamos la fila.
+  function setPendiente(userId, depId, kind, nextValue) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    const savedValue = savedFlag(usuario, depId, kind)
+
+    setCambiosPendientes(prev => {
+      const userMap = { ...(prev[userId] ?? {}) }
+      const depMap  = { ...(userMap[depId] ?? {}) }
+      if (nextValue === savedValue) {
+        delete depMap[flagKey]
+      } else {
+        depMap[flagKey] = nextValue
+      }
+      const tieneFlags = 'puede_gestionar' in depMap || 'puede_administrar' in depMap
+      if (tieneFlags) {
+        userMap[depId] = depMap
+      } else {
+        delete userMap[depId]
+      }
+      const next = { ...prev }
+      if (Object.keys(userMap).length > 0) {
+        next[userId] = userMap
+      } else {
+        delete next[userId]
+      }
+      return next
+    })
+  }
+
+  // Valor "efectivo" de un checkbox: pending si existe, si no el
+  // saved value de la DB. Sirve tanto para el render como para el
+  // chequeo de pending al hacer click.
+  function effectiveFlag(userId, depId, kind) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return false
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    const pending = cambiosPendientes[userId]?.[depId]
+    if (pending && flagKey in pending) return !!pending[flagKey]
+    return savedFlag(usuario, depId, kind)
+  }
+
+  function isCellPending(userId, depId, kind) {
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    return flagKey in (cambiosPendientes[userId]?.[depId] ?? {})
+  }
+
+  // Combina saved + pending de un usuario en el array final que se
+  // persiste en dependencias_acceso.
+  function combinedAccesoFor(userId) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return []
+    const saved = Array.isArray(usuario.dependencias_acceso) ? usuario.dependencias_acceso : []
+    const pending = cambiosPendientes[userId] ?? {}
+    const byDep = new Map()
+    for (const row of saved) {
+      if (!row?.dependencia_id) continue
+      byDep.set(row.dependencia_id, {
+        dependencia_id:    row.dependencia_id,
+        puede_gestionar:   !!row.puede_gestionar,
+        puede_administrar: !!row.puede_administrar,
+      })
+    }
+    for (const [depId, patch] of Object.entries(pending)) {
+      const current = byDep.get(depId) ?? {
+        dependencia_id: depId, puede_gestionar: false, puede_administrar: false,
+      }
+      byDep.set(depId, {
+        ...current,
+        ...('puede_gestionar'   in patch ? { puede_gestionar:   !!patch.puede_gestionar   } : {}),
+        ...('puede_administrar' in patch ? { puede_administrar: !!patch.puede_administrar } : {}),
+      })
+    }
+    return Array.from(byDep.values()).filter(r => r.puede_gestionar || r.puede_administrar)
+  }
+
+  async function handleGuardar() {
+    onError?.('')
+    setSaving(true)
+    const fallos = []
+    try {
+      for (const userId of Object.keys(cambiosPendientes)) {
+        try {
+          await updateMut.mutateAsync({
+            id: userId,
+            dependencias_acceso: combinedAccesoFor(userId),
+          })
+        } catch (e) {
+          const u = (usuarios ?? []).find(x => x.id === userId)
+          fallos.push(`${u?.nombre ?? userId}: ${e?.message ?? 'error'}`)
+        }
+      }
+      if (fallos.length > 0) {
+        onError?.('No pudimos guardar algunos cambios — ' + fallos.join(' · '))
+      } else {
+        setCambiosPendientes({})
+        setOkMsg('✓ Permisos guardados correctamente')
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleCancelar() {
+    if (totalCambios === 0) return
+    setCambiosPendientes({})
+    setOkMsg('Cambios descartados')
+    onError?.('')
+  }
 
   if (isLoading) {
     return <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
@@ -566,18 +726,28 @@ function PermisosPorPersona({
             {filtrados.map(u => {
               const rol = rolPrincipal(u.roles)
               const seleccionado = u.id === selectedId
-              const isDirector  = rol === 'admin_comuna'
+              const isDirector   = rol === 'admin_comuna'
+              const pending      = userHasPending(u.id)
               return (
                 <button
                   key={u.id}
                   type="button"
                   onClick={() => { setSelectedId(u.id); onError?.('') }}
-                  className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                  className={`relative flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
                     seleccionado
                       ? 'border-accent-300 bg-primary-50/60 ring-1 ring-accent-200'
-                      : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/40'
+                      : pending
+                        ? 'border-accent-200 bg-accent-50/30 hover:border-accent-300'
+                        : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/40'
                   }`}
                 >
+                  {pending && (
+                    <span
+                      aria-label="Tiene cambios sin guardar"
+                      title="Tiene cambios sin guardar"
+                      className="absolute right-2 top-2 inline-block h-2 w-2 rounded-full bg-accent shadow ring-2 ring-white"
+                    />
+                  )}
                   <Avatar name={u.nombre} size="md" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-primary">{u.nombre || u.email || 'Sin nombre'}</p>
@@ -600,20 +770,23 @@ function PermisosPorPersona({
         )}
       </section>
 
-      {/* PASO 2 · Tabla compacta de permisos. Se monta con key
-          basada en el usuario seleccionado para que el estado
-          local (acceso pendiente) se reinicie con el snapshot
-          fresco de dependencias_acceso al cambiar de persona. */}
+      {/* PASO 2 · Tabla compacta de permisos. NO se remonta al
+          cambiar de usuario — el estado pendiente es global y
+          sobrevive al switch. */}
       {selectedUser && (
         <TablaPermisos
-          key={selectedUser.id}
           usuario={selectedUser}
           dependencias={dependencias}
           esDirector={esDirector}
           editable={editable}
+          totalCambios={totalCambios}
+          saving={saving}
           onDeseleccionar={() => setSelectedId(null)}
-          onSaved={(msg) => setOkMsg(msg)}
-          onError={onError}
+          onGuardar={handleGuardar}
+          onCancelar={handleCancelar}
+          effectiveFlag={effectiveFlag}
+          isCellPending={isCellPending}
+          setPendiente={setPendiente}
         />
       )}
 
@@ -629,56 +802,19 @@ function PermisosPorPersona({
 // ─────────────────────────────────────────────────────────────────
 // TablaPermisos — vista compacta del acceso del usuario seleccionado
 //
-// Mantiene un snapshot LOCAL de `dependencias_acceso` para evitar
-// la race condition de clicks consecutivos en checkboxes distintos:
-// si esperáramos a que cada mutación refresque el server antes de
-// la siguiente, el segundo click leería el array stale. El snapshot
-// se inicializa al montar (la key del padre fuerza remount al
-// cambiar de usuario) y se actualiza sincrónicamente con cada
-// toggle, antes de disparar la mutación.
+// Stateless por diseño: la verdad sobre flags efectivos y cambios
+// pendientes la mantiene PermisosPorPersona (un mapa por usuario).
+// Esto evita el "vibe" del auto-save al cambiar checkboxes — cada
+// toggle solo actualiza estado local en el padre hasta que el
+// usuario confirma con "Guardar cambios".
 // ─────────────────────────────────────────────────────────────────
 
 function TablaPermisos({
   usuario, dependencias, esDirector, editable,
-  onDeseleccionar, onSaved, onError,
+  totalCambios, saving,
+  onDeseleccionar, onGuardar, onCancelar,
+  effectiveFlag, isCellPending, setPendiente,
 }) {
-  const updateMut = useUpdatePermisosUsuario()
-  const [acceso, setAcceso] = useState(() =>
-    Array.isArray(usuario?.dependencias_acceso) ? usuario.dependencias_acceso : [],
-  )
-
-  function flagFor(depId, kind) {
-    const row = acceso.find(d => d?.dependencia_id === depId)
-    return kind === 'gestion' ? !!row?.puede_gestionar : !!row?.puede_administrar
-  }
-
-  async function togglePermiso(dep, kind, nextValue) {
-    onError?.('')
-    if (!usuario?.id) return
-    const otras = acceso.filter(d => d?.dependencia_id !== dep.id)
-    const actual = acceso.find(d => d?.dependencia_id === dep.id)
-    const nuevaG = kind === 'gestion' ? !!nextValue : !!actual?.puede_gestionar
-    const nuevaA = kind === 'admin'   ? !!nextValue : !!actual?.puede_administrar
-    const proximas = [...otras]
-    if (nuevaG || nuevaA) {
-      proximas.push({
-        dependencia_id:    dep.id,
-        puede_gestionar:   nuevaG,
-        puede_administrar: nuevaA,
-      })
-    }
-    // Update optimista local — se confirma o revierte según el server.
-    const previo = acceso
-    setAcceso(proximas)
-    try {
-      await updateMut.mutateAsync({ id: usuario.id, dependencias_acceso: proximas })
-      onSaved?.('✓ Guardado')
-    } catch (e) {
-      setAcceso(previo)
-      onError?.(e?.message ?? 'No pudimos guardar los permisos.')
-    }
-  }
-
   // Ordeno y agrupo dependencias: CIC → Dependencias → Solo info.
   const filasPorGrupo = useMemo(() => {
     const out = { cic: [], deps: [], info: [] }
@@ -691,12 +827,13 @@ function TablaPermisos({
     return out
   }, [dependencias])
 
-  const disabled = !editable || esDirector || updateMut.isPending
+  const disabled    = !editable || esDirector || saving
+  const hasPending  = totalCambios > 0
 
   return (
     <section className="space-y-3">
-      {/* Header del panel — título + nombre + botón X */}
-      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-primary-50/40 p-4">
+      {/* Header del panel — título + nombre + acciones Guardar/Cancelar */}
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-primary-50/40 p-4">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
             Permisos de
@@ -716,16 +853,37 @@ function TablaPermisos({
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onDeseleccionar}
-          className="rounded-md p-1.5 text-primary-400 transition-colors hover:bg-primary-100 hover:text-primary"
-          aria-label="Deseleccionar"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
-          </svg>
-        </button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {hasPending && (
+            <span className="text-xs font-semibold text-accent-700">
+              {totalCambios} {totalCambios === 1 ? 'cambio sin guardar' : 'cambios sin guardar'}
+            </span>
+          )}
+          {hasPending && (
+            <button
+              type="button"
+              onClick={onCancelar}
+              disabled={saving}
+              className="inline-flex items-center justify-center rounded-md border-2 border-primary/30 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          )}
+          <Button onClick={onGuardar} loading={saving} disabled={!hasPending || saving}>
+            Guardar cambios
+          </Button>
+          <button
+            type="button"
+            onClick={onDeseleccionar}
+            className="rounded-md p-1.5 text-primary-400 transition-colors hover:bg-primary-100 hover:text-primary"
+            aria-label="Deseleccionar"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {dependencias.length === 0 ? (
@@ -764,8 +922,10 @@ function TablaPermisos({
                 for (const dep of filas) {
                   const grupo = g
                   const isInfo = grupo === 'info'
-                  const gestion = flagFor(dep.id, 'gestion')
-                  const admin   = flagFor(dep.id, 'admin')
+                  const gestion       = effectiveFlag(usuario.id, dep.id, 'gestion')
+                  const admin         = effectiveFlag(usuario.id, dep.id, 'admin')
+                  const pendingGestion = isCellPending(usuario.id, dep.id, 'gestion')
+                  const pendingAdmin   = isCellPending(usuario.id, dep.id, 'admin')
                   rows.push(
                     <tr key={dep.id} className="hover:bg-primary-50/40">
                       <td className="px-4 py-2">
@@ -789,28 +949,20 @@ function TablaPermisos({
                         </>
                       ) : (
                         <>
-                          <td className="px-4 py-2 text-center">
-                            <label className="inline-flex cursor-pointer items-center justify-center" aria-label={`Gestión en ${dep.nombre}`}>
-                              <input
-                                type="checkbox"
-                                checked={gestion}
-                                disabled={disabled}
-                                onChange={e => togglePermiso(dep, 'gestion', e.target.checked)}
-                                className="h-4 w-4 cursor-pointer accent-[#C9A84C] disabled:cursor-not-allowed disabled:opacity-50"
-                              />
-                            </label>
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <label className="inline-flex cursor-pointer items-center justify-center" aria-label={`Administración en ${dep.nombre}`}>
-                              <input
-                                type="checkbox"
-                                checked={admin}
-                                disabled={disabled}
-                                onChange={e => togglePermiso(dep, 'admin', e.target.checked)}
-                                className="h-4 w-4 cursor-pointer accent-[#C9A84C] disabled:cursor-not-allowed disabled:opacity-50"
-                              />
-                            </label>
-                          </td>
+                          <PermisoCell
+                            pending={pendingGestion}
+                            checked={gestion}
+                            disabled={disabled}
+                            ariaLabel={`Gestión en ${dep.nombre}`}
+                            onChange={v => setPendiente(usuario.id, dep.id, 'gestion', v)}
+                          />
+                          <PermisoCell
+                            pending={pendingAdmin}
+                            checked={admin}
+                            disabled={disabled}
+                            ariaLabel={`Administración en ${dep.nombre}`}
+                            onChange={v => setPendiente(usuario.id, dep.id, 'admin', v)}
+                          />
                         </>
                       )}
                     </tr>,
@@ -823,5 +975,28 @@ function TablaPermisos({
         </div>
       )}
     </section>
+  )
+}
+
+// Celda con checkbox + borde gold sutil cuando el toggle está
+// pendiente de guardar. Inline styles para el ring porque Tailwind
+// no expone un ring-around-table-cell sin afectar el row entero.
+function PermisoCell({ pending, checked, disabled, onChange, ariaLabel }) {
+  return (
+    <td
+      className={`px-4 py-2 text-center transition-colors ${
+        pending ? 'bg-accent-50/60 ring-1 ring-inset ring-accent-300' : ''
+      }`}
+    >
+      <label className="inline-flex cursor-pointer items-center justify-center" aria-label={ariaLabel}>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={e => onChange(e.target.checked)}
+          className="h-4 w-4 cursor-pointer accent-[#C9A84C] disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </label>
+    </td>
   )
 }
