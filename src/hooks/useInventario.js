@@ -15,9 +15,9 @@ import { useAuth } from '../context/AuthContext'
 //   ordenes_compra         (id, municipio_id, dependencia_id, numero,
 //                           proveedor, descripcion, monto_total,
 //                           partida_codigo, tipo directa|cotizacion,
-//                           estado pendiente|aprobada|rechazada,
+//                           estado borrador|pendiente|aprobada|rechazada,
 //                           comprobante_url, fecha, created_by,
-//                           fecha_aprobacion)
+//                           fecha_aprobacion, gasto_id)
 //   partidas_tipo          (codigo, nombre, descripcion)
 //
 // Las mutaciones que tocan stock (entrada/salida) lo hacen en dos
@@ -44,7 +44,7 @@ const MOV_COLS = `
 const OC_COLS = `
   id, municipio_id, dependencia_id, numero, proveedor, descripcion,
   monto_total, partida_codigo, tipo, estado, comprobante_url, fecha,
-  created_by, fecha_aprobacion,
+  created_by, fecha_aprobacion, gasto_id,
   dependencia:dependencia_id ( id, nombre )
 `
 
@@ -305,48 +305,142 @@ export function useCreateMovimiento() {
 // Mutaciones — órdenes de compra
 // ─────────────────────────────────────────────────────────────────
 
+// Crea una orden de compra. Si `crearGastoPendiente=true`, primero
+// inserta un gasto en estado 'pendiente' y luego enlaza la orden a
+// ese gasto vía `gasto_id`. Esto permite al SubAdmin pre-registrar
+// el gasto cuando solicita los insumos; al aprobar la orden el
+// gasto se promueve a 'aprobado' (no se duplica).
 async function createOrdenCompra(data) {
+  const { crearGastoPendiente, ...rest } = data ?? {}
+  let gastoId = null
+
+  if (crearGastoPendiente) {
+    const { data: g, error: gErr } = await supabase
+      .from('gastos')
+      .insert({
+        municipio_id:    rest.municipio_id,
+        fecha:           rest.fecha ?? new Date().toISOString().slice(0, 10),
+        descripcion:     buildGastoDesc(rest),
+        categoria:       'Insumos',
+        dependencia_id:  rest.dependencia_id,
+        monto:           Number(rest.monto_total ?? 0),
+        estado:          'pendiente',
+        comprobante_url: rest.comprobante_url ?? null,
+      })
+      .select('id')
+      .single()
+    if (gErr) throw gErr
+    gastoId = g.id
+  }
+
   const { data: row, error } = await supabase
-    .from('ordenes_compra').insert(data).select(OC_COLS).single()
-  if (error) throw error
+    .from('ordenes_compra')
+    .insert({ ...rest, gasto_id: gastoId })
+    .select(OC_COLS)
+    .single()
+  if (error) {
+    // Rollback manual: si la inserción falla y ya creamos el gasto,
+    // lo borramos para no dejar un gasto pendiente huérfano.
+    if (gastoId) {
+      const { error: dErr } = await supabase.from('gastos').delete().eq('id', gastoId)
+      if (dErr) console.warn('[useInventario] rollback gasto huérfano falló:', dErr.message)
+    }
+    throw error
+  }
   return row
+}
+
+// Descripción canónica del gasto asociado a una OC. Centralizada
+// para que coincida entre el pre-registro (pendiente) y la
+// creación automática al aprobar.
+function buildGastoDesc(oc) {
+  return `OC ${oc.numero ?? ''} — ${oc.proveedor ?? ''}: ${oc.descripcion ?? ''}`.trim()
 }
 
 export function useCreateOrdenCompra() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createOrdenCompra,
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['ordenes-compra'] }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['ordenes-compra'] })
+      qc.invalidateQueries({ queryKey: ['gastos'] })
+    },
   })
 }
 
-// Aprobar/Rechazar. Al aprobar también crea un gasto en estado
-// 'aprobado' usando los datos de la orden — el módulo de
-// Administración la verá automáticamente.
+// Aprobar / Rechazar / Enviar a aprobación.
+//
+//   borrador  → pendiente : la solicitud queda visible para el Admin
+//                            Comuna en la cola de aprobación.
+//   pendiente → aprobada  : si la orden tiene gasto_id, ese gasto se
+//                            promueve a 'aprobado'. Si no, se crea
+//                            un gasto nuevo en 'aprobado' y se
+//                            vincula a la orden.
+//   pendiente → rechazada : si la orden tiene gasto_id, ese gasto se
+//                            marca como 'rechazado'.
 async function updateOrdenEstado({ id, estado, fechaAprobacion }) {
   const patch = { estado }
-  if (estado === 'aprobada') patch.fecha_aprobacion = fechaAprobacion ?? new Date().toISOString().slice(0, 10)
+  if (estado === 'aprobada') {
+    patch.fecha_aprobacion = fechaAprobacion ?? new Date().toISOString().slice(0, 10)
+  }
   const { data: row, error } = await supabase
     .from('ordenes_compra').update(patch).eq('id', id).select(OC_COLS).single()
   if (error) throw error
 
   if (estado === 'aprobada') {
-    const { error: gErr } = await supabase.from('gastos').insert({
-      municipio_id:    row.municipio_id,
-      fecha:           row.fecha_aprobacion ?? new Date().toISOString().slice(0, 10),
-      descripcion:     `OC ${row.numero ?? ''} — ${row.proveedor ?? ''}: ${row.descripcion ?? ''}`.trim(),
-      categoria:       'Insumos',
-      dependencia_id:  row.dependencia_id,
-      monto:           Number(row.monto_total ?? 0),
-      estado:          'aprobado',
-      comprobante_url: row.comprobante_url ?? null,
-    })
-    if (gErr) {
-      // No abortamos — la OC quedó aprobada. El operador puede crear
-      // el gasto a mano si hace falta. Loggeamos para diagnóstico.
-      console.warn('[useInventario] gasto auto-creado falló:', gErr.message)
+    const fechaAprob = row.fecha_aprobacion ?? new Date().toISOString().slice(0, 10)
+
+    if (row.gasto_id) {
+      // Promover el gasto pre-registrado al estado 'aprobado'.
+      const { error: upErr } = await supabase
+        .from('gastos')
+        .update({
+          estado:          'aprobado',
+          fecha:           fechaAprob,
+          monto:           Number(row.monto_total ?? 0),
+          descripcion:     buildGastoDesc(row),
+          comprobante_url: row.comprobante_url ?? null,
+        })
+        .eq('id', row.gasto_id)
+      if (upErr) {
+        console.warn('[useInventario] no se pudo promover el gasto pre-cargado:', upErr.message)
+      }
+    } else {
+      // No hay gasto vinculado — creamos uno nuevo en 'aprobado'
+      // y lo vinculamos a la orden para futuras consultas.
+      const { data: g, error: gErr } = await supabase
+        .from('gastos')
+        .insert({
+          municipio_id:    row.municipio_id,
+          fecha:           fechaAprob,
+          descripcion:     buildGastoDesc(row),
+          categoria:       'Insumos',
+          dependencia_id:  row.dependencia_id,
+          monto:           Number(row.monto_total ?? 0),
+          estado:          'aprobado',
+          comprobante_url: row.comprobante_url ?? null,
+        })
+        .select('id')
+        .single()
+      if (gErr) {
+        console.warn('[useInventario] gasto auto-creado falló:', gErr.message)
+      } else {
+        const { error: linkErr } = await supabase
+          .from('ordenes_compra')
+          .update({ gasto_id: g.id })
+          .eq('id', row.id)
+        if (linkErr) console.warn('[useInventario] no se pudo enlazar gasto a OC:', linkErr.message)
+      }
     }
+  } else if (estado === 'rechazada' && row.gasto_id) {
+    // Sincronizamos el gasto pre-cargado al rechazo de la orden.
+    const { error: upErr } = await supabase
+      .from('gastos')
+      .update({ estado: 'rechazado' })
+      .eq('id', row.gasto_id)
+    if (upErr) console.warn('[useInventario] no se pudo rechazar el gasto vinculado:', upErr.message)
   }
+
   return row
 }
 
@@ -354,6 +448,20 @@ export function useUpdateOrdenEstado() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: updateOrdenEstado,
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['ordenes-compra'] })
+      qc.invalidateQueries({ queryKey: ['gastos'] })
+    },
+  })
+}
+
+// Atajo semántico: borrador → pendiente. Es el mismo update bajo el
+// capó, pero la UI lee mejor con un hook explícito para "enviar a
+// aprobación".
+export function useEnviarSolicitudOC() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id }) => updateOrdenEstado({ id, estado: 'pendiente' }),
     onSuccess:  () => {
       qc.invalidateQueries({ queryKey: ['ordenes-compra'] })
       qc.invalidateQueries({ queryKey: ['gastos'] })

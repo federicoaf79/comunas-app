@@ -5,7 +5,9 @@ import {
   useCreatePresupuestoPartida,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
-import { usePartidasTipo } from '../../hooks/useInventario'
+import {
+  usePartidasTipo, useOrdenesCompra, useUpdateOrdenEstado,
+} from '../../hooks/useInventario'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -34,11 +36,12 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
 })
 
 const TABS = [
-  { value: 'dashboard',   label: 'Dashboard' },
-  { value: 'gastos',      label: 'Gastos' },
-  { value: 'ingresos',    label: 'Ingresos' },
-  { value: 'presupuesto', label: 'Presupuesto' },
-  { value: 'partidas',    label: 'Partidas' },
+  { value: 'dashboard',    label: 'Dashboard' },
+  { value: 'solicitudes',  label: 'Solicitudes' },
+  { value: 'gastos',       label: 'Gastos' },
+  { value: 'ingresos',     label: 'Ingresos' },
+  { value: 'presupuesto',  label: 'Presupuesto' },
+  { value: 'partidas',     label: 'Partidas' },
 ]
 
 const FUENTES_PARTIDA = [
@@ -926,6 +929,149 @@ function PartidaFormModal({ dependencias, partidasTipo, anioDefault, onClose, on
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TAB · Solicitudes (cola de aprobación de órdenes de compra)
+// ─────────────────────────────────────────────────────────────────
+
+const OC_ESTADO_BADGE_ADMIN = {
+  pendiente: { label: 'Pendiente', cls: 'estado-pendiente' },
+  aprobada:  { label: 'Aprobada',  cls: 'estado-confirmado' },
+  rechazada: { label: 'Rechazada', cls: 'estado-cancelado' },
+}
+
+function SolicitudesTab({ municipioId, dependencias, canApprove }) {
+  const [dependenciaId, setDependenciaId] = useState('')
+  // Default 'pendiente' — esta pantalla es la cola de aprobación.
+  // El usuario puede cambiar el filtro para ver el historial.
+  const [estado, setEstado] = useState('pendiente')
+
+  const { data: ordenes = [], isLoading } = useOrdenesCompra({
+    dependenciaId: dependenciaId || undefined,
+    estado:        estado        || undefined,
+  }, { municipioIdOverride: municipioId })
+
+  const updateEst = useUpdateOrdenEstado()
+
+  const total = ordenes.reduce((acc, o) => acc + Number(o.monto_total ?? 0), 0)
+  const pendientes = ordenes.filter(o => o.estado === 'pendiente')
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-primary">
+            Solicitudes de las dependencias
+          </h2>
+          <p className="text-sm text-primary-400">
+            Las solicitudes enviadas por cada dependencia llegan acá. Al aprobar,
+            el gasto se crea (o se promueve) automáticamente.
+          </p>
+        </div>
+      </header>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Pendientes"
+          value={pendientes.length}
+          accent={pendientes.length > 0 ? 'accent' : 'primary'}
+        />
+        <StatCard
+          label="Monto en cola"
+          value={fmtMoney.format(pendientes.reduce((a, o) => a + Number(o.monto_total ?? 0), 0))}
+          accent="primary"
+        />
+        <StatCard
+          label="Total filtrado"
+          value={fmtMoney.format(total)}
+          accent="accent"
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Select
+          label="Dependencia" value={dependenciaId} onChange={setDependenciaId}
+          placeholder="Todas"
+          options={dependencias.map(d => ({ value: d.id, label: d.nombre }))}
+        />
+        <Select
+          label="Estado" value={estado} onChange={setEstado}
+          placeholder="Todos"
+          options={Object.entries(OC_ESTADO_BADGE_ADMIN).map(([v, b]) => ({ value: v, label: b.label }))}
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : ordenes.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">
+          {estado === 'pendiente'
+            ? 'No hay solicitudes pendientes — todo aprobado.'
+            : 'No hay solicitudes con estos filtros.'}
+        </div>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>N°</Th>
+              <Th>Dependencia</Th>
+              <Th>Proveedor</Th>
+              <Th>Descripción</Th>
+              <Th className="text-right">Monto</Th>
+              <Th>Partida</Th>
+              <Th>Tipo</Th>
+              <Th>Estado</Th>
+              <Th>Fecha</Th>
+              {canApprove && <Th className="text-right">Acciones</Th>}
+            </Tr>
+          </THead>
+          <tbody>
+            {ordenes.map(o => {
+              const badge = OC_ESTADO_BADGE_ADMIN[o.estado] ?? { label: o.estado, cls: 'estado-pendiente' }
+              return (
+                <Tr key={o.id}>
+                  <Td className="font-mono text-xs">{o.numero ?? `OC-${o.id.slice(0, 6)}`}</Td>
+                  <Td>{o.dependencia?.nombre ?? '—'}</Td>
+                  <Td className="font-medium text-primary">{o.proveedor ?? '—'}</Td>
+                  <Td className="max-w-[260px] truncate" title={o.descripcion ?? ''}>{o.descripcion ?? '—'}</Td>
+                  <Td className="whitespace-nowrap text-right font-semibold tabular-nums">
+                    {fmtMoney.format(o.monto_total ?? 0)}
+                  </Td>
+                  <Td className="font-mono text-xs">{o.partida_codigo ?? '—'}</Td>
+                  <Td className="text-xs">{o.tipo === 'cotizacion' ? 'Cotización' : 'Directa'}</Td>
+                  <Td><span className={badge.cls}>{badge.label}</span></Td>
+                  <Td className="whitespace-nowrap">{o.fecha ? dateOf(o.fecha) : '—'}</Td>
+                  {canApprove && (
+                    <Td className="whitespace-nowrap text-right text-xs">
+                      {o.estado === 'pendiente' && (
+                        <div className="flex justify-end gap-3 font-medium">
+                          <button
+                            onClick={() => updateEst.mutate({ id: o.id, estado: 'aprobada' })}
+                            className="text-ok-700 hover:underline"
+                          >Aprobar</button>
+                          <button
+                            onClick={() => updateEst.mutate({ id: o.id, estado: 'rechazada' })}
+                            className="text-danger hover:underline"
+                          >Rechazar</button>
+                        </div>
+                      )}
+                      {o.comprobante_url && (
+                        <a
+                          href={o.comprobante_url} target="_blank" rel="noopener noreferrer"
+                          className="ml-2 text-primary-500 hover:underline"
+                        >Comprob.</a>
+                      )}
+                    </Td>
+                  )}
+                </Tr>
+              )
+            })}
+          </tbody>
+        </Table>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────────
 
@@ -960,6 +1106,7 @@ export default function Administracion() {
 
       <div>
         {tab === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
+        {tab === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
         {tab === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
         {tab === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
         {tab === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}

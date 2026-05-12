@@ -6,6 +6,7 @@ import {
   useInventario, useMovimientos, useOrdenesCompra, usePartidasTipo,
   useCreateInventarioItem, useUpdateInventarioItem,
   useCreateMovimiento, useCreateOrdenCompra, useUpdateOrdenEstado,
+  useEnviarSolicitudOC,
   LIMITE_COMPRA_DIRECTA,
 } from '../../hooks/useInventario'
 import Tabs from '../../components/ui/Tabs'
@@ -30,7 +31,7 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
 const TABS = [
   { value: 'stock',       label: 'Stock general' },
   { value: 'movimientos', label: 'Movimientos' },
-  { value: 'ordenes',     label: 'Órdenes de compra' },
+  { value: 'ordenes',     label: 'Solicitudes y órdenes' },
 ]
 
 const CATEGORIAS = ['Limpieza', 'Oficina', 'Salud', 'Construcción', 'Combustible', 'Repuestos', 'Otros']
@@ -569,13 +570,18 @@ function MovimientosTab({ municipioId, dependencias }) {
 // Tab 3 — Órdenes de compra
 // ─────────────────────────────────────────────────────────────────
 
+// Cero verde — el flujo de borrador→pendiente→aprobada/rechazada
+// usa solo navy / gold / red. `borrador` toma `estado-pendiente`
+// (gold) para diferenciarlo visualmente del navy aprobado.
 const OC_ESTADO_BADGE = {
+  borrador:   { label: 'Borrador',   cls: 'badge-neutral' },
   pendiente:  { label: 'Pendiente',  cls: 'estado-pendiente' },
   aprobada:   { label: 'Aprobada',   cls: 'estado-confirmado' },
   rechazada:  { label: 'Rechazada',  cls: 'estado-cancelado' },
 }
 
 function OrdenesTab({ municipioId, dependencias, canApprove }) {
+  const { perfil } = useAuth()
   const [dependenciaId, setDependenciaId] = useState('')
   const [estado, setEstado]               = useState('')
   const [modalNew, setModalNew]           = useState(false)
@@ -586,6 +592,7 @@ function OrdenesTab({ municipioId, dependencias, canApprove }) {
   }, { municipioIdOverride: municipioId })
 
   const updateEst = useUpdateOrdenEstado()
+  const enviarMut = useEnviarSolicitudOC()
 
   return (
     <div className="space-y-5">
@@ -602,13 +609,15 @@ function OrdenesTab({ municipioId, dependencias, canApprove }) {
             options={Object.entries(OC_ESTADO_BADGE).map(([v, b]) => ({ value: v, label: b.label }))}
           />
         </div>
-        <Button onClick={() => setModalNew(true)}>+ Nueva orden</Button>
+        <Button onClick={() => setModalNew(true)}>+ Nueva solicitud</Button>
       </div>
 
       {isLoading ? (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       ) : ordenes.length === 0 ? (
-        <div className="card p-10 text-center text-sm text-primary-400">No hay órdenes.</div>
+        <div className="card p-10 text-center text-sm text-primary-400">
+          No hay solicitudes ni órdenes con estos filtros.
+        </div>
       ) : (
         <Table>
           <THead>
@@ -621,12 +630,17 @@ function OrdenesTab({ municipioId, dependencias, canApprove }) {
               <Th>Tipo</Th>
               <Th>Estado</Th>
               <Th>Fecha</Th>
-              {canApprove && <Th className="text-right">Acciones</Th>}
+              <Th className="text-right">Acciones</Th>
             </Tr>
           </THead>
           <tbody>
             {ordenes.map(o => {
               const badge = OC_ESTADO_BADGE[o.estado] ?? { label: o.estado, cls: 'estado-pendiente' }
+              // Borradores se "envían a aprobación" solo si los creó
+              // este mismo usuario o si tiene permiso de aprobación
+              // (admin_comuna fallback). Evita que un operario mueva
+              // el borrador de otro a la cola.
+              const puedeEnviar = o.estado === 'borrador' && (canApprove || o.created_by === perfil?.id)
               return (
                 <Tr key={o.id}>
                   <Td className="font-mono text-xs">{o.numero ?? `OC-${o.id.slice(0, 6)}`}</Td>
@@ -639,28 +653,35 @@ function OrdenesTab({ municipioId, dependencias, canApprove }) {
                   <Td className="text-xs">{o.tipo === 'cotizacion' ? 'Cotización' : 'Directa'}</Td>
                   <Td><span className={badge.cls}>{badge.label}</span></Td>
                   <Td className="whitespace-nowrap">{o.fecha ? dateOf(o.fecha) : '—'}</Td>
-                  {canApprove && (
-                    <Td className="whitespace-nowrap text-right text-xs">
-                      {o.estado === 'pendiente' && (
-                        <div className="flex justify-end gap-3 font-medium">
-                          <button
-                            onClick={() => updateEst.mutate({ id: o.id, estado: 'aprobada' })}
-                            className="text-ok-700 hover:underline"
-                          >Aprobar</button>
-                          <button
-                            onClick={() => updateEst.mutate({ id: o.id, estado: 'rechazada' })}
-                            className="text-danger hover:underline"
-                          >Rechazar</button>
-                        </div>
-                      )}
-                      {o.comprobante_url && (
-                        <a
-                          href={o.comprobante_url} target="_blank" rel="noopener noreferrer"
-                          className="ml-2 text-primary-500 hover:underline"
-                        >Comprob.</a>
-                      )}
-                    </Td>
-                  )}
+                  <Td className="whitespace-nowrap text-right text-xs">
+                    {puedeEnviar && (
+                      <button
+                        onClick={() => enviarMut.mutate({ id: o.id })}
+                        disabled={enviarMut.isPending}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        Enviar a aprobación
+                      </button>
+                    )}
+                    {canApprove && o.estado === 'pendiente' && (
+                      <div className="flex justify-end gap-3 font-medium">
+                        <button
+                          onClick={() => updateEst.mutate({ id: o.id, estado: 'aprobada' })}
+                          className="text-ok-700 hover:underline"
+                        >Aprobar</button>
+                        <button
+                          onClick={() => updateEst.mutate({ id: o.id, estado: 'rechazada' })}
+                          className="text-danger hover:underline"
+                        >Rechazar</button>
+                      </div>
+                    )}
+                    {o.comprobante_url && (
+                      <a
+                        href={o.comprobante_url} target="_blank" rel="noopener noreferrer"
+                        className="ml-2 text-primary-500 hover:underline"
+                      >Comprob.</a>
+                    )}
+                  </Td>
                 </Tr>
               )
             })}
@@ -685,6 +706,7 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
     partida_codigo: '', monto_total: '',
     tipo: 'directa', comprobante_url: '', numero: '',
     fecha: todayArgYMD(),
+    crearGastoPendiente: false,
   })
   const [error, setError] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
@@ -704,7 +726,11 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
     !!form.partida_codigo &&
     monto > 0
 
-  async function handle() {
+  // `estado` se decide por el botón que apretó el usuario:
+  //   'borrador'  → guarda y deja sin enviar (el SubAdmin puede
+  //                  editar más tarde antes de mandarla).
+  //   'pendiente' → la deja en cola de aprobación del Admin Comuna.
+  async function handle(estado) {
     setError('')
     try {
       await create.mutateAsync({
@@ -716,10 +742,11 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
         monto_total:     monto,
         partida_codigo:  form.partida_codigo,
         tipo:            tipoEfectivo,
-        estado:          'pendiente',
+        estado,
         comprobante_url: form.comprobante_url.trim() || null,
         fecha:           form.fecha,
         created_by:      perfil?.id ?? null,
+        crearGastoPendiente: form.crearGastoPendiente && estado !== 'borrador',
       })
       onClose()
     } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
@@ -727,11 +754,21 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
 
   return (
     <Modal
-      open onClose={onClose} size="lg" title="Nueva orden de compra"
+      open onClose={onClose} size="lg" title="Nueva solicitud de insumos"
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
-          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+          <Button
+            variant="secondary"
+            onClick={() => handle('borrador')}
+            loading={create.isPending}
+            disabled={!canSubmit}
+          >
+            Guardar borrador
+          </Button>
+          <Button onClick={() => handle('pendiente')} loading={create.isPending} disabled={!canSubmit}>
+            Enviar a aprobación
+          </Button>
         </>
       }
     >
@@ -771,6 +808,26 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
           value={form.comprobante_url} onChange={e => set('comprobante_url', e.target.value)}
           placeholder="https://..."
         />
+
+        <label className="flex items-start gap-3 rounded-md border border-border bg-primary-50 p-3 text-sm sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={form.crearGastoPendiente}
+            onChange={e => set('crearGastoPendiente', e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-primary"
+          />
+          <span className="flex-1">
+            <span className="block font-semibold text-primary">
+              También registrar el gasto en estado <em>pendiente</em>
+            </span>
+            <span className="block text-xs text-primary-500">
+              Útil cuando ya conocés el monto y querés que aparezca en Administración.
+              Al aprobar la solicitud, el gasto se promueve a <em>aprobado</em>.
+              No aplica a borradores.
+            </span>
+          </span>
+        </label>
+
         {superaLimite && (
           <div className="rounded-md border border-accent-200 bg-accent-50 p-3 text-xs text-accent-700 sm:col-span-2">
             <b>Supera el límite de compra directa</b> ({fmtMoney.format(LIMITE_COMPRA_DIRECTA)}).
