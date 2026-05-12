@@ -1,22 +1,24 @@
 import { useMemo, useState } from 'react'
-import {
-  medicoGuardia,
-  vecinoById,
-  alergiasOf,
-  vecinoTieneAlergias,
-  turnosCAPSHoy,
-} from '../../lib/mockData'
-import { useTurnos } from '../../hooks/useTurnos'
-import { shortDateOf } from '../../lib/datetime'
+import { medicoGuardia } from '../../lib/mockData'
+import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
-import AlergiaBadge from '../../components/hc/AlergiaBadge'
 import RecetaUploader from '../../components/hc/RecetaUploader'
+import AtencionDrawer from '../../components/admin/AtencionDrawer'
 import CalendarioSemanal, {
   COLOR_BY_SPEC,
   SPEC_LABEL,
 } from '../../components/turnos/CalendarioSemanal'
+
+function vecinoLabel(t) {
+  const v = t.vecino
+  if (!v) return 'Vecino'
+  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
+  return v.nombre_completo || v.apellido || v.nombre || 'Vecino'
+}
 
 // Clases en src/index.css — paleta unificada (cero verde).
 const ESTADO_DIA = {
@@ -56,16 +58,32 @@ export default function SalaPrimerosAuxilios() {
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
+  // Turno seleccionado → abre el drawer de atención clínica.
+  const [turnoSel, setTurnoSel] = useState(null)
 
-  // Vista día: mock por ahora (mismo que antes).
-  const turnosDia   = turnosCAPSHoy().sort((a, b) => a.hora.localeCompare(b.hora))
-  const conAlergias = turnosDia.filter(t => vecinoTieneAlergias(t.vecino_id))
-  const atendidos   = turnosDia.filter(t => t.estado === 'atendido').length
+  const municipioId = useEffectiveMunicipioId()
+  // Dependencia de salud para filtrar el catálogo de insumos en el
+  // drawer + restringir las queries de turnos a la Sala PA.
+  const depSaludQ  = useDependenciaByTipo('caps')
+  const dependenciaSaludId = depSaludQ.data?.id ?? null
+
+  // Vista día: turnos reales del día actual (Supabase). Si la
+  // dependencia de salud está resuelta, filtramos por ella.
+  const today = todayArgYMD()
+  const { turnos: turnosDia, isLoading: diaLoading } = useTurnos({
+    fecha:         vista === 'dia' ? today : undefined,
+    dependenciaId: dependenciaSaludId ?? undefined,
+  })
+  const atendidos = (turnosDia ?? []).filter(t => t.estado === 'atendido').length
+  // Alergias requieren un hook real (TODO). Hasta entonces el KPI
+  // queda en 0 — placeholder hasta que tengamos source of truth.
+  const conAlergias = []
 
   // Vista semana: turnos del rango via Supabase real.
   const { turnos: turnosSemana, isLoading: weekLoading, error: weekError } = useTurnos({
-    fechaFrom: vista === 'semana' ? ymdLocal(weekStart) : undefined,
-    fechaTo:   vista === 'semana' ? ymdLocal(weekEnd)   : undefined,
+    fechaFrom:     vista === 'semana' ? ymdLocal(weekStart) : undefined,
+    fechaTo:       vista === 'semana' ? ymdLocal(weekEnd)   : undefined,
+    dependenciaId: dependenciaSaludId ?? undefined,
   })
 
   function prevWeek() { setWeekStart(prev => addDays(prev, -7)) }
@@ -145,32 +163,37 @@ export default function SalaPrimerosAuxilios() {
               <header className="border-b border-border px-5 py-4">
                 <h2 className="text-sm font-semibold text-primary-700">Agenda del día</h2>
               </header>
-              {turnosDia.length === 0 ? (
+              {diaLoading ? (
+                <div className="flex items-center justify-center px-5 py-10">
+                  <Spinner />
+                </div>
+              ) : (turnosDia ?? []).length === 0 ? (
                 <div className="px-5 py-10 text-center text-sm text-primary-400">Sin turnos cargados.</div>
               ) : (
                 <ul className="divide-y divide-border">
-                  {turnosDia.map(t => {
-                    const v = vecinoById(t.vecino_id)
-                    const alergias = alergiasOf(t.vecino_id)
-                    return (
-                      <li key={t.id} className="flex flex-wrap items-start gap-3 px-5 py-3">
-                        <span className="w-12 shrink-0 text-sm font-semibold text-primary">{t.hora}</span>
-                        <Avatar name={`${v?.nombre} ${v?.apellido}`} size="sm" />
+                  {(turnosDia ?? []).map(t => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => setTurnoSel(t)}
+                        className="flex w-full flex-wrap items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-primary-50/50"
+                      >
+                        <span className="w-14 shrink-0 text-sm font-semibold text-primary">
+                          {timeOf(t.fecha_hora) || '—'}
+                        </span>
+                        <Avatar name={vecinoLabel(t)} size="sm" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-primary-700">
-                            {v?.apellido}, {v?.nombre}
+                            {vecinoLabel(t)}
                           </p>
                           <p className="truncate text-xs text-primary-400">
-                            {t.motivo}{t.medico ? ` · ${t.medico}` : ''}
+                            {t.motivo || 'Consulta clínica'}
                           </p>
-                          {alergias.length > 0 && (
-                            <div className="mt-2"><AlergiaBadge alergias={alergias} /></div>
-                          )}
                         </div>
                         <span className={ESTADO_DIA[t.estado] ?? 'estado-pendiente'}>{t.estado}</span>
-                      </li>
-                    )
-                  })}
+                      </button>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
@@ -244,6 +267,15 @@ export default function SalaPrimerosAuxilios() {
             <CalendarioSemanal weekStart={weekStart} turnos={turnosSemana} />
           )}
         </>
+      )}
+
+      {turnoSel && (
+        <AtencionDrawer
+          turno={turnoSel}
+          dependenciaSaludId={dependenciaSaludId}
+          municipioId={municipioId}
+          onClose={() => setTurnoSel(null)}
+        />
       )}
     </div>
   )
