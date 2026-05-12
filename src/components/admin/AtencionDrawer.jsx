@@ -433,10 +433,13 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const catalogoQ  = useInsumosDisponibles({ municipioId, dependenciaId: dependenciaSaludId })
   const createMut  = useCreateAtencionInsumo()
   const deleteMut  = useDeleteAtencionInsumo()
-  const [inventarioId, setInventarioId] = useState('')
-  const [cantidad, setCantidad]         = useState('')
-  const [busqueda, setBusqueda]         = useState('')
-  const [error, setError]               = useState('')
+  // Estado del combobox: `insumoSeleccionado` es el objeto completo
+  // (el chip lo necesita para mostrar nombre/stock/unidad), no solo
+  // el id. La búsqueda se limpia tras elegir y el chip persiste.
+  const [insumoSeleccionado, setInsumoSeleccionado] = useState(null)
+  const [cantidad, setCantidad] = useState('')
+  const [busqueda, setBusqueda] = useState('')
+  const [error, setError]       = useState('')
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
 
@@ -456,49 +459,27 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const items = insumosQ.data ?? []
 
   // Filtrado por nombre / categoría, normalizando acentos. Si el
-  // término está vacío devuelve el catálogo entero. Si el insumo
-  // seleccionado quedó fuera del filtro lo dejamos al frente
-  // igual — sino el <select> mostraría su id pero label vacío.
+  // término está vacío devolvemos lista vacía — el dropdown solo
+  // aparece cuando el usuario escribió algo.
   const catalogFiltrado = useMemo(() => {
     const q = normalizar(busqueda.trim())
     const base = catalogoQ.data ?? []
-    if (!q) return base
-    const filtrados = base.filter(c =>
+    if (!q) return []
+    return base.filter(c =>
       normalizar(c.nombre).includes(q) || normalizar(c.categoria).includes(q),
     )
-    const selObj = base.find(c => c.id === inventarioId)
-    if (selObj && !filtrados.some(c => c.id === selObj.id)) {
-      return [selObj, ...filtrados]
-    }
-    return filtrados
-  }, [catalogoQ.data, busqueda, inventarioId])
+  }, [catalogoQ.data, busqueda])
 
-  // Dep en .data raw para evitar identity-flip del array nuevo.
-  const selected = useMemo(() => {
-    const base = catalogoQ.data ?? []
-    return base.find(c => c.id === inventarioId) ?? null
-  }, [catalogoQ.data, inventarioId])
-  // Texto de la opción: "[Categoría] Nombre — Stock: X unidad",
-  // prefijo ⚠ si crítico.
-  function optionLabel(c) {
-    const cat = c.categoria ? `[${c.categoria}] ` : ''
-    const critico = Number(c.stock_actual ?? 0) <= Number(c.stock_minimo ?? 0)
-    const flag = critico ? '⚠️ ' : ''
-    const unidad = c.unidad ? ` ${c.unidad}` : ''
-    return `${flag}${cat}${c.nombre} — Stock: ${c.stock_actual ?? 0}${unidad}`
+  function seleccionarInsumo(insumo) {
+    setInsumoSeleccionado(insumo)
+    setBusqueda('')      // cierra el dropdown
+    setError('')
   }
-
-  // Si el filtro deja la lista vacía, dejamos UNA opción disabled
-  // que sirve de feedback al usuario.
-  const selectOptions = catalogFiltrado.length === 0
-    ? [{ value: '__none__', label: 'Sin coincidencias', disabled: true }]
-    : catalogFiltrado.map(c => ({ value: c.id, label: optionLabel(c) }))
-
-  function handlePickInsumo(id) {
-    if (id === '__none__') return
-    setInventarioId(id)
-    // Reset búsqueda — el insumo elegido sigue visible por su id.
+  function limpiarSeleccion() {
+    setInsumoSeleccionado(null)
     setBusqueda('')
+    setCantidad('')
+    setError('')
   }
 
   async function handleAgregar() {
@@ -507,20 +488,18 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
       setError('Primero guardá la atención como borrador desde la tab "Atención".')
       return
     }
-    if (!inventarioId || !(Number(cantidad) > 0)) {
+    if (!insumoSeleccionado || !(Number(cantidad) > 0)) {
       setError('Elegí un insumo y una cantidad > 0.')
       return
     }
     try {
       await createMut.mutateAsync({
         atencion_id:   atencion.id,
-        inventario_id: inventarioId,
+        inventario_id: insumoSeleccionado.id,
         cantidad:      Number(cantidad),
-        unidad:        selected?.unidad ?? null,
+        unidad:        insumoSeleccionado.unidad ?? null,
       })
-      setInventarioId('')
-      setCantidad('')
-      setBusqueda('')
+      limpiarSeleccion()
     } catch (e) {
       setError(e?.message ?? 'No pudimos agregar el insumo.')
     }
@@ -578,58 +557,123 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
             Agregar insumo
           </h3>
 
-          {/* Buscador — filtra catálogo en tiempo real por nombre o
-              categoría. Sin debounce: el filtrado es client-side y
-              el set de catálogo es chico (decenas de filas), responde
-              inmediato. */}
-          <div className="mt-3">
-            <label className="text-sm font-medium text-primary-700">Buscar</label>
+          {/* Combobox custom — input + dropdown absoluto. No usa
+              <select> nativo: el dropdown aparece automáticamente al
+              tipear y se cierra al elegir (set busqueda='' lo oculta).
+              Filtra por nombre o categoría client-side. */}
+          <div className="relative mt-3">
+            <label className="text-sm font-medium text-primary-700">
+              {insumoSeleccionado ? 'Cambiar insumo' : 'Buscar insumo'}
+            </label>
             <input
               type="text"
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               placeholder="Buscar insumo... (ej: gasas, alcohol)"
+              role="combobox"
+              aria-expanded={busqueda.length > 0}
+              aria-autocomplete="list"
               className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm placeholder:text-primary-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
+
+            {/* Dropdown — solo visible cuando hay texto. */}
+            {busqueda && (
+              <ul
+                role="listbox"
+                className="absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-white shadow-card"
+              >
+                {catalogoQ.isLoading ? (
+                  <li className="px-3 py-2 text-sm text-primary-400">Cargando catálogo...</li>
+                ) : catalogFiltrado.length === 0 ? (
+                  <li className="px-3 py-2 text-sm text-primary-400">Sin coincidencias</li>
+                ) : (
+                  catalogFiltrado.map(insumo => {
+                    const critico = Number(insumo.stock_actual ?? 0) <= Number(insumo.stock_minimo ?? 0)
+                    return (
+                      <li
+                        key={insumo.id}
+                        role="option"
+                        // mousedown vs click — el input pierde foco al
+                        // hacer click, y un onBlur lateral podría cerrar
+                        // el dropdown antes que se dispare el onClick.
+                        // mousedown se dispara antes del blur.
+                        onMouseDown={(e) => { e.preventDefault(); seleccionarInsumo(insumo) }}
+                        className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2 text-sm hover:bg-background"
+                      >
+                        <span className="min-w-0 flex-1">
+                          {critico && <span aria-label="stock crítico">⚠️ </span>}
+                          <span className="font-medium text-primary">{insumo.nombre}</span>
+                          {insumo.categoria && (
+                            <span className="ml-1 text-[11px] uppercase tracking-wide text-primary-400">
+                              · {insumo.categoria}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 text-xs text-primary-500">
+                          Stock: {insumo.stock_actual ?? 0}{insumo.unidad ? ` ${insumo.unidad}` : ''}
+                        </span>
+                      </li>
+                    )
+                  })
+                )}
+              </ul>
+            )}
           </div>
 
-          <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-            <Select
-              label={
-                catalogFiltrado.length > 0
-                  ? `Insumo (${catalogFiltrado.length} ${catalogFiltrado.length === 1 ? 'resultado' : 'resultados'})`
-                  : 'Insumo'
-              }
-              value={inventarioId}
-              onChange={handlePickInsumo}
-              placeholder={catalogoQ.isLoading ? 'Cargando...' : 'Seleccionar...'}
-              options={selectOptions}
-            />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-primary-700">Cantidad</label>
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={cantidad}
-                onChange={e => setCantidad(e.target.value)}
-                placeholder="Cantidad"
-                className="input-field min-w-[100px]"
-              />
-              <p className="text-[11px] text-primary-400">
-                {selected?.unidad ? `Unidad: ${selected.unidad}` : 'Elegí un insumo para ver la unidad.'}
-              </p>
-            </div>
-            <div className="flex items-start sm:items-end">
-              <Button
-                onClick={handleAgregar}
-                loading={createMut.isPending}
-                disabled={!atencion || !inventarioId || inventarioId === '__none__' || !(Number(cantidad) > 0)}
+          {/* Chip del insumo seleccionado */}
+          {insumoSeleccionado && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 text-sm ring-1 ring-inset ring-primary/10">
+              <span className="font-medium text-primary">{insumoSeleccionado.nombre}</span>
+              <span className="text-xs text-primary-400">
+                — Stock: {insumoSeleccionado.stock_actual ?? 0}
+                {insumoSeleccionado.unidad ? ` ${insumoSeleccionado.unidad}` : ''}
+              </span>
+              <button
+                type="button"
+                onClick={limpiarSeleccion}
+                aria-label="Quitar selección"
+                className="ml-auto rounded p-0.5 text-primary-400 hover:bg-primary/10 hover:text-danger"
               >
-                + Agregar
-              </Button>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
+                </svg>
+              </button>
             </div>
-          </div>
+          )}
+
+          {/* Cantidad + botón — solo aparecen cuando hay insumo. */}
+          {insumoSeleccionado && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-primary-700">Cantidad</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={cantidad}
+                  onChange={e => setCantidad(e.target.value)}
+                  placeholder="Cantidad"
+                  autoFocus
+                  className="input-field min-w-[100px]"
+                />
+                <p className="text-[11px] text-primary-400">
+                  {insumoSeleccionado.unidad
+                    ? `Unidad: ${insumoSeleccionado.unidad}`
+                    : 'Sin unidad definida en el catálogo.'}
+                </p>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  onClick={handleAgregar}
+                  loading={createMut.isPending}
+                  disabled={!atencion || !(Number(cantidad) > 0)}
+                >
+                  + Agregar
+                </Button>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>
           )}
