@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../lib/supabase'
 import {
   useGastos, useIngresos, usePresupuesto, usePresupuestoPartidas,
   useCreateGasto, useUpdateGastoEstado, useCreateIngreso,
@@ -109,7 +111,7 @@ function aggregateByMonth(rows, months) {
 }
 
 // Gráfico SVG inline — barras pareadas por mes (ingresos navy, gastos gold).
-function BarChart({ ingresos, gastos }) {
+function BarChart({ ingresos, gastos, height = 240, compact = false }) {
   const months = ingresos.map((m, i) => ({
     label:    m.label,
     ingresos: m.total,
@@ -118,13 +120,41 @@ function BarChart({ ingresos, gastos }) {
   const max = Math.max(1, ...months.flatMap(m => [m.ingresos, m.gastos]))
 
   const W       = 720
-  const H       = 240
+  const H       = height
   const PAD_X   = 28
   const PAD_TOP = 16
   const PAD_BOT = 32
   const groupW  = (W - PAD_X * 2) / months.length
-  const barW    = Math.max(14, (groupW - 18) / 2)
+  const barW    = Math.max(10, (groupW - 18) / 2)
   const chartH  = H - PAD_TOP - PAD_BOT
+
+  // Línea de tendencia — regresión lineal simple sobre el saldo
+  // mensual (ingresos − gastos). Se renderiza como polyline navy
+  // semi-transparente para no competir con las barras.
+  const saldos = months.map(m => m.ingresos - m.gastos)
+  const n = saldos.length
+  let trendCoords = null
+  if (n >= 2) {
+    const xs = saldos.map((_, i) => i)
+    const ys = saldos
+    const sumX  = xs.reduce((a, b) => a + b, 0)
+    const sumY  = ys.reduce((a, b) => a + b, 0)
+    const sumXY = xs.reduce((a, _, i) => a + xs[i] * ys[i], 0)
+    const sumXX = xs.reduce((a, _, i) => a + xs[i] * xs[i], 0)
+    const denom = n * sumXX - sumX * sumX
+    if (denom !== 0) {
+      const slope = (n * sumXY - sumX * sumY) / denom
+      const inter = (sumY - slope * sumX) / n
+      const minY = Math.min(0, ...saldos, inter, inter + slope * (n - 1))
+      const maxY = Math.max(1, ...saldos.map(Math.abs), Math.abs(inter), Math.abs(inter + slope * (n - 1)))
+      const yToPx = y => H - PAD_BOT - ((y - minY) / (maxY - minY)) * chartH
+      trendCoords = xs.map(i => {
+        const px = PAD_X + groupW * i + groupW / 2
+        const py = yToPx(inter + slope * i)
+        return `${px},${py}`
+      }).join(' ')
+    }
+  }
 
   return (
     <div className="card overflow-hidden p-0">
@@ -140,12 +170,18 @@ function BarChart({ ingresos, gastos }) {
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-3 rounded-sm bg-accent" /> Gastos
           </span>
+          {trendCoords && (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-0.5 w-4 rounded-sm bg-primary/40" />
+              Tendencia
+            </span>
+          )}
         </div>
       </header>
-      <div className="overflow-x-auto p-4">
+      <div className={compact ? 'overflow-x-auto p-3' : 'overflow-x-auto p-4'}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="block min-w-[640px] h-auto w-full"
+          className={(compact ? 'block min-w-[480px]' : 'block min-w-[640px]') + ' h-auto w-full'}
           role="img"
           aria-label="Gráfico de barras: ingresos vs gastos por mes"
         >
@@ -196,7 +232,214 @@ function BarChart({ ingresos, gastos }) {
               </g>
             )
           })}
+          {trendCoords && (
+            <polyline
+              points={trendCoords}
+              fill="none"
+              stroke="#0F1C35"
+              strokeWidth="2"
+              strokeDasharray="4 4"
+              strokeOpacity="0.4"
+            />
+          )}
         </svg>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Dashboard helpers — Top dependencias / Top insumos / Ingresos canal
+// ─────────────────────────────────────────────────────────────────
+
+// Clasificación de un texto libre de `ingresos.origen` en uno de
+// los 4 canales que muestra el resumen inferior del dashboard.
+// El criterio sigue lo que el director usa coloquialmente: la
+// "coparticipación" provincial/nacional, las "tasas propias", los
+// "aportes no reintegrables" y el resto en "otros".
+function canalDeOrigen(origen) {
+  const t = (origen ?? '').toLowerCase()
+  if (/copart|nacional|provincial/.test(t)) return 'coparticipacion'
+  if (/tasa|servicio|alumbrado|abl/.test(t)) return 'tasas'
+  if (/aporte|subsidio|no\s*reintegr/.test(t)) return 'aportes'
+  return 'otros'
+}
+
+const CANAL_INGRESO_META = [
+  { key: 'coparticipacion', label: 'Coparticipación',        hint: 'Provincial + nacional' },
+  { key: 'tasas',           label: 'Tasas propias',          hint: 'ABL, servicios, otras' },
+  { key: 'aportes',         label: 'Aportes específicos',    hint: 'No reintegrables y subsidios' },
+  { key: 'otros',           label: 'Otros',                  hint: 'Sin clasificar' },
+]
+
+function TopDependenciasGasto({ gastosMes }) {
+  const ranking = useMemo(() => {
+    const map = new Map()
+    for (const g of gastosMes ?? []) {
+      if (g.estado !== 'aprobado') continue
+      const depId = g.dependencia_id ?? '__sin_dep__'
+      const nombre = g.dependencia?.nombre ?? 'Sin dependencia'
+      const monto = Number(g.monto ?? 0)
+      if (!map.has(depId)) map.set(depId, { id: depId, nombre, total: 0 })
+      map.get(depId).total += monto
+    }
+    return Array.from(map.values())
+      .filter(r => r.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+  }, [gastosMes])
+
+  const total = ranking.reduce((a, r) => a + r.total, 0)
+
+  return (
+    <div className="card overflow-hidden p-0">
+      <header className="border-b border-border px-5 py-3">
+        <h3 className="text-sm font-semibold text-primary">Mayor gasto por área</h3>
+        <p className="text-xs text-primary-400">
+          Gastos aprobados del mes corriente · top 5
+        </p>
+      </header>
+      <div className="p-4">
+        {ranking.length === 0 ? (
+          <p className="py-6 text-center text-xs text-primary-400">
+            Todavía no hay gastos aprobados este mes.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {ranking.map((r, i) => {
+              const pct = total > 0 ? Math.round((r.total / total) * 100) : 0
+              return (
+                <li key={r.id}>
+                  <div className="flex items-baseline justify-between gap-2 text-xs">
+                    <span className="min-w-0 flex-1 truncate font-medium text-primary">
+                      <span className="text-primary-400">{i + 1}.</span> {r.nombre}
+                    </span>
+                    <span className="whitespace-nowrap font-semibold text-primary-700">
+                      {fmtMoney.format(r.total)}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary-50">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-10 text-right text-[10px] font-semibold text-primary-500">
+                      {pct}%
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TopInsumos({ municipioId }) {
+  const today = new Date()
+  const ymd   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  const insumosQ = useQuery({
+    queryKey: ['top-insumos-mes', municipioId ?? '__ALL__', ymd],
+    queryFn: async () => {
+      let q = supabase
+        .from('movimientos_inventario')
+        .select('cantidad, inventario:inventario_id ( id, nombre, unidad ), municipio_id')
+        .eq('tipo', 'salida')
+        .gte('created_at', `${ymd}T00:00:00-03:00`)
+        .limit(500)
+      if (municipioId) q = q.eq('municipio_id', municipioId)
+      const { data, error } = await q
+      if (error) {
+        // Tolerancia: si la tabla no existe todavía, devolvemos vacío.
+        if (/does not exist|42P01/.test(error.message ?? '')) return []
+        throw error
+      }
+      const map = new Map()
+      for (const m of (data ?? [])) {
+        const inv = m.inventario ?? {}
+        const id = inv.id ?? '__sin__'
+        if (!map.has(id)) {
+          map.set(id, { id, nombre: inv.nombre ?? 'Insumo', unidad: inv.unidad ?? '', total: 0 })
+        }
+        map.get(id).total += Number(m.cantidad ?? 0)
+      }
+      return Array.from(map.values())
+        .filter(r => r.total > 0 && r.id !== '__sin__')
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5)
+    },
+    enabled: true,
+    staleTime: 60 * 1000,
+  })
+
+  const items = insumosQ.data ?? []
+
+  return (
+    <div className="card overflow-hidden p-0">
+      <header className="border-b border-border px-5 py-3">
+        <h3 className="text-sm font-semibold text-primary">Insumos más usados</h3>
+        <p className="text-xs text-primary-400">
+          Salidas de inventario del mes · top 5
+        </p>
+      </header>
+      <div className="p-4">
+        {insumosQ.isLoading ? (
+          <div className="flex items-center justify-center py-6"><Spinner size="sm" /></div>
+        ) : items.length === 0 ? (
+          <p className="py-6 text-center text-xs text-primary-400">
+            Sin movimientos de salida este mes.
+          </p>
+        ) : (
+          <ol className="space-y-2.5 text-sm">
+            {items.map((r, i) => (
+              <li key={r.id} className="flex items-baseline gap-2">
+                <span className="w-5 shrink-0 text-xs text-primary-400">{i + 1}.</span>
+                <span className="min-w-0 flex-1 truncate text-primary">
+                  {r.nombre}
+                </span>
+                <span className="whitespace-nowrap font-semibold text-primary-700">
+                  {r.total}{r.unidad ? <span className="ml-0.5 text-xs text-primary-400">{r.unidad}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function IngresosPorCanal({ ingresosMes }) {
+  const totales = useMemo(() => {
+    const out = { coparticipacion: 0, tasas: 0, aportes: 0, otros: 0 }
+    for (const r of ingresosMes ?? []) {
+      out[canalDeOrigen(r.origen)] += Number(r.monto ?? 0)
+    }
+    return out
+  }, [ingresosMes])
+
+  return (
+    <div className="card overflow-hidden p-0">
+      <header className="border-b border-border px-5 py-3">
+        <h3 className="text-sm font-semibold text-primary">Resumen de ingresos por canal</h3>
+        <p className="text-xs text-primary-400">Mes corriente</p>
+      </header>
+      <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        {CANAL_INGRESO_META.map(c => (
+          <div key={c.key} className="rounded-lg border border-border bg-primary-50/40 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
+              {c.label}
+            </p>
+            <p className="mt-1 font-sora text-xl font-bold text-primary">
+              {fmtMoney.format(totales[c.key])}
+            </p>
+            <p className="mt-0.5 text-[11px] text-primary-400">{c.hint}</p>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -305,7 +548,21 @@ function DashboardTab({ municipioId }) {
         </div>
       )}
 
-      <BarChart ingresos={ingPorMes} gastos={gasPorMes} />
+      {/* Layout 3-col en lg+ : gráfico 40% / top deps 30% / top
+          insumos 30%. En mobile cada bloque se apila. */}
+      <div className="grid gap-4 lg:grid-cols-10">
+        <div className="lg:col-span-4">
+          <BarChart ingresos={ingPorMes} gastos={gasPorMes} height={200} compact />
+        </div>
+        <div className="lg:col-span-3">
+          <TopDependenciasGasto gastosMes={gastosMes} />
+        </div>
+        <div className="lg:col-span-3">
+          <TopInsumos municipioId={municipioId} />
+        </div>
+      </div>
+
+      <IngresosPorCanal ingresosMes={ingresosMes} />
     </div>
   )
 }

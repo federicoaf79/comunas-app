@@ -242,6 +242,16 @@ const NAV_GESTION = [
     ],
   },
   {
+    to: '/admin/auditoria',
+    label: 'Auditoría',
+    modulo: 'auditoria',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6M5 21V5a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" />
+      </svg>
+    ),
+  },
+  {
     to: '/admin/config-general',
     label: 'Config. General',
     icon: (
@@ -620,10 +630,15 @@ export default function AdminLayout() {
     const seenTipo = new Set()
     const principales = []
     const info = []
+    // tipos que NO se muestran como dependencia en el sidebar
+    // porque ya tienen su propio módulo en "Gestión Municipal"
+    // (Administración Municipal vive bajo /admin/administracion).
+    const TIPOS_EXCLUIDOS = new Set(['admin', 'administracion', 'intendencia', 'comuna'])
     for (const d of (deps ?? [])) {
       if (d.activa === false) continue
       const t = (d.tipo ?? '').toLowerCase().trim()
       if (!t || TIPOS_CIC.has(t)) continue
+      if (TIPOS_EXCLUIDOS.has(t)) continue
       if (seenTipo.has(t)) continue
       seenTipo.add(t)
       const label = LABEL_BY_TIPO[t] ?? d.nombre

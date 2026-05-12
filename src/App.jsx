@@ -30,6 +30,7 @@ import Inventario          from './pages/admin/Inventario'
 import Flota               from './pages/admin/Flota'
 import Noticias            from './pages/admin/Noticias'
 import Administracion      from './pages/admin/Administracion'
+import Auditoria           from './pages/admin/Auditoria'
 import Rendicion           from './pages/admin/Rendicion'
 import ConfigPortal        from './pages/admin/ConfigPortal'
 import ConfigGeneral       from './pages/admin/ConfigGeneral'
@@ -127,6 +128,7 @@ const router = createBrowserRouter([
                   { path: '/admin/flota',                element: <Flota /> },
                   { path: '/admin/noticias',             element: <Noticias /> },
                   { path: '/admin/administracion', element: <Administracion /> },
+                  { path: '/admin/auditoria',      element: <Auditoria /> },
                   { path: '/admin/rendicion',      element: <Rendicion /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
