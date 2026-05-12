@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useAtencionPorTurno, useAtencionInsumos, useAtencionesVecino,
   useInsumosDisponibles,
@@ -429,6 +430,7 @@ function normalizar(s) {
 }
 
 export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
+  const qc         = useQueryClient()
   const insumosQ   = useAtencionInsumos(atencion?.id)
   const catalogoQ  = useInsumosDisponibles({ municipioId, dependenciaId: dependenciaSaludId })
   const createMut  = useCreateAtencionInsumo()
@@ -440,6 +442,16 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const [cantidad, setCantidad] = useState('')
   const [busqueda, setBusqueda] = useState('')
   const [error, setError]       = useState('')
+  const [ok, setOk]             = useState('')
+
+  // Feedback de éxito visible por 2.5s tras agregar un insumo —
+  // confirma al médico que la fila se persistió, sin tener que
+  // mirar la lista de arriba para validarlo.
+  useEffect(() => {
+    if (!ok) return
+    const t = setTimeout(() => setOk(''), 2500)
+    return () => clearTimeout(t)
+  }, [ok])
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
 
@@ -474,6 +486,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
     setInsumoSeleccionado(insumo)
     setBusqueda('')      // cierra el dropdown
     setError('')
+    setOk('')
   }
   function limpiarSeleccion() {
     setInsumoSeleccionado(null)
@@ -483,7 +496,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   }
 
   async function handleAgregar() {
-    setError('')
+    setError(''); setOk('')
     if (!atencion) {
       setError('Primero guardá la atención como borrador desde la tab "Atención".')
       return
@@ -492,18 +505,55 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
       setError('Elegí un insumo y una cantidad > 0.')
       return
     }
+    // Trace de input — sirve para debuggear casos donde el botón
+    // parece "no hacer nada": en realidad sale por validación o
+    // por error del INSERT contra RLS.
+    const payload = {
+      atencion_id:   atencion.id,
+      inventario_id: insumoSeleccionado.id,
+      cantidad:      Number(cantidad),
+      unidad:        insumoSeleccionado.unidad ?? null,
+    }
+    console.log('[InsumosTab] handleAgregar payload:', payload)
     try {
-      await createMut.mutateAsync({
-        atencion_id:   atencion.id,
-        inventario_id: insumoSeleccionado.id,
-        cantidad:      Number(cantidad),
-        unidad:        insumoSeleccionado.unidad ?? null,
-      })
+      const row = await createMut.mutateAsync(payload)
+      console.log('[InsumosTab] mutation success:', row)
+      // Reset completo del formulario + nombre del insumo recién
+      // agregado en el toast para que el médico confirme visualmente
+      // qué fue lo que entró.
+      const nombre = insumoSeleccionado.nombre
       limpiarSeleccion()
+      setOk(`✓ ${nombre} agregado`)
+      // Invalidación belt-and-suspenders: el hook ya invalida con
+      // queryKey ['atencion-insumos', row.atencion_id]. Re-invalidar
+      // por seguridad si row viene sin atencion_id en algún edge case.
+      qc.invalidateQueries({ queryKey: ['atencion-insumos', atencion.id] })
     } catch (e) {
+      console.error('[InsumosTab] mutation error:', e)
       setError(e?.message ?? 'No pudimos agregar el insumo.')
     }
   }
+
+  async function handleEliminar(insumoFila) {
+    setError(''); setOk('')
+    try {
+      await deleteMut.mutateAsync({ id: insumoFila.id, atencionId: atencion.id })
+      qc.invalidateQueries({ queryKey: ['atencion-insumos', atencion.id] })
+    } catch (e) {
+      console.error('[InsumosTab] delete error:', e)
+      setError(e?.message ?? 'No pudimos eliminar el insumo.')
+    }
+  }
+
+  // Hint sobre por qué el botón está deshabilitado, para que el
+  // médico no se quede mirando un botón gris sin contexto.
+  const disabledHint = !atencion
+    ? 'Guardá la atención como borrador antes de cargar insumos.'
+    : !insumoSeleccionado
+      ? 'Elegí un insumo de la lista de arriba.'
+      : !(Number(cantidad) > 0)
+        ? 'Ingresá una cantidad mayor a 0.'
+        : null
 
   return (
     <div className="space-y-4 p-5">
@@ -516,7 +566,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
 
       <section>
         <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
-          Insumos cargados
+          Insumos cargados {items.length > 0 && <span className="ml-1 text-primary-400">({items.length})</span>}
         </h3>
         {insumosQ.isLoading ? (
           <div className="mt-2 flex justify-center p-6"><Spinner /></div>
@@ -524,24 +574,37 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
           <p className="mt-2 text-sm text-primary-400">Todavía no se cargaron insumos.</p>
         ) : (
           <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-white">
-            {items.map(it => (
-              <li key={it.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-primary">{it.inventario?.nombre ?? '—'}</p>
-                  <p className="text-xs text-primary-500">
-                    <b>{it.cantidad}</b> {it.unidad || it.inventario?.unidad || ''}
-                  </p>
-                </div>
-                {!yaCerrada && (
-                  <button
-                    onClick={() => deleteMut.mutate({ id: it.id, atencionId: atencion.id })}
-                    className="text-xs font-semibold text-danger hover:underline"
-                  >
-                    Eliminar
-                  </button>
-                )}
-              </li>
-            ))}
+            {items.map(it => {
+              const unidad = it.unidad || it.inventario?.unidad || ''
+              return (
+                <li
+                  key={it.id}
+                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate font-medium text-primary" title={it.inventario?.nombre ?? '—'}>
+                    {it.inventario?.nombre ?? '—'}
+                  </span>
+                  <span className="whitespace-nowrap font-bold tabular-nums text-primary">
+                    {it.cantidad}
+                  </span>
+                  <span className="whitespace-nowrap text-xs text-primary-500">
+                    {unidad || '—'}
+                  </span>
+                  {!yaCerrada ? (
+                    <button
+                      onClick={() => handleEliminar(it)}
+                      aria-label={`Eliminar ${it.inventario?.nombre ?? 'insumo'}`}
+                      title="Eliminar"
+                      className="rounded p-1 text-primary-400 transition-colors hover:bg-red-50 hover:text-danger"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+                      </svg>
+                    </button>
+                  ) : <span />}
+                </li>
+              )
+            })}
           </ul>
         )}
         {items.length > 0 && totalEstimado > 0 && (
@@ -662,20 +725,28 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
                     : 'Sin unidad definida en el catálogo.'}
                 </p>
               </div>
-              <div className="flex items-end">
+              <div className="flex flex-col items-stretch gap-1 sm:items-end">
                 <Button
                   onClick={handleAgregar}
                   loading={createMut.isPending}
-                  disabled={!atencion || !(Number(cantidad) > 0)}
+                  disabled={!!disabledHint}
                 >
                   + Agregar
                 </Button>
+                {disabledHint && (
+                  <p className="text-[11px] text-primary-400">{disabledHint}</p>
+                )}
               </div>
             </div>
           )}
 
           {error && (
             <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>
+          )}
+          {ok && (
+            <div className="mt-3 rounded-md border border-ok-100 bg-ok-50 p-3 text-xs font-medium text-ok-700">
+              {ok}
+            </div>
           )}
         </section>
       )}
