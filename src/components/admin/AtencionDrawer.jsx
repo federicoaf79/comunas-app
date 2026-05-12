@@ -448,6 +448,29 @@ function normalizar(s) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+// Texto de stock con conversión opcional, espejo de stockDisplayLabel
+// en Inventario.jsx (lo replicamos acá para no acoplar el drawer a
+// una página). Formato:
+//   - Con conversión activa: "800 pares (≈ 8 cajas)"
+//   - Sin conversión:        "80 unidades"
+function stockTextoDe(item) {
+  const stock = Number(item?.stock_actual ?? 0)
+  const ucon  = item?.unidad_consumo || item?.unidad || ''
+  const ucom  = item?.unidad_compra ?? null
+  const ratio = Number(item?.cantidad_por_unidad_compra ?? 0)
+  if (ucon && ucom && ucon !== ucom && ratio > 0) {
+    const enCompra = Math.floor(stock / ratio)
+    return `${stock} ${ucon} (≈ ${enCompra} ${ucom})`
+  }
+  return `${stock}${ucon ? ` ${ucon}` : ''}`
+}
+
+// Unidad efectiva de consumo del insumo — la usa la atención para
+// cantidad y unidad del INSERT en atencion_insumos.
+function unidadConsumoDe(item) {
+  return item?.unidad_consumo || item?.unidad || 'unidad'
+}
+
 export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitchToAtencion }) {
   const qc         = useQueryClient()
   const insumosQ   = useAtencionInsumos(atencion?.id)
@@ -531,7 +554,10 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitch
       atencion_id:   atencion.id,
       inventario_id: insumoSeleccionado.id,
       cantidad:      Number(cantidad),
-      unidad:        insumoSeleccionado.unidad ?? null,
+      // Persistimos la unidad de consumo — es la que el stock va a
+      // descontar al cerrar la atención. Si el item no tiene
+      // unidad_consumo (legacy), caemos a `unidad`.
+      unidad:        unidadConsumoDe(insumoSeleccionado),
     }
     console.log('[InsumosTab] handleAgregar payload:', payload)
     try {
@@ -660,7 +686,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitch
                             )}
                           </span>
                           <span className="shrink-0 text-xs text-primary-500">
-                            Stock: {insumo.stock_actual ?? 0}{insumo.unidad ? ` ${insumo.unidad}` : ''}
+                            Stock: {stockTextoDe(insumo)}
                           </span>
                         </li>
                       )
@@ -677,7 +703,7 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitch
                   {insumoSeleccionado.nombre}
                 </span>
                 <span className="shrink-0 text-primary-400">
-                  · Stock {insumoSeleccionado.stock_actual ?? 0}{insumoSeleccionado.unidad ? ` ${insumoSeleccionado.unidad}` : ''}
+                  — Stock: {stockTextoDe(insumoSeleccionado)}
                 </span>
                 <button
                   type="button"
@@ -692,35 +718,41 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitch
               </div>
             )}
 
-            {/* Cantidad + unidad + botón en una sola fila horizontal. */}
-            {insumoSeleccionado && (
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <div className="flex w-24 flex-col gap-1">
-                  <label className="text-[11px] font-medium uppercase tracking-wider text-primary-500">Cantidad</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={cantidad}
-                    onChange={e => setCantidad(e.target.value)}
-                    placeholder="0"
-                    autoFocus
-                    className="input-field min-w-0"
-                  />
+            {/* Cantidad + unidad + botón en una sola fila horizontal.
+                La cantidad se ingresa siempre en unidad_consumo (al
+                cerrar la atención se descuenta de stock_actual directo). */}
+            {insumoSeleccionado && (() => {
+              const ucon = unidadConsumoDe(insumoSeleccionado)
+              return (
+                <div className="mt-3 flex flex-wrap items-end gap-2">
+                  <div className="flex w-32 flex-col gap-1">
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-primary-500">
+                      Cantidad
+                    </label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={cantidad}
+                      onChange={e => setCantidad(e.target.value)}
+                      placeholder={`Cantidad en ${ucon}`}
+                      autoFocus
+                      className="input-field min-w-0"
+                    />
+                    <p className="text-[11px] text-primary-400">Unidad: {ucon}</p>
+                  </div>
+                  <span className="pb-6 text-sm text-primary-500">{ucon}</span>
+                  <Button
+                    onClick={handleAgregar}
+                    loading={createMut.isPending}
+                    disabled={!!disabledHint}
+                    className="ml-auto"
+                  >
+                    + Agregar
+                  </Button>
                 </div>
-                <span className="pb-2 text-sm text-primary-500">
-                  {insumoSeleccionado.unidad || 'unidad'}
-                </span>
-                <Button
-                  onClick={handleAgregar}
-                  loading={createMut.isPending}
-                  disabled={!!disabledHint}
-                  className="ml-auto"
-                >
-                  + Agregar
-                </Button>
-              </div>
-            )}
+              )
+            })()}
 
             {disabledHint && insumoSeleccionado && (
               <p className="mt-2 text-[11px] text-primary-400">{disabledHint}</p>

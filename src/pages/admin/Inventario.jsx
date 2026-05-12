@@ -36,6 +36,45 @@ const TABS = [
 
 const CATEGORIAS = ['Limpieza', 'Oficina', 'Salud', 'Construcción', 'Combustible', 'Repuestos', 'Otros']
 
+// Catálogos para el split unidad_compra / unidad_consumo. Mantener
+// los `value` en lowercase, sin acentos — los persiste el schema y
+// los lee también AtencionDrawer / DependenciaGeneral.
+const UNIDADES_COMPRA = [
+  { value: 'unidad',   label: 'Unidad' },
+  { value: 'caja',     label: 'Caja' },
+  { value: 'bulto',    label: 'Bulto' },
+  { value: 'paquete',  label: 'Paquete' },
+  { value: 'frasco',   label: 'Frasco' },
+  { value: 'rollo',    label: 'Rollo' },
+  { value: 'bidon',    label: 'Bidón' },
+  { value: 'bolsa',    label: 'Bolsa' },
+]
+const UNIDADES_CONSUMO = [
+  { value: 'unidades', label: 'Unidades' },
+  { value: 'pares',    label: 'Pares' },
+  { value: 'ml',       label: 'ml' },
+  { value: 'litros',   label: 'Litros' },
+  { value: 'gramos',   label: 'Gramos' },
+  { value: 'kg',       label: 'Kg' },
+  { value: 'metros',   label: 'Metros' },
+]
+
+// Texto del stock con conversión opcional. Si el ítem tiene
+// unidad_consumo distinta de unidad_compra y cantidad_por_unidad_compra
+// > 0, muestra "X consumo (≈ Y compra)". Si son iguales o falta data,
+// cae al formato simple "X unidad".
+function stockDisplayLabel(item) {
+  const stock = Number(item?.stock_actual ?? 0)
+  const ucon  = item?.unidad_consumo || item?.unidad || ''
+  const ucom  = item?.unidad_compra ?? null
+  const ratio = Number(item?.cantidad_por_unidad_compra ?? 0)
+  if (ucon && ucom && ucon !== ucom && ratio > 0) {
+    const enCompra = Math.floor(stock / ratio)
+    return `${stock} ${ucon} (≈ ${enCompra} ${ucom})`
+  }
+  return `${stock}${ucon ? ` ${ucon}` : ''}`
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Página
 // ─────────────────────────────────────────────────────────────────
@@ -205,8 +244,8 @@ function StockTab({ municipioId, dependencias, canEdit }) {
                   <Td>{i.dependencia?.nombre ?? '—'}</Td>
                   <Td className="font-medium text-primary">{i.nombre}</Td>
                   <Td>{i.categoria || '—'}</Td>
-                  <Td>{i.unidad || '—'}</Td>
-                  <Td className="text-right tabular-nums">{i.stock_actual}</Td>
+                  <Td>{i.unidad_consumo || i.unidad || '—'}</Td>
+                  <Td className="text-right tabular-nums">{stockDisplayLabel(i)}</Td>
                   <Td className="text-right tabular-nums text-primary-500">{i.stock_minimo}</Td>
                   <Td><StockBadge estado={est} /></Td>
                   <Td className="text-right tabular-nums">
@@ -322,13 +361,42 @@ export function Paginacion({ page, totalPages, totalItems, pageStart, pageSize, 
 export function ItemFormModal({ editing = null, onClose, onSave, dependencias, saving }) {
   const [form, setForm] = useState(() => editing ?? {
     dependencia_id: '', nombre: '', categoria: '', unidad: '',
+    unidad_compra: 'unidad', unidad_consumo: 'unidades',
+    cantidad_por_unidad_compra: '',
     stock_actual: '', stock_minimo: '', precio_referencia: '', partida_codigo: '',
   })
   const [error, setError] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
   const { data: partidas = [] } = usePartidasTipo()
 
-  const canSubmit = !!form.nombre?.trim() && !!form.dependencia_id && !!form.unidad
+  // El select de Categoría tolera valores legacy que no estén en
+  // CATEGORIAS — agregamos la categoría actual si falta para que
+  // el <Select> no muestre vacío al editar items antiguos.
+  const categoriaOpts = useMemo(() => {
+    const base = CATEGORIAS.map(c => ({ value: c, label: c }))
+    if (form.categoria && !CATEGORIAS.includes(form.categoria)) {
+      return [{ value: form.categoria, label: form.categoria }, ...base]
+    }
+    return base
+  }, [form.categoria])
+
+  // Conversión activa = unidades difieren y hay ratio > 0. Cuando la
+  // unidad de compra y consumo coinciden, los campos extra no aplican
+  // y el comportamiento es el legacy (sumar/restar directo).
+  const ucom  = form.unidad_compra
+  const ucon  = form.unidad_consumo
+  const ratio = Number(form.cantidad_por_unidad_compra ?? 0)
+  const conversionActiva = ucom && ucon && ucom !== ucon
+  const hintConversion = conversionActiva && ratio > 0
+    ? `Al comprar 1 ${ucom} se suman ${ratio} ${ucon} al stock`
+    : null
+
+  const canSubmit =
+    !!form.nombre?.trim() && !!form.dependencia_id &&
+    !!form.unidad_consumo &&
+    // Si las unidades difieren, exigimos el ratio para que la
+    // entrada de stock pueda hacer la conversión sin asumir.
+    (!conversionActiva || ratio > 0)
 
   async function handle() {
     setError('')
@@ -337,7 +405,12 @@ export function ItemFormModal({ editing = null, onClose, onSave, dependencias, s
         dependencia_id:    form.dependencia_id,
         nombre:            form.nombre.trim(),
         categoria:         form.categoria || null,
-        unidad:            form.unidad,
+        // `unidad` queda en sync con unidad_consumo para que el
+        // código legacy que lee `.unidad` siga funcionando.
+        unidad:            form.unidad_consumo || form.unidad || null,
+        unidad_compra:     form.unidad_compra  || null,
+        unidad_consumo:    form.unidad_consumo || null,
+        cantidad_por_unidad_compra: conversionActiva ? Number(form.cantidad_por_unidad_compra) : null,
         stock_actual:      Number(form.stock_actual ?? 0) || 0,
         stock_minimo:      Number(form.stock_minimo ?? 0) || 0,
         precio_referencia: form.precio_referencia ? Number(form.precio_referencia) : null,
@@ -366,22 +439,60 @@ export function ItemFormModal({ editing = null, onClose, onSave, dependencias, s
         <Select
           label="Categoría" value={form.categoria ?? ''} onChange={v => set('categoria', v)}
           placeholder="Seleccionar..."
-          options={CATEGORIAS.map(c => ({ value: c, label: c }))}
+          options={categoriaOpts}
         />
         <div className="sm:col-span-2">
           <Input label="Nombre del ítem" value={form.nombre} onChange={e => set('nombre', e.target.value)} required />
         </div>
-        <Input label="Unidad" value={form.unidad ?? ''} onChange={e => set('unidad', e.target.value)} placeholder="ej. unidad, lts, kg" required />
+        <Select
+          label="Se compra por"
+          value={form.unidad_compra ?? ''}
+          onChange={v => set('unidad_compra', v)}
+          options={UNIDADES_COMPRA}
+        />
+        <Select
+          label="Se consume en"
+          value={form.unidad_consumo ?? ''}
+          onChange={v => set('unidad_consumo', v)}
+          options={UNIDADES_CONSUMO}
+        />
+        {conversionActiva && (
+          <div className="sm:col-span-2">
+            <Input
+              label={`Unidades de consumo por unidad de compra (${ucon} por ${ucom})`}
+              type="number" min="0" step="0.01"
+              value={form.cantidad_por_unidad_compra ?? ''}
+              onChange={e => set('cantidad_por_unidad_compra', e.target.value)}
+              placeholder={`Ej: 100 (un ${ucom} trae 100 ${ucon})`}
+              required
+            />
+            {hintConversion && (
+              <p className="mt-1 text-xs text-ok-700">
+                {hintConversion}
+              </p>
+            )}
+          </div>
+        )}
         <Select
           label="Partida presupuestaria" value={form.partida_codigo ?? ''} onChange={v => set('partida_codigo', v)}
           placeholder="Sin asignar"
           options={partidas.map(p => ({ value: p.codigo, label: `${p.codigo} — ${p.nombre}` }))}
         />
-        <Input label="Stock actual" type="number" min="0" value={form.stock_actual ?? ''} onChange={e => set('stock_actual', e.target.value)} />
-        <Input label="Stock mínimo" type="number" min="0" value={form.stock_minimo ?? ''} onChange={e => set('stock_minimo', e.target.value)} />
+        <Input
+          label={`Stock actual (${ucon || 'unidades'})`}
+          type="number" min="0"
+          value={form.stock_actual ?? ''}
+          onChange={e => set('stock_actual', e.target.value)}
+        />
+        <Input
+          label={`Stock mínimo (${ucon || 'unidades'})`}
+          type="number" min="0"
+          value={form.stock_minimo ?? ''}
+          onChange={e => set('stock_minimo', e.target.value)}
+        />
         <div className="sm:col-span-2">
           <Input
-            label="Precio de referencia (opcional)"
+            label={`Precio de referencia ${conversionActiva ? `(por ${ucom}, opcional)` : '(opcional)'}`}
             type="number" min="0" step="0.01"
             value={form.precio_referencia ?? ''}
             onChange={e => set('precio_referencia', e.target.value)}
@@ -403,13 +514,64 @@ export function MovimientoFormModal({ item, tipo, onClose }) {
   const [error, setError]       = useState('')
   const create = useCreateMovimiento()
   const titulo = tipo === 'entrada' ? 'Registrar entrada' : 'Registrar salida'
-  const canSubmit = Number(cantidad) > 0
+
+  const ucon  = item.unidad_consumo || item.unidad || 'unidades'
+  const ucom  = item.unidad_compra ?? null
+  const ratio = Number(item.cantidad_por_unidad_compra ?? 0)
+  // Conversión activa solo cuando difieren las unidades Y hay
+  // ratio. La entrada se ingresa en unidad de compra; la salida
+  // siempre en unidad de consumo (lo que sale del stock).
+  const conversionActiva = !!ucom && ucon !== ucom && ratio > 0
+
+  const cantidadNum = Number(cantidad)
+  const cantidadValida = cantidadNum > 0
+
+  // Cantidad real que se va a sumar/restar del stock_actual (en
+  // unidad_consumo, que es la unidad del stock).
+  const cantidadEnStock = (() => {
+    if (!cantidadValida) return 0
+    if (tipo === 'entrada' && conversionActiva) return cantidadNum * ratio
+    return cantidadNum
+  })()
+
+  // Hint de conversión visible en tiempo real.
+  const hint = (() => {
+    if (!cantidadValida || !conversionActiva) return null
+    if (tipo === 'entrada') {
+      return `= ${cantidadEnStock} ${ucon} que se sumarán al stock`
+    }
+    // Salida: convertimos los X consumo a Y compra para que el
+    // operador entienda cuánto del stock-bruto se gasta.
+    const enCompra = cantidadNum / ratio
+    const compraTxt = enCompra >= 1
+      ? `≈ ${enCompra.toFixed(2).replace(/\.?0+$/, '')} ${ucom}`
+      : `≈ ${enCompra.toFixed(3).replace(/\.?0+$/, '')} ${ucom}`
+    return `${compraTxt} del stock`
+  })()
+
+  // Motivo auto-armado para Entrada con conversión — el operador
+  // puede sobreescribirlo. Para Salida y Entradas sin conversión,
+  // el motivo lo escribe libre.
+  function motivoFinal() {
+    if (motivo.trim()) return motivo.trim()
+    if (tipo === 'entrada' && conversionActiva && cantidadValida) {
+      return `Entrada: ${cantidadNum} ${ucom} (${cantidadEnStock} ${ucon})`
+    }
+    return null
+  }
+
+  const canSubmit = cantidadValida
 
   async function handle() {
     setError('')
     try {
       await create.mutateAsync({
-        inventarioId: item.id, tipo, cantidad: Number(cantidad), motivo,
+        inventarioId: item.id,
+        tipo,
+        // Pasamos la cantidad EN STOCK (unidad_consumo) — el hook
+        // ya hace la suma/resta sobre stock_actual directamente.
+        cantidad: cantidadEnStock,
+        motivo: motivoFinal(),
       })
       onClose()
     } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
@@ -429,18 +591,45 @@ export function MovimientoFormModal({ item, tipo, onClose }) {
         <div className="rounded-lg border border-border bg-primary-50/40 p-3 text-sm">
           <div className="font-semibold text-primary">{item.nombre}</div>
           <div className="text-primary-500">
-            Stock actual: <b className="tabular-nums">{item.stock_actual}</b> {item.unidad}
+            Stock actual: <b className="tabular-nums">{stockDisplayLabel(item)}</b>
           </div>
         </div>
-        <Input
-          label={`Cantidad (${item.unidad ?? 'unid.'})`}
-          type="number" min="0.01" step="0.01"
-          value={cantidad} onChange={e => setCantidad(e.target.value)} required autoFocus
-        />
+
+        {tipo === 'entrada' && conversionActiva ? (
+          // Entrada con conversión: cantidad en unidad_compra.
+          <Input
+            label={`Cantidad recibida (${ucom})`}
+            type="number" min="0.01" step="0.01"
+            value={cantidad} onChange={e => setCantidad(e.target.value)}
+            placeholder={`Ej: 8 ${ucom}s`}
+            required autoFocus
+          />
+        ) : (
+          // Entrada sin conversión + cualquier salida: en unidad_consumo.
+          <Input
+            label={tipo === 'entrada'
+              ? `Cantidad recibida (${ucon})`
+              : `Cantidad consumida (${ucon})`}
+            type="number" min="0.01" step="0.01"
+            value={cantidad} onChange={e => setCantidad(e.target.value)}
+            required autoFocus
+          />
+        )}
+
+        {hint && (
+          <p className="rounded-md border border-ok-100 bg-ok-50 p-2 text-xs font-medium text-ok-700">
+            {hint}
+          </p>
+        )}
+
         <Input
           label="Motivo (opcional)"
           value={motivo} onChange={e => setMotivo(e.target.value)}
-          placeholder={tipo === 'entrada' ? 'Ej: Compra OC #123' : 'Ej: Consumo en obra'}
+          placeholder={
+            tipo === 'entrada'
+              ? (conversionActiva ? 'Se genera automático — completá si querés más detalle' : 'Ej: Compra OC #123')
+              : 'Ej: Consumo en atención, descarte, ajuste'
+          }
         />
         {error && (
           <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>

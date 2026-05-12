@@ -108,7 +108,11 @@ export function useInsumosDisponibles({ municipioId, dependenciaId } = {}) {
     queryFn:  async () => {
       let q = supabase
         .from('inventario')
-        .select('id, nombre, unidad, stock_actual, categoria, dependencia_id, precio_referencia')
+        // Incluimos unidad_compra / unidad_consumo / cantidad_por_unidad_compra
+        // para que el combobox de la atención muestre la conversión
+        // ("Stock: 800 pares (≈ 8 cajas)") y arme las descripciones
+        // de movimientos correctamente.
+        .select('id, nombre, unidad, unidad_compra, unidad_consumo, cantidad_por_unidad_compra, stock_actual, stock_minimo, categoria, dependencia_id, precio_referencia')
         .order('nombre', { ascending: true })
       if (municipioId)   q = q.eq('municipio_id', municipioId)
       if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
