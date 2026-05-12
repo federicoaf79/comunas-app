@@ -5,7 +5,6 @@ import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import { todayArgYMD, shortDateOf, timeOf } from '../../lib/datetime'
-import Tabs from '../../components/ui/Tabs'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
@@ -20,17 +19,21 @@ import {
 
 // =============================================================
 // Juez de Paz — gestión de turnos y expedientes del juzgado.
-// 5 tabs: Turnos del día | Agenda semanal | Consultas frecuentes |
-//         Expedientes | Administración
+// La página no tiene barra de tabs interna: navega entre
+// sub-secciones (gestion / expedientes / administracion) leyendo
+// el ?tab= que pone el sidebar (AdminLayout NavGroup).
+//
+// Secciones:
+//   gestion        → Turnos del día + Agenda semanal + Consultas
+//   expedientes    → ExpedientesTab
+//   administracion → AdministracionTab
 // =============================================================
 
-const TABS = [
-  { value: 'dia',            label: 'Turnos del día' },
-  { value: 'semana',         label: 'Agenda semanal' },
-  { value: 'consultas',      label: 'Consultas frecuentes' },
-  { value: 'expedientes',    label: 'Expedientes' },
-  { value: 'administracion', label: 'Administración' },
-]
+const SECCION_LABEL = {
+  gestion:        'Gestión',
+  expedientes:    'Expedientes',
+  administracion: 'Administración',
+}
 
 const EXP_TIPO_LABEL = {
   acta_matrimonio:         'Acta matrimonio civil',
@@ -592,23 +595,18 @@ export default function JuezDePaz() {
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
-  // ?tab= en URL. Aliases:
-  //   'gestion' → 'semana' (vista por defecto del módulo)
-  //   'admin'   → 'administracion'
-  // Resto: pass-through.
-  const [searchParams, setSearchParams] = useSearchParams()
+  // Lectura del ?tab= desde URL. Sin escritura: la navegación
+  // entre sub-secciones viene del sidebar.
+  //   'admin'   → 'administracion'  (alias del sidebar)
+  //   'expedientes' → 'expedientes'
+  //   resto / vacío → 'gestion' (turnos + agenda + consultas)
+  const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
-  const tabFromUrl  = tabParamRaw === 'gestion' ? 'semana'
-                    : tabParamRaw === 'admin'   ? 'administracion'
-                    : tabParamRaw === ''        ? 'semana'
-                    : tabParamRaw
-  const tab = tabFromUrl
-  const setTab = (v) => {
-    const next = new URLSearchParams(searchParams)
-    if (v === 'semana') next.delete('tab')
-    else next.set('tab', v === 'administracion' ? 'admin' : v)
-    setSearchParams(next, { replace: true })
-  }
+  const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
+                       ? 'administracion'
+                       : tabParamRaw === 'expedientes'
+                         ? 'expedientes'
+                         : 'gestion'
   const [modalOpen, setModalOpen] = useState(false)
 
   // Busca la dependencia "juzgado" del municipio del operador. Si
@@ -623,24 +621,29 @@ export default function JuezDePaz() {
   }, [perfil, depJuez])
   const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
   const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
-  const tabsVisibles = useMemo(() => TABS.filter(t => {
-    if (t.value === 'administracion') return puedeAdministrar
-    return puedeGestionar
-  }), [puedeGestionar, puedeAdministrar])
-  const tabActivo = tabsVisibles.some(t => t.value === tab)
-    ? tab
-    : (tabsVisibles[0]?.value ?? 'semana')
+  // gestion + expedientes requieren puede_gestionar.
+  // administracion requiere puede_administrar.
+  // Sin permisos para la sección pedida → cae a la primera permitida.
+  const seccionPermitida = (s) =>
+    s === 'administracion' ? puedeAdministrar : puedeGestionar
+  const primeraSeccion = puedeGestionar
+    ? 'gestion'
+    : puedeAdministrar ? 'administracion' : null
+  const seccion = seccionPermitida(tabRequested) ? tabRequested : primeraSeccion
 
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-primary">Juez de Paz</h1>
-        <p className="text-sm text-primary-400">
-          Gestión de turnos y consultas frecuentes del Juzgado.
+        <h1 className="font-sora text-2xl font-bold text-primary">Juez de Paz</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">Juez de Paz</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
+          {depJuez?.nombre && (
+            <span className="text-primary-400"> · {depJuez.nombre}</span>
+          )}
         </p>
       </header>
-
-      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
 
       {depsLoading && (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
@@ -655,28 +658,36 @@ export default function JuezDePaz() {
         </div>
       )}
 
-      {!depsLoading && depJuez && (
-        <>
-          {tabActivo === 'dia'            && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
-          {tabActivo === 'semana'         && <AgendaSemanalTab depJuez={depJuez} />}
-          {tabActivo === 'consultas'      && <ConsultasTab depJuez={depJuez} />}
-          {tabActivo === 'expedientes'    && (
-            <ExpedientesTab
-              depJuez={depJuez}
-              municipioId={municipioId}
-              canCreate={canCreate}
-            />
-          )}
-          {tabActivo === 'administracion' && (
-            <AdministracionTab
-              dependenciaId={depJuez.id}
-              dependenciaNombre={depJuez.nombre}
-              municipioId={municipioId}
-              canApprove={canApprove}
-              canCreate={canCreate}
-            />
-          )}
-        </>
+      {!depsLoading && !seccion && (
+        <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
+          No tenés permisos para ver esta sección del Juzgado.
+        </div>
+      )}
+
+      {!depsLoading && depJuez && seccion === 'gestion' && (
+        <div className="space-y-10">
+          <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />
+          <AgendaSemanalTab depJuez={depJuez} />
+          <ConsultasTab depJuez={depJuez} />
+        </div>
+      )}
+
+      {!depsLoading && depJuez && seccion === 'expedientes' && (
+        <ExpedientesTab
+          depJuez={depJuez}
+          municipioId={municipioId}
+          canCreate={canCreate}
+        />
+      )}
+
+      {!depsLoading && depJuez && seccion === 'administracion' && (
+        <AdministracionTab
+          dependenciaId={depJuez.id}
+          dependenciaNombre={depJuez.nombre}
+          municipioId={municipioId}
+          canApprove={canApprove}
+          canCreate={canCreate}
+        />
       )}
 
       <NuevoTurnoModal

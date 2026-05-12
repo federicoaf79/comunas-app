@@ -20,7 +20,6 @@ import {
 } from './Inventario'
 import Select from '../../components/ui/Select'
 import Button from '../../components/ui/Button'
-import Tabs from '../../components/ui/Tabs'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
@@ -42,12 +41,18 @@ import { todayArgYMD, dateOf, timeOf, dateTimeOf } from '../../lib/datetime'
 //   educacion                → Calendario escolar (placeholder)
 // =============================================================
 
-const TABS_BASE = [
-  { value: 'info',           label: 'Información' },
-  { value: 'turnos',         label: 'Turnos' },
-  { value: 'administracion', label: 'Administración' },
-  { value: 'inventario',     label: 'Inventario' },
-  { value: 'contacto',       label: 'Contacto' },
+// Secciones disponibles. La página no renderiza barra de tabs:
+// el sidebar (AdminLayout NavGroup) navega entre secciones vía
+// ?tab=. Los campos `kind` se usan para gating por permisos:
+//   gestion → puede_gestionar
+//   admin   → puede_administrar
+//   public  → siempre visible (info / contacto)
+const SECCIONES_BASE = [
+  { value: 'info',           label: 'Información',     kind: 'public'  },
+  { value: 'turnos',         label: 'Turnos',          kind: 'gestion' },
+  { value: 'administracion', label: 'Administración', kind: 'admin'   },
+  { value: 'inventario',     label: 'Inventario',      kind: 'gestion' },
+  { value: 'contacto',       label: 'Contacto',        kind: 'public'  },
 ]
 
 const CATEGORIAS_INV = ['Limpieza', 'Oficina', 'Salud', 'Construcción', 'Combustible', 'Repuestos', 'Otros']
@@ -111,6 +116,9 @@ const EXTRA_TAB_LABELS = {
   reservas:      'Reservas canchas',
   calendario:    'Calendario escolar',
 }
+
+// Las extras siempre son de gestión (puede_gestionar para verlas).
+const EXTRA_KIND = 'gestion'
 
 const ESTADO_TURNO_LABEL = {
   pendiente:  'Pendiente',
@@ -807,22 +815,16 @@ export default function DependenciaGeneral() {
 
   const { data: dep, isLoading } = useDependenciaByTipo(tipo)
 
-  // ?tab= en URL. Aliases:
-  //   'informacion' → 'info'    (usado por sidebar info-only)
+  // Lectura del ?tab= desde URL. Sin escritura: la navegación
+  // entre sub-secciones viene del sidebar.
+  //   'informacion' → 'info'           (alias del sidebar info-only)
   //   'admin'       → 'administracion'
-  // Resto: pass-through (turnos, inventario, contacto, beneficiarios, ...).
-  const [searchParams, setSearchParams] = useSearchParams()
+  // Resto: pass-through (turnos, inventario, contacto, ...).
+  const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
-  const tabFromUrl  = tabParamRaw === 'informacion' ? 'info'
-                    : tabParamRaw === 'admin'       ? 'administracion'
-                    : tabParamRaw || 'info'
-  const tab = tabFromUrl
-  const setTab = (v) => {
-    const next = new URLSearchParams(searchParams)
-    if (v === 'info') next.delete('tab')
-    else next.set('tab', v === 'administracion' ? 'admin' : v)
-    setSearchParams(next, { replace: true })
-  }
+  const tabRequested = tabParamRaw === 'informacion' ? 'info'
+                     : tabParamRaw === 'admin'       ? 'administracion'
+                     : tabParamRaw || 'info'
   const [modalOpen, setModalOpen] = useState(false)
 
   // Permisos por dependencia desde dependencias_acceso del perfil.
@@ -836,33 +838,36 @@ export default function DependenciaGeneral() {
   const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
 
   const extraKey = useMemo(() => extraTabKey(tipo), [tipo])
-  // Filtramos tabs según permisos. "info" siempre visible (es
-  // contexto básico). Las demás se gating según puede_gestionar /
-  // puede_administrar.
-  const tabs = useMemo(() => {
+  // Lista efectiva de secciones según permisos. "info" y "contacto"
+  // son siempre visibles. El resto se filtra según gestion/admin.
+  const secciones = useMemo(() => {
     const completo = extraKey
-      ? [...TABS_BASE, { value: extraKey, label: EXTRA_TAB_LABELS[extraKey] }]
-      : TABS_BASE
-    return completo.filter(t => {
-      if (t.value === 'info')          return true
-      if (t.value === 'administracion') return puedeAdministrar
-      // turnos / inventario / contacto / beneficiarios / reclamos
-      // (extras) → gestión.
+      ? [...SECCIONES_BASE, { value: extraKey, label: EXTRA_TAB_LABELS[extraKey], kind: EXTRA_KIND }]
+      : SECCIONES_BASE
+    return completo.filter(s => {
+      if (s.kind === 'public')  return true
+      if (s.kind === 'admin')   return puedeAdministrar
       return puedeGestionar
     })
   }, [extraKey, puedeGestionar, puedeAdministrar])
 
-  // Si el tab seleccionado no está en la lista filtrada (cambio de
-  // permisos), caemos al primero visible para el render sin tocar
-  // el state — preserva la selección original si los permisos se
-  // restauran sin recargar.
-  const tabActivo = tabs.some(t => t.value === tab) ? tab : (tabs[0]?.value ?? 'info')
+  // Si la sección pedida no está permitida, cae a la primera visible.
+  // Para usuarios sin permisos, "info" siempre está visible (es public).
+  const seccion = secciones.some(s => s.value === tabRequested)
+    ? tabRequested
+    : (secciones[0]?.value ?? 'info')
+  const seccionLabel = secciones.find(s => s.value === seccion)?.label ?? '—'
 
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-primary">{dep?.nombre ?? 'Dependencia'}</h1>
-        <p className="text-sm text-primary-400">
+        <h1 className="font-sora text-2xl font-bold text-primary">{dep?.nombre ?? 'Dependencia'}</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">{dep?.nombre ?? 'Dependencia'}</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{seccionLabel}</span>
+        </p>
+        <p className="mt-1 text-xs text-primary-400">
           {DEP_INFO[tipo]?.detalle ?? 'Módulo genérico de dependencia.'}
         </p>
       </header>
@@ -888,11 +893,10 @@ export default function DependenciaGeneral() {
 
       {!isLoading && dep && (
         <>
-          <Tabs tabs={tabs} value={tabActivo} onChange={setTab} />
           <div>
-            {tabActivo === 'info'           && <InformacionTab dep={dep} />}
-            {tabActivo === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
-            {tabActivo === 'administracion' && (
+            {seccion === 'info'           && <InformacionTab dep={dep} />}
+            {seccion === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
+            {seccion === 'administracion' && (
               <AdministracionTab
                 dependenciaId={dep.id}
                 dependenciaNombre={dep.nombre}
@@ -901,12 +905,12 @@ export default function DependenciaGeneral() {
                 canCreate={canCreate}
               />
             )}
-            {tabActivo === 'inventario'     && <InventarioTab dep={dep} municipioId={municipioId} canEdit={canEditInv} />}
-            {tabActivo === 'contacto'       && <ContactoTab dep={dep} />}
-            {tabActivo === 'beneficiarios'  && <BeneficiariosTab municipioId={municipioId} />}
-            {tabActivo === 'reclamos'       && <ReclamosTab      municipioId={municipioId} />}
-            {tabActivo === 'reservas'       && <ReservasCanchasTab />}
-            {tabActivo === 'calendario'     && <CalendarioEscolarTab />}
+            {seccion === 'inventario'     && <InventarioTab dep={dep} municipioId={municipioId} canEdit={canEditInv} />}
+            {seccion === 'contacto'       && <ContactoTab dep={dep} />}
+            {seccion === 'beneficiarios'  && <BeneficiariosTab municipioId={municipioId} />}
+            {seccion === 'reclamos'       && <ReclamosTab      municipioId={municipioId} />}
+            {seccion === 'reservas'       && <ReservasCanchasTab />}
+            {seccion === 'calendario'     && <CalendarioEscolarTab />}
           </div>
 
           <NuevoTurnoModal

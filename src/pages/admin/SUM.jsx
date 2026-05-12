@@ -7,7 +7,6 @@ import {
   useSumReservas, useCreateSumReserva, useUpdateSumReservaEstado,
 } from '../../hooks/useSumReservas'
 import { currentMonthYYYYMM } from '../../hooks/useAdministracion'
-import Tabs from '../../components/ui/Tabs'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
@@ -27,12 +26,12 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 0,
 })
 
-const TABS = [
-  { value: 'reservas',       label: 'Reservas' },
-  { value: 'calendario',     label: 'Calendario' },
-  { value: 'tarifas',        label: 'Tarifas' },
-  { value: 'administracion', label: 'Administración' },
-]
+// Etiqueta de sección activa para el breadcrumb. Sin barra de tabs:
+// la navegación se hace desde el sidebar (AdminLayout NavGroup).
+const SECCION_LABEL = {
+  reservas:       'Reservas',
+  administracion: 'Administración',
+}
 
 const ESTADOS_OPTS = [
   { value: 'pendiente',  label: 'Pendientes' },
@@ -423,20 +422,16 @@ export default function SUM() {
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
-  // ?tab= en URL: 'reservas' | 'calendario' | 'tarifas' | 'admin' (alias).
-  const [searchParams, setSearchParams] = useSearchParams()
+  // Lectura del ?tab= desde URL. Sin escritura: la navegación
+  // entre sub-secciones viene del sidebar.
+  //   'admin' → 'administracion' (alias)
+  //   resto / vacío → 'reservas' (página principal del módulo, que
+  //   incluye reservas + calendario + tarifas en un solo flujo).
+  const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
-  const tabFromUrl  = tabParamRaw === 'admin' ? 'administracion'
-                    : ['reservas', 'calendario', 'tarifas', 'administracion'].includes(tabParamRaw)
-                      ? tabParamRaw
-                      : 'reservas'
-  const tab = tabFromUrl
-  const setTab = (v) => {
-    const next = new URLSearchParams(searchParams)
-    if (v === 'reservas') next.delete('tab')
-    else next.set('tab', v === 'administracion' ? 'admin' : v)
-    setSearchParams(next, { replace: true })
-  }
+  const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
+                       ? 'administracion'
+                       : 'reservas'
   // Busca la dependencia "sum" del municipio del operador. Si es
   // superadmin (municipio_id = null), useDependenciaByTipo cae a la
   // primera dependencia activa con ese tipo en cualquier municipio.
@@ -449,31 +444,35 @@ export default function SUM() {
   }, [perfil, depSum])
   const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
   const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
-  const tabsVisibles = useMemo(() => TABS.filter(t => {
-    if (t.value === 'administracion') return puedeAdministrar
-    if (t.value === 'tarifas')        return true  // info pública, siempre visible
-    return puedeGestionar
-  }), [puedeGestionar, puedeAdministrar])
-  const tabActivo = tabsVisibles.some(t => t.value === tab)
-    ? tab
-    : (tabsVisibles[0]?.value ?? 'reservas')
+  // Tarifas son info pública dentro de "reservas" — siempre visibles.
+  // Si llega sin permisos, "reservas" sigue mostrando la vista
+  // pública (calendario + tarifas) sin las acciones de aprobar/crear.
+  const primeraSeccion = puedeGestionar
+    ? 'reservas'
+    : puedeAdministrar ? 'administracion' : 'reservas'
+  const seccion = tabRequested === 'administracion' && !puedeAdministrar
+    ? primeraSeccion
+    : tabRequested
 
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-primary">Salón de Usos Múltiples</h1>
-        <p className="text-sm text-primary-400">
-          Reservas, calendario y tarifas del SUM.
+        <h1 className="font-sora text-2xl font-bold text-primary">Salón de Usos Múltiples</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">SUM</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
+          {depSum?.nombre && (
+            <span className="text-primary-400"> · {depSum.nombre}</span>
+          )}
         </p>
       </header>
-
-      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
 
       {depsLoading && (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       )}
 
-      {!depsLoading && !depSum && tabActivo !== 'tarifas' && (
+      {!depsLoading && !depSum && seccion !== 'reservas' && (
         <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
           <p className="font-semibold">No hay un SUM configurado en este municipio.</p>
           <p className="mt-1 text-xs">
@@ -482,21 +481,31 @@ export default function SUM() {
         </div>
       )}
 
-      {!depsLoading && (
-        <>
-          {tabActivo === 'reservas'       && depSum && <ReservasTab depSum={depSum} canApprove={canApprove} />}
-          {tabActivo === 'calendario'     && depSum && <CalendarioTab />}
-          {tabActivo === 'tarifas'                  && <TarifasTab />}
-          {tabActivo === 'administracion' && depSum && (
-            <AdministracionTab
-              dependenciaId={depSum.id}
-              dependenciaNombre={depSum.nombre}
-              municipioId={municipioId}
-              canApprove={canApprove}
-              canCreate={canCreate}
-            />
-          )}
-        </>
+      {!depsLoading && seccion === 'reservas' && (
+        <div className="space-y-6">
+          {depSum
+            ? <ReservasTab depSum={depSum} canApprove={canApprove} />
+            : (
+              <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
+                <p className="font-semibold">No hay un SUM configurado en este municipio.</p>
+                <p className="mt-1 text-xs">
+                  Pedile al administrador que cree una dependencia con tipo <code>sum</code>.
+                </p>
+              </div>
+            )}
+          {depSum && <CalendarioTab />}
+          <TarifasTab />
+        </div>
+      )}
+
+      {!depsLoading && seccion === 'administracion' && depSum && (
+        <AdministracionTab
+          dependenciaId={depSum.id}
+          dependenciaNombre={depSum.nombre}
+          municipioId={municipioId}
+          canApprove={canApprove}
+          canCreate={canCreate}
+        />
       )}
     </div>
   )

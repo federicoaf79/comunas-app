@@ -5,7 +5,6 @@ import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
-import Tabs from '../../components/ui/Tabs'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
@@ -16,10 +15,13 @@ import CalendarioSemanal, {
   SPEC_LABEL,
 } from '../../components/turnos/CalendarioSemanal'
 
-const TABS_SALA = [
-  { value: 'agenda',         label: 'Agenda' },
-  { value: 'administracion', label: 'Administración' },
-]
+// Etiqueta de sección activa para el breadcrumb del header.
+// No se renderiza una barra de tabs: el usuario navega entre
+// sub-secciones desde el sidebar (AdminLayout NavGroup).
+const SECCION_LABEL = {
+  agenda:         'Agenda',
+  administracion: 'Administración',
+}
 
 function vecinoLabel(t) {
   const v = t.vecino
@@ -70,21 +72,15 @@ export default function SalaPrimerosAuxilios() {
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
-  // ?tab= en URL: 'agenda' | 'admin' (alias de administracion).
-  // Si no viene, default 'agenda'. Cambios internos sincronizan la URL.
-  const [searchParams, setSearchParams] = useSearchParams()
+  // Lectura del ?tab= desde URL. Sin escritura: el cambio de
+  // sub-sección viene exclusivamente desde el sidebar (AdminLayout).
+  //   'admin' → 'administracion' (alias)
+  //   resto / vacío → 'agenda'
+  const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
-  const tabFromUrl  = tabParamRaw === 'admin' ? 'administracion'
-                    : tabParamRaw === 'administracion' ? 'administracion'
-                    : tabParamRaw === 'agenda' ? 'agenda'
-                    : 'agenda'
-  const tab = tabFromUrl
-  const setTab = (v) => {
-    const next = new URLSearchParams(searchParams)
-    if (v === 'agenda') next.delete('tab')
-    else next.set('tab', v === 'administracion' ? 'admin' : v)
-    setSearchParams(next, { replace: true })
-  }
+  const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
+                       ? 'administracion'
+                       : 'agenda'
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
@@ -107,19 +103,20 @@ export default function SalaPrimerosAuxilios() {
   }, [perfil, dependenciaSaludId])
   const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
   const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
-  const tabsVisibles = useMemo(() => TABS_SALA.filter(t => {
-    if (t.value === 'administracion') return puedeAdministrar
-    return puedeGestionar
-  }), [puedeGestionar, puedeAdministrar])
-  const tabActivo = tabsVisibles.some(t => t.value === tab)
-    ? tab
-    : (tabsVisibles[0]?.value ?? 'agenda')
+  // Si el usuario llega sin permiso para la sección pedida (o sin
+  // ?tab y sin permiso de gestión), cae a la primera permitida.
+  const seccionPermitida = (s) =>
+    s === 'administracion' ? puedeAdministrar : puedeGestionar
+  const primeraSeccion = puedeGestionar
+    ? 'agenda'
+    : puedeAdministrar ? 'administracion' : null
+  const seccion = seccionPermitida(tabRequested) ? tabRequested : primeraSeccion
 
   // Vista día: turnos reales del día actual (Supabase). Si la
   // dependencia de salud está resuelta, filtramos por ella.
   const today = todayArgYMD()
   const { turnos: turnosDia, isLoading: diaLoading } = useTurnos({
-    fecha:         vista === 'dia' ? today : undefined,
+    fecha:         vista === 'dia' && seccion === 'agenda' ? today : undefined,
     dependenciaId: dependenciaSaludId ?? undefined,
   })
   const atendidos = (turnosDia ?? []).filter(t => t.estado === 'atendido').length
@@ -129,8 +126,8 @@ export default function SalaPrimerosAuxilios() {
 
   // Vista semana: turnos del rango via Supabase real.
   const { turnos: turnosSemana, isLoading: weekLoading, error: weekError } = useTurnos({
-    fechaFrom:     vista === 'semana' ? ymdLocal(weekStart) : undefined,
-    fechaTo:       vista === 'semana' ? ymdLocal(weekEnd)   : undefined,
+    fechaFrom:     vista === 'semana' && seccion === 'agenda' ? ymdLocal(weekStart) : undefined,
+    fechaTo:       vista === 'semana' && seccion === 'agenda' ? ymdLocal(weekEnd)   : undefined,
     dependenciaId: dependenciaSaludId ?? undefined,
   })
 
@@ -142,10 +139,17 @@ export default function SalaPrimerosAuxilios() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
-          <p className="text-sm text-primary-400">Agenda — CAPS Real Sayana</p>
+          <h1 className="font-sora text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
+          <p className="mt-1 text-sm text-primary-500">
+            <span className="text-primary-400">Sala PA</span>
+            <span className="mx-1.5 text-primary-300">›</span>
+            <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
+            {depSaludNombre && (
+              <span className="text-primary-400"> · {depSaludNombre}</span>
+            )}
+          </p>
         </div>
-        {tabActivo === 'agenda' && (
+        {seccion === 'agenda' && (
           <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
             <button
               onClick={() => setVista('dia')}
@@ -167,9 +171,13 @@ export default function SalaPrimerosAuxilios() {
         )}
       </header>
 
-      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
+      {!seccion && (
+        <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
+          No tenés permisos para ver esta sección.
+        </div>
+      )}
 
-      {tabActivo === 'administracion' && (
+      {seccion === 'administracion' && (
         <AdministracionTab
           dependenciaId={dependenciaSaludId}
           dependenciaNombre={depSaludNombre}
@@ -179,7 +187,7 @@ export default function SalaPrimerosAuxilios() {
         />
       )}
 
-      {tabActivo === 'agenda' && <>
+      {seccion === 'agenda' && <>
       {/* Médico de guardia (común a ambas vistas) */}
       <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-4">
