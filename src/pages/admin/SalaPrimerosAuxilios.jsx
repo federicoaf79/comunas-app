@@ -2,15 +2,24 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { medicoGuardia } from '../../lib/mockData'
 import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useAuth } from '../../context/AuthContext'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
+import Tabs from '../../components/ui/Tabs'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
 import RecetaUploader from '../../components/hc/RecetaUploader'
+import AdministracionTab from '../../components/admin/AdministracionTab'
 import CalendarioSemanal, {
   COLOR_BY_SPEC,
   SPEC_LABEL,
 } from '../../components/turnos/CalendarioSemanal'
+
+const TABS_SALA = [
+  { value: 'agenda',         label: 'Agenda' },
+  { value: 'administracion', label: 'Administración' },
+]
 
 function vecinoLabel(t) {
   const v = t.vecino
@@ -55,6 +64,12 @@ function ymdLocal(d) {
 
 export default function SalaPrimerosAuxilios() {
   const navigate = useNavigate()
+  const { hasRole } = useAuth()
+  const municipioId = useEffectiveMunicipioId()
+  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
+
+  const [tab, setTab] = useState('agenda')
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
@@ -65,6 +80,7 @@ export default function SalaPrimerosAuxilios() {
   // AtencionDetalle.
   const depSaludQ  = useDependenciaByTipo('caps')
   const dependenciaSaludId = depSaludQ.data?.id ?? null
+  const depSaludNombre     = depSaludQ.data?.nombre ?? null
 
   // Vista día: turnos reales del día actual (Supabase). Si la
   // dependencia de salud está resuelta, filtramos por ella.
@@ -96,26 +112,41 @@ export default function SalaPrimerosAuxilios() {
           <h1 className="text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
           <p className="text-sm text-primary-400">Agenda — CAPS Real Sayana</p>
         </div>
-        <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
-          <button
-            onClick={() => setVista('dia')}
-            className={`rounded px-3 py-1 font-medium transition-colors ${
-              vista === 'dia' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-            }`}
-          >
-            Vista día
-          </button>
-          <button
-            onClick={() => setVista('semana')}
-            className={`rounded px-3 py-1 font-medium transition-colors ${
-              vista === 'semana' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-            }`}
-          >
-            Vista semana
-          </button>
-        </div>
+        {tab === 'agenda' && (
+          <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
+            <button
+              onClick={() => setVista('dia')}
+              className={`rounded px-3 py-1 font-medium transition-colors ${
+                vista === 'dia' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
+              }`}
+            >
+              Vista día
+            </button>
+            <button
+              onClick={() => setVista('semana')}
+              className={`rounded px-3 py-1 font-medium transition-colors ${
+                vista === 'semana' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
+              }`}
+            >
+              Vista semana
+            </button>
+          </div>
+        )}
       </header>
 
+      <Tabs tabs={TABS_SALA} value={tab} onChange={setTab} />
+
+      {tab === 'administracion' && (
+        <AdministracionTab
+          dependenciaId={dependenciaSaludId}
+          dependenciaNombre={depSaludNombre}
+          municipioId={municipioId}
+          canApprove={canApprove}
+          canCreate={canCreate}
+        />
+      )}
+
+      {tab === 'agenda' && <>
       {/* Médico de guardia (común a ambas vistas) */}
       <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-4">
@@ -267,6 +298,7 @@ export default function SalaPrimerosAuxilios() {
           )}
         </>
       )}
+      </>}
 
     </div>
   )

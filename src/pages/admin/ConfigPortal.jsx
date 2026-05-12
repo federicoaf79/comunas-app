@@ -13,6 +13,7 @@ import {
   useDependenciasAdmin, useUpdateDependenciaPublica, uploadFotoDependencia,
 } from '../../hooks/useDependenciaPublica'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
@@ -21,6 +22,7 @@ import Select from '../../components/ui/Select'
 import Tabs from '../../components/ui/Tabs'
 import FuenteRssFormModal from '../../components/admin/FuenteRssFormModal'
 import AutoridadFormModal from '../../components/admin/AutoridadFormModal'
+import AdministracionTab from '../../components/admin/AdministracionTab'
 
 // =============================================================
 // Configuración del portal — CMS del Portal Ciudadano.
@@ -33,10 +35,11 @@ import AutoridadFormModal from '../../components/admin/AutoridadFormModal'
 // =============================================================
 
 const TABS = [
-  { value: 'rss',         label: 'Fuentes RSS' },
-  { value: 'autoridades', label: 'Autoridades' },
-  { value: 'historia',    label: 'Historia' },
-  { value: 'deps',        label: 'Dependencias' },
+  { value: 'rss',            label: 'Fuentes RSS' },
+  { value: 'autoridades',    label: 'Autoridades' },
+  { value: 'historia',       label: 'Historia' },
+  { value: 'deps',           label: 'Dependencias' },
+  { value: 'administracion', label: 'Administración' },
 ]
 
 // ─────────────────────────────────────────────────────────────────
@@ -803,9 +806,16 @@ function TabDependencias({ municipioId, sinMunicipio }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function ConfigPortal() {
-  const { perfil } = useAuth()
+  const { perfil, hasRole } = useAuth()
   const municipioId = useEffectiveMunicipioId()
   const sinMunicipio = !municipioId
+  const canApprove   = hasRole(['admin_comuna', 'superadmin'])
+  const canCreate    = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
+
+  // Dependencia que representa al Portal Web en la tabla
+  // dependencias. Si el municipio no la tiene creada, el tab
+  // Administración muestra el empty state estándar — no rompe.
+  const { data: depPortal = null } = useDependenciaByTipo('portal')
 
   const [tab, setTab] = useState('rss')
 
@@ -827,10 +837,19 @@ export default function ConfigPortal() {
 
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
-      {tab === 'rss'         && <TabFuentesRss sinMunicipio={sinMunicipio} />}
-      {tab === 'autoridades' && <TabAutoridades municipioId={municipioId} sinMunicipio={sinMunicipio} />}
-      {tab === 'historia'    && <TabHistoria   municipioId={municipioId} sinMunicipio={sinMunicipio} />}
-      {tab === 'deps'        && <TabDependencias municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {tab === 'rss'            && <TabFuentesRss sinMunicipio={sinMunicipio} />}
+      {tab === 'autoridades'    && <TabAutoridades municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {tab === 'historia'       && <TabHistoria   municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {tab === 'deps'           && <TabDependencias municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {tab === 'administracion' && (
+        <AdministracionTab
+          dependenciaId={depPortal?.id ?? null}
+          dependenciaNombre={depPortal?.nombre ?? 'Portal Web'}
+          municipioId={municipioId}
+          canApprove={canApprove}
+          canCreate={canCreate}
+        />
+      )}
     </div>
   )
 }

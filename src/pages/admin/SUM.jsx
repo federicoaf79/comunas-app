@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import {
   useSumReservas, useCreateSumReserva, useUpdateSumReservaEstado,
@@ -11,6 +12,7 @@ import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import SumReservaFormModal from '../../components/admin/SumReservaFormModal'
+import AdministracionTab from '../../components/admin/AdministracionTab'
 import { dateOf } from '../../lib/datetime'
 
 // =============================================================
@@ -25,9 +27,10 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
 })
 
 const TABS = [
-  { value: 'reservas',   label: 'Reservas' },
-  { value: 'calendario', label: 'Calendario' },
-  { value: 'tarifas',    label: 'Tarifas' },
+  { value: 'reservas',       label: 'Reservas' },
+  { value: 'calendario',     label: 'Calendario' },
+  { value: 'tarifas',        label: 'Tarifas' },
+  { value: 'administracion', label: 'Administración' },
 ]
 
 const ESTADOS_OPTS = [
@@ -414,7 +417,9 @@ function TarifasTab() {
 
 export default function SUM() {
   const { hasRole } = useAuth()
-  const canApprove = hasRole(['admin_comuna', 'superadmin'])
+  const municipioId = useEffectiveMunicipioId()
+  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
   const [tab, setTab] = useState('calendario')
   // Busca la dependencia "sum" del municipio del operador. Si es
@@ -448,9 +453,18 @@ export default function SUM() {
 
       {!depsLoading && (
         <>
-          {tab === 'reservas'   && depSum    && <ReservasTab depSum={depSum} canApprove={canApprove} />}
-          {tab === 'calendario' && depSum    && <CalendarioTab />}
-          {tab === 'tarifas'                 && <TarifasTab />}
+          {tab === 'reservas'       && depSum && <ReservasTab depSum={depSum} canApprove={canApprove} />}
+          {tab === 'calendario'     && depSum && <CalendarioTab />}
+          {tab === 'tarifas'                  && <TarifasTab />}
+          {tab === 'administracion' && depSum && (
+            <AdministracionTab
+              dependenciaId={depSum.id}
+              dependenciaNombre={depSum.nombre}
+              municipioId={municipioId}
+              canApprove={canApprove}
+              canCreate={canCreate}
+            />
+          )}
         </>
       )}
     </div>
