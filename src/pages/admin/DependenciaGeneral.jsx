@@ -794,7 +794,7 @@ function CalendarioEscolarTab() {
 
 export default function DependenciaGeneral() {
   const { tipo } = useParams()
-  const { hasRole } = useAuth()
+  const { perfil, hasRole } = useAuth()
   const qc = useQueryClient()
   // useEffectiveMunicipioId resuelve el municipio destino — para
   // superadmin (perfil.municipio_id null) cae al primer municipio
@@ -803,16 +803,44 @@ export default function DependenciaGeneral() {
   const canEditInv  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
+  const esDirector  = hasRole(['admin_comuna', 'superadmin'])
 
   const { data: dep, isLoading } = useDependenciaByTipo(tipo)
   const [tab, setTab] = useState('info')
   const [modalOpen, setModalOpen] = useState(false)
 
+  // Permisos por dependencia desde dependencias_acceso del perfil.
+  // Directores pasan todo true por rol. Para usuarios sub se busca
+  // la fila del array por dependencia_id; falta de fila = sin acceso.
+  const miAcceso = useMemo(() => {
+    if (!dep) return null
+    return (perfil?.dependencias_acceso ?? []).find(d => d?.dependencia_id === dep.id) ?? null
+  }, [perfil, dep])
+  const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
+  const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
+
   const extraKey = useMemo(() => extraTabKey(tipo), [tipo])
+  // Filtramos tabs según permisos. "info" siempre visible (es
+  // contexto básico). Las demás se gating según puede_gestionar /
+  // puede_administrar.
   const tabs = useMemo(() => {
-    if (!extraKey) return TABS_BASE
-    return [...TABS_BASE, { value: extraKey, label: EXTRA_TAB_LABELS[extraKey] }]
-  }, [extraKey])
+    const completo = extraKey
+      ? [...TABS_BASE, { value: extraKey, label: EXTRA_TAB_LABELS[extraKey] }]
+      : TABS_BASE
+    return completo.filter(t => {
+      if (t.value === 'info')          return true
+      if (t.value === 'administracion') return puedeAdministrar
+      // turnos / inventario / contacto / beneficiarios / reclamos
+      // (extras) → gestión.
+      return puedeGestionar
+    })
+  }, [extraKey, puedeGestionar, puedeAdministrar])
+
+  // Si el tab seleccionado no está en la lista filtrada (cambio de
+  // permisos), caemos al primero visible para el render sin tocar
+  // el state — preserva la selección original si los permisos se
+  // restauran sin recargar.
+  const tabActivo = tabs.some(t => t.value === tab) ? tab : (tabs[0]?.value ?? 'info')
 
   return (
     <div className="space-y-5">
@@ -844,11 +872,11 @@ export default function DependenciaGeneral() {
 
       {!isLoading && dep && (
         <>
-          <Tabs tabs={tabs} value={tab} onChange={setTab} />
+          <Tabs tabs={tabs} value={tabActivo} onChange={setTab} />
           <div>
-            {tab === 'info'           && <InformacionTab dep={dep} />}
-            {tab === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
-            {tab === 'administracion' && (
+            {tabActivo === 'info'           && <InformacionTab dep={dep} />}
+            {tabActivo === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
+            {tabActivo === 'administracion' && (
               <AdministracionTab
                 dependenciaId={dep.id}
                 dependenciaNombre={dep.nombre}
@@ -857,12 +885,12 @@ export default function DependenciaGeneral() {
                 canCreate={canCreate}
               />
             )}
-            {tab === 'inventario'     && <InventarioTab dep={dep} municipioId={municipioId} canEdit={canEditInv} />}
-            {tab === 'contacto'       && <ContactoTab dep={dep} />}
-            {tab === 'beneficiarios' && <BeneficiariosTab municipioId={municipioId} />}
-            {tab === 'reclamos'      && <ReclamosTab      municipioId={municipioId} />}
-            {tab === 'reservas'      && <ReservasCanchasTab />}
-            {tab === 'calendario'    && <CalendarioEscolarTab />}
+            {tabActivo === 'inventario'     && <InventarioTab dep={dep} municipioId={municipioId} canEdit={canEditInv} />}
+            {tabActivo === 'contacto'       && <ContactoTab dep={dep} />}
+            {tabActivo === 'beneficiarios'  && <BeneficiariosTab municipioId={municipioId} />}
+            {tabActivo === 'reclamos'       && <ReclamosTab      municipioId={municipioId} />}
+            {tabActivo === 'reservas'       && <ReservasCanchasTab />}
+            {tabActivo === 'calendario'     && <CalendarioEscolarTab />}
           </div>
 
           <NuevoTurnoModal

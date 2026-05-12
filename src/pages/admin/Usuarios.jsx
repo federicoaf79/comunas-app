@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -7,6 +7,7 @@ import { useDependencias } from '../../hooks/useTurnos'
 import Spinner from '../../components/ui/Spinner'
 import Select from '../../components/ui/Select'
 import Button from '../../components/ui/Button'
+import Tabs from '../../components/ui/Tabs'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import UsuarioInvitarModal from '../../components/admin/UsuarioInvitarModal'
 import { dateOf } from '../../lib/datetime'
@@ -79,12 +80,24 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, nombre, email, activo, created_at')
+    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, created_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
   if (error) throw error
   return data ?? []
+}
+
+// Reemplaza el array completo de `dependencias_acceso` para un
+// usuario. Es la única operación de escritura del Tablero de
+// permisos — cada cambio de celda dispara una mutación con el
+// array recomputado client-side.
+async function updateDependenciasAcceso(id, dependencias_acceso) {
+  const { error } = await supabase
+    .from('usuarios')
+    .update({ dependencias_acceso })
+    .eq('id', id)
+  if (error) throw error
 }
 
 async function updateUsuarioRol(id, nuevoRol) {
@@ -174,6 +187,7 @@ export default function Usuarios() {
     [perfil],
   )
 
+  const [view, setView]                 = useState('lista') // 'lista' | 'permisos'
   const [filtroRol, setFiltroRol]       = useState('')
   const [filtroEstado, setFiltroEstado] = useState('')
   const [modalOpen, setModalOpen]       = useState(false)
@@ -220,6 +234,16 @@ export default function Usuarios() {
       return true
     })
   }, [usuariosQ.data, filtroRol, filtroEstado])
+
+  // Catálogo de dependencias activas — la matriz de permisos usa
+  // estas como columnas. Filtramos por activa para no contaminar
+  // con dependencias soft-eliminadas.
+  // OJO: este useMemo debe vivir ANTES del early-return de
+  // canManageUsers para no romper rules-of-hooks.
+  const depsActivas = useMemo(
+    () => (dependencias ?? []).filter(d => d.activa !== false),
+    [dependencias],
+  )
 
   function puedeEditarUsuario(u) {
     if (!canManageUsers) return false
@@ -268,33 +292,24 @@ export default function Usuarios() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Usuarios</h1>
           <p className="text-sm text-primary-400">
-            Gestión de usuarios y roles del municipio.
+            Gestión de usuarios, roles y permisos por dependencia.
           </p>
         </div>
-        <Button onClick={() => { setError(''); setModalOpen(true) }}>
-          + Invitar usuario
-        </Button>
+        {view === 'lista' && (
+          <Button onClick={() => { setError(''); setModalOpen(true) }}>
+            + Invitar usuario
+          </Button>
+        )}
       </header>
 
-      <div className="flex flex-wrap gap-3">
-        <Select
-          value={filtroRol}
-          onChange={setFiltroRol}
-          placeholder="Todos los roles"
-          options={FILTRO_ROL_OPTS}
-          className="min-w-[200px]"
-        />
-        <Select
-          value={filtroEstado}
-          onChange={setFiltroEstado}
-          placeholder="Todos los estados"
-          options={FILTRO_ESTADO_OPTS}
-          className="min-w-[180px]"
-        />
-        <p className="self-end text-xs text-primary-400">
-          {total} usuario{total === 1 ? '' : 's'}
-        </p>
-      </div>
+      <Tabs
+        tabs={[
+          { value: 'lista',    label: 'Lista de usuarios' },
+          { value: 'permisos', label: 'Tablero de permisos' },
+        ]}
+        value={view}
+        onChange={setView}
+      />
 
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
@@ -302,7 +317,38 @@ export default function Usuarios() {
         </div>
       )}
 
-      {usuariosQ.isLoading ? (
+      {view === 'permisos' && (
+        <TableroPermisos
+          usuarios={usuariosQ.data ?? []}
+          dependencias={depsActivas}
+          isLoading={usuariosQ.isLoading}
+          onError={setError}
+        />
+      )}
+
+      {view === 'lista' && (
+        <div className="flex flex-wrap gap-3">
+          <Select
+            value={filtroRol}
+            onChange={setFiltroRol}
+            placeholder="Todos los roles"
+            options={FILTRO_ROL_OPTS}
+            className="min-w-[200px]"
+          />
+          <Select
+            value={filtroEstado}
+            onChange={setFiltroEstado}
+            placeholder="Todos los estados"
+            options={FILTRO_ESTADO_OPTS}
+            className="min-w-[180px]"
+          />
+          <p className="self-end text-xs text-primary-400">
+            {total} usuario{total === 1 ? '' : 's'}
+          </p>
+        </div>
+      )}
+
+      {view === 'lista' && (usuariosQ.isLoading ? (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       ) : usuariosQ.error ? (
         <div className="card border-red-100 bg-red-50 p-4 text-sm text-danger">
@@ -379,7 +425,7 @@ export default function Usuarios() {
             })}
           </tbody>
         </Table>
-      )}
+      ))}
 
       <UsuarioInvitarModal
         open={modalOpen}
@@ -389,6 +435,197 @@ export default function Usuarios() {
         rolesAsignables={rolesAsignables}
         dependencias={dependencias}
       />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Tablero matricial de permisos por dependencia
+//
+// Una fila por usuario (sin superadmin), una columna por
+// dependencia activa. Cada celda es un <select> con 4 opciones:
+//
+//   ''   → Sin acceso (remove del array)
+//   'g'  → Solo gestión          (puede_gestionar=true,  admin=false)
+//   'a'  → Solo administración   (puede_gestionar=false, admin=true)
+//   'ga' → Gestión + administr.  (ambos true)
+//
+// Los `admin_comuna` muestran "Director — acceso total" en todas
+// las celdas, no editable: ya tienen todo por rol.
+// ─────────────────────────────────────────────────────────────────
+
+const PERMISO_OPCIONES = [
+  { value: '',   label: '— Sin acceso' },
+  { value: 'g',  label: '👁 Solo gestión' },
+  { value: 'a',  label: '💰 Solo administración' },
+  { value: 'ga', label: '✅ Gestión + administración' },
+]
+
+// Deriva el code 'g'|'a'|'ga'|null a partir del row del array.
+function accesoCode(row) {
+  if (!row) return ''
+  const g = !!row.puede_gestionar
+  const a = !!row.puede_administrar
+  if (g && a) return 'ga'
+  if (g)      return 'g'
+  if (a)      return 'a'
+  return ''
+}
+
+// Construye un nuevo array `dependencias_acceso` para el usuario
+// reemplazando la entrada con `dependencia_id`. Si `code` es ''
+// (sin acceso), remueve la entrada por completo.
+function rebuildAcceso(actual, dependenciaId, code) {
+  const base = Array.isArray(actual) ? actual.filter(d => d?.dependencia_id !== dependenciaId) : []
+  if (!code) return base
+  return [...base, {
+    dependencia_id:    dependenciaId,
+    puede_gestionar:   code === 'g'  || code === 'ga',
+    puede_administrar: code === 'a'  || code === 'ga',
+  }]
+}
+
+function TableroPermisos({ usuarios, dependencias, isLoading, onError }) {
+  const qc = useQueryClient()
+  const [ok, setOk] = useState('')
+  const [savingKey, setSavingKey] = useState(null) // `${userId}-${depId}` mientras escribe
+
+  // Toast de éxito autoclear 2s.
+  useEffect(() => {
+    if (!ok) return
+    const t = setTimeout(() => setOk(''), 2000)
+    return () => clearTimeout(t)
+  }, [ok])
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, dependencias_acceso }) =>
+      updateDependenciasAcceso(id, dependencias_acceso),
+    onMutate:  (vars) => setSavingKey(`${vars.id}-${vars._depId}`),
+    onSettled: () => setSavingKey(null),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-usuarios'] })
+      setOk('✓ Permisos actualizados')
+    },
+    onError: (e) => onError?.(e?.message ?? 'No pudimos guardar los permisos.'),
+  })
+
+  // Filas: excluyo a los superadmin del tablero (acceso global por
+  // rol, no por celda). admin_comuna se muestra como "Director".
+  const filas = useMemo(() => {
+    return (usuarios ?? [])
+      .filter(u => !u.roles?.includes('superadmin'))
+      .filter(u => u.activo !== false)
+      .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+  }, [usuarios])
+
+  function handleCambio(u, dep, codeNuevo) {
+    onError?.('')
+    const nextArr = rebuildAcceso(u.dependencias_acceso, dep.id, codeNuevo)
+    updateMut.mutate({
+      id: u.id,
+      dependencias_acceso: nextArr,
+      _depId: dep.id,
+    })
+  }
+
+  if (isLoading) {
+    return <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+  }
+  if (filas.length === 0) {
+    return (
+      <div className="card p-10 text-center text-sm text-primary-400">
+        No hay usuarios activos para mostrar en el tablero.
+      </div>
+    )
+  }
+  if (dependencias.length === 0) {
+    return (
+      <div className="card p-10 text-center text-sm text-primary-400">
+        Este municipio no tiene dependencias activas. Cargá al menos una para
+        configurar permisos por área.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {ok && (
+        <div className="inline-flex rounded-md border border-ok-100 bg-ok-50 px-3 py-1.5 text-xs font-medium text-ok-700">
+          {ok}
+        </div>
+      )}
+      <p className="text-xs text-primary-400">
+        Cada celda guarda al cambiar — no hay botón global. Los
+        <b className="ml-1 mr-1">admin de comuna</b> tienen acceso total a todas
+        las dependencias por rol; el superadmin no aparece en el tablero.
+      </p>
+
+      <Table>
+        <THead>
+          <Tr>
+            <Th className="sticky left-0 z-10 bg-primary-50 min-w-[200px]">
+              Usuario / Rol global
+            </Th>
+            {dependencias.map(d => (
+              <Th key={d.id} className="min-w-[180px]">
+                <span className="block truncate" title={d.nombre}>
+                  {d.nombre}
+                </span>
+                {d.tipo && (
+                  <span className="block text-[10px] font-normal uppercase tracking-wider text-primary-400">
+                    {d.tipo}
+                  </span>
+                )}
+              </Th>
+            ))}
+          </Tr>
+        </THead>
+        <tbody>
+          {filas.map(u => {
+            const rol = rolPrincipal(u.roles)
+            const esDirector = rol === 'admin_comuna'
+            return (
+              <Tr key={u.id}>
+                <Td className="sticky left-0 z-10 bg-white min-w-[200px]">
+                  <p className="font-medium text-primary">{u.nombre || '—'}</p>
+                  <p className="text-xs text-primary-400">
+                    {ROLE_LABEL[rol] ?? rol ?? 'Sin rol'}
+                  </p>
+                </Td>
+                {dependencias.map(d => {
+                  const key = `${u.id}-${d.id}`
+                  const saving = savingKey === key && updateMut.isPending
+                  if (esDirector) {
+                    return (
+                      <Td key={d.id} className="text-center">
+                        <span className="inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700 ring-1 ring-inset ring-accent-100">
+                          Director · acceso total
+                        </span>
+                      </Td>
+                    )
+                  }
+                  const row = (u.dependencias_acceso ?? []).find(x => x?.dependencia_id === d.id)
+                  const value = accesoCode(row)
+                  return (
+                    <Td key={d.id}>
+                      <select
+                        value={value}
+                        disabled={saving}
+                        onChange={e => handleCambio(u, d, e.target.value)}
+                        className="input-field py-1 text-xs disabled:opacity-50"
+                      >
+                        {PERMISO_OPCIONES.map(o => (
+                          <option key={o.value || 'none'} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </Td>
+                  )
+                })}
+              </Tr>
+            )
+          })}
+        </tbody>
+      </Table>
     </div>
   )
 }

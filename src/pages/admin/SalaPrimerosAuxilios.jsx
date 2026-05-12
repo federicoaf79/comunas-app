@@ -64,9 +64,10 @@ function ymdLocal(d) {
 
 export default function SalaPrimerosAuxilios() {
   const navigate = useNavigate()
-  const { hasRole } = useAuth()
+  const { perfil, hasRole } = useAuth()
   const municipioId = useEffectiveMunicipioId()
-  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const esDirector  = hasRole(['admin_comuna', 'superadmin'])
+  const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
   const [tab, setTab] = useState('agenda')
@@ -81,6 +82,24 @@ export default function SalaPrimerosAuxilios() {
   const depSaludQ  = useDependenciaByTipo('caps')
   const dependenciaSaludId = depSaludQ.data?.id ?? null
   const depSaludNombre     = depSaludQ.data?.nombre ?? null
+
+  // Gating por dependencias_acceso. Directores ven todo; otros roles
+  // ven Agenda solo si tienen `puede_gestionar` y Administración solo
+  // si tienen `puede_administrar` para esta dep.
+  const miAcceso = useMemo(() => {
+    if (!dependenciaSaludId) return null
+    return (perfil?.dependencias_acceso ?? [])
+      .find(d => d?.dependencia_id === dependenciaSaludId) ?? null
+  }, [perfil, dependenciaSaludId])
+  const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
+  const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
+  const tabsVisibles = useMemo(() => TABS_SALA.filter(t => {
+    if (t.value === 'administracion') return puedeAdministrar
+    return puedeGestionar
+  }), [puedeGestionar, puedeAdministrar])
+  const tabActivo = tabsVisibles.some(t => t.value === tab)
+    ? tab
+    : (tabsVisibles[0]?.value ?? 'agenda')
 
   // Vista día: turnos reales del día actual (Supabase). Si la
   // dependencia de salud está resuelta, filtramos por ella.
@@ -112,7 +131,7 @@ export default function SalaPrimerosAuxilios() {
           <h1 className="text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
           <p className="text-sm text-primary-400">Agenda — CAPS Real Sayana</p>
         </div>
-        {tab === 'agenda' && (
+        {tabActivo === 'agenda' && (
           <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
             <button
               onClick={() => setVista('dia')}
@@ -134,9 +153,9 @@ export default function SalaPrimerosAuxilios() {
         )}
       </header>
 
-      <Tabs tabs={TABS_SALA} value={tab} onChange={setTab} />
+      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
 
-      {tab === 'administracion' && (
+      {tabActivo === 'administracion' && (
         <AdministracionTab
           dependenciaId={dependenciaSaludId}
           dependenciaNombre={depSaludNombre}
@@ -146,7 +165,7 @@ export default function SalaPrimerosAuxilios() {
         />
       )}
 
-      {tab === 'agenda' && <>
+      {tabActivo === 'agenda' && <>
       {/* Médico de guardia (común a ambas vistas) */}
       <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
         <div className="flex items-center gap-4">

@@ -416,9 +416,10 @@ function TarifasTab() {
 // ─────────────────────────────────────────────────────────────────
 
 export default function SUM() {
-  const { hasRole } = useAuth()
+  const { perfil, hasRole } = useAuth()
   const municipioId = useEffectiveMunicipioId()
-  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const esDirector  = hasRole(['admin_comuna', 'superadmin'])
+  const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
   const [tab, setTab] = useState('calendario')
@@ -426,6 +427,22 @@ export default function SUM() {
   // superadmin (municipio_id = null), useDependenciaByTipo cae a la
   // primera dependencia activa con ese tipo en cualquier municipio.
   const { data: depSum = null, isLoading: depsLoading } = useDependenciaByTipo('sum')
+
+  // Gating por dependencias_acceso. Directores ven todo.
+  const miAcceso = useMemo(() => {
+    if (!depSum) return null
+    return (perfil?.dependencias_acceso ?? []).find(d => d?.dependencia_id === depSum.id) ?? null
+  }, [perfil, depSum])
+  const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
+  const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
+  const tabsVisibles = useMemo(() => TABS.filter(t => {
+    if (t.value === 'administracion') return puedeAdministrar
+    if (t.value === 'tarifas')        return true  // info pública, siempre visible
+    return puedeGestionar
+  }), [puedeGestionar, puedeAdministrar])
+  const tabActivo = tabsVisibles.some(t => t.value === tab)
+    ? tab
+    : (tabsVisibles[0]?.value ?? 'calendario')
 
   return (
     <div className="space-y-5">
@@ -436,13 +453,13 @@ export default function SUM() {
         </p>
       </header>
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
 
       {depsLoading && (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       )}
 
-      {!depsLoading && !depSum && tab !== 'tarifas' && (
+      {!depsLoading && !depSum && tabActivo !== 'tarifas' && (
         <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
           <p className="font-semibold">No hay un SUM configurado en este municipio.</p>
           <p className="mt-1 text-xs">
@@ -453,10 +470,10 @@ export default function SUM() {
 
       {!depsLoading && (
         <>
-          {tab === 'reservas'       && depSum && <ReservasTab depSum={depSum} canApprove={canApprove} />}
-          {tab === 'calendario'     && depSum && <CalendarioTab />}
-          {tab === 'tarifas'                  && <TarifasTab />}
-          {tab === 'administracion' && depSum && (
+          {tabActivo === 'reservas'       && depSum && <ReservasTab depSum={depSum} canApprove={canApprove} />}
+          {tabActivo === 'calendario'     && depSum && <CalendarioTab />}
+          {tabActivo === 'tarifas'                  && <TarifasTab />}
+          {tabActivo === 'administracion' && depSum && (
             <AdministracionTab
               dependenciaId={depSum.id}
               dependenciaNombre={depSum.nombre}

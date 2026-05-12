@@ -321,9 +321,10 @@ function ConsultasTab({ depJuez }) {
 
 export default function JuezDePaz() {
   const qc = useQueryClient()
-  const { hasRole } = useAuth()
+  const { perfil, hasRole } = useAuth()
   const municipioId = useEffectiveMunicipioId()
-  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const esDirector  = hasRole(['admin_comuna', 'superadmin'])
+  const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
   const [tab, setTab] = useState('semana')
   const [modalOpen, setModalOpen] = useState(false)
@@ -332,6 +333,21 @@ export default function JuezDePaz() {
   // es superadmin (municipio_id = null), useDependenciaByTipo cae a
   // la primera dependencia activa con ese tipo en cualquier municipio.
   const { data: depJuez = null, isLoading: depsLoading } = useDependenciaByTipo('juzgado')
+
+  // Gating de tabs por dependencias_acceso. Directores ven todo.
+  const miAcceso = useMemo(() => {
+    if (!depJuez) return null
+    return (perfil?.dependencias_acceso ?? []).find(d => d?.dependencia_id === depJuez.id) ?? null
+  }, [perfil, depJuez])
+  const puedeGestionar   = esDirector || !!miAcceso?.puede_gestionar
+  const puedeAdministrar = esDirector || !!miAcceso?.puede_administrar
+  const tabsVisibles = useMemo(() => TABS.filter(t => {
+    if (t.value === 'administracion') return puedeAdministrar
+    return puedeGestionar
+  }), [puedeGestionar, puedeAdministrar])
+  const tabActivo = tabsVisibles.some(t => t.value === tab)
+    ? tab
+    : (tabsVisibles[0]?.value ?? 'semana')
 
   return (
     <div className="space-y-5">
@@ -342,7 +358,7 @@ export default function JuezDePaz() {
         </p>
       </header>
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      <Tabs tabs={tabsVisibles} value={tabActivo} onChange={setTab} />
 
       {depsLoading && (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
@@ -359,10 +375,10 @@ export default function JuezDePaz() {
 
       {!depsLoading && depJuez && (
         <>
-          {tab === 'dia'            && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
-          {tab === 'semana'         && <AgendaSemanalTab depJuez={depJuez} />}
-          {tab === 'consultas'      && <ConsultasTab depJuez={depJuez} />}
-          {tab === 'administracion' && (
+          {tabActivo === 'dia'            && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
+          {tabActivo === 'semana'         && <AgendaSemanalTab depJuez={depJuez} />}
+          {tabActivo === 'consultas'      && <ConsultasTab depJuez={depJuez} />}
+          {tabActivo === 'administracion' && (
             <AdministracionTab
               dependenciaId={depJuez.id}
               dependenciaNombre={depJuez.nombre}

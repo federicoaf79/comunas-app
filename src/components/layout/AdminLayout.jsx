@@ -273,11 +273,28 @@ function SidebarDepLink({ tipo, label }) {
 // un módulo propio. Sin header, sin separador previo y sin grupos
 // anidados — todas las dependencias aparecen como NavLinks
 // consecutivos en el nav principal, al mismo nivel que el resto.
+//
+// Gating por dependencias_acceso del perfil:
+//   - admin_comuna / superadmin → ven todas las dependencias (es el
+//     comportamiento default — no se filtra).
+//   - Otros roles → solo ven las dependencias cuyo `id` aparece en
+//     perfil.dependencias_acceso[].dependencia_id. Si el array está
+//     vacío o no existe, no muestran ninguna.
 function DependenciasFlat() {
   const { data: deps = [], isLoading } = useDependencias()
+  const { perfil, hasRole } = useAuth()
+  const esDirector = hasRole(['admin_comuna', 'superadmin'])
+
+  // Set de UUIDs a los que el usuario tiene acceso explícito.
+  const misDepIds = useMemo(() => {
+    const arr = perfil?.dependencias_acceso ?? []
+    return new Set(arr.map(d => d?.dependencia_id).filter(Boolean))
+  }, [perfil])
 
   // Dedupe por TIPO + orden alfabético. Mantenemos la exclusión de
   // los tipos que ya tienen módulo top-level (Sala/Juez/SUM/etc).
+  // Para no-directores filtramos a las dependencias cuyo `id` está
+  // en su `dependencias_acceso`.
   const items = useMemo(() => {
     const seenTipo = new Set()
     const out = []
@@ -286,13 +303,14 @@ function DependenciasFlat() {
       const t = (d.tipo ?? '').toLowerCase().trim()
       if (!t) continue
       if (TIPOS_CON_MODULO_PROPIO.has(t)) continue
+      if (!esDirector && !misDepIds.has(d.id)) continue
       if (seenTipo.has(t)) continue
       seenTipo.add(t)
       out.push({ tipo: t, label: LABEL_BY_TIPO[t] ?? d.nombre })
     }
     out.sort((a, b) => a.label.localeCompare(b.label))
     return out
-  }, [deps])
+  }, [deps, esDirector, misDepIds])
 
   if (isLoading || items.length === 0) return null
 
