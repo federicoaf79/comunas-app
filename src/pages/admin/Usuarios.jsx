@@ -506,6 +506,124 @@ function savedFlag(usuario, depId, kind) {
   return kind === 'gestion' ? !!r?.puede_gestionar : !!r?.puede_administrar
 }
 
+// Truncado para mostrar nombres en chips estrechos.
+function nombreCorto(nombre, max = 12) {
+  const n = (nombre ?? '').trim()
+  if (n.length <= max) return n
+  return n.slice(0, max - 1).trimEnd() + '…'
+}
+
+function nivelDeAcceso(row) {
+  if (!row) return null
+  const g = !!row.puede_gestionar
+  const a = !!row.puede_administrar
+  if (g && a) return 'G+A'
+  if (g)      return 'G'
+  if (a)      return 'A'
+  return null
+}
+
+// Resuelve dep por id. La buscamos en el array completo de
+// dependencias del municipio para poder mostrar nombre + tipo.
+function getDependenciaPorId(depId, dependencias) {
+  if (!depId || !Array.isArray(dependencias)) return null
+  return dependencias.find(d => d?.id === depId) ?? null
+}
+
+// Chips inline con resumen de las dependencias asignadas a un
+// usuario. Muestra hasta 2 chips + botón "+N más" que abre un
+// popover con el listado completo. El director ve un mensaje fijo
+// porque su rol le da acceso total (sin necesidad de filas en
+// dependencias_acceso).
+function ResumenDependenciasUsuario({
+  usuario, dependencias, isDirector, popoverOpen, onTogglePopover,
+}) {
+  const filas = useMemo(() => {
+    if (isDirector) return []
+    const raw = Array.isArray(usuario?.dependencias_acceso) ? usuario.dependencias_acceso : []
+    return raw
+      .map(r => {
+        const dep = getDependenciaPorId(r?.dependencia_id, dependencias)
+        if (!dep) return null
+        return { dep, nivel: nivelDeAcceso(r) }
+      })
+      .filter(f => f && f.nivel)
+      .sort((a, b) => (a.dep.nombre ?? '').localeCompare(b.dep.nombre ?? ''))
+  }, [usuario, dependencias, isDirector])
+
+  if (isDirector) {
+    return (
+      <p className="mt-1 text-[11px] italic text-accent-700">
+        Acceso total a todas las dependencias
+      </p>
+    )
+  }
+  if (filas.length === 0) {
+    return (
+      <p className="mt-1 text-[11px] text-primary-400">
+        Sin dependencias asignadas
+      </p>
+    )
+  }
+
+  const visibles = filas.slice(0, 2)
+  const extras   = filas.length - visibles.length
+
+  return (
+    <div className="relative mt-1 flex flex-wrap items-center gap-1.5">
+      {visibles.map(({ dep, nivel }) => (
+        <span
+          key={dep.id}
+          title={`${dep.nombre} · ${nivel}`}
+          className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-inset ring-primary-100"
+        >
+          <span className="text-primary-500" aria-hidden="true">
+            <DepIcon tipo={dep.tipo} className="h-3 w-3" />
+          </span>
+          <span className="truncate">{nombreCorto(dep.nombre)}</span>
+          <span className="rounded bg-white px-1 text-[9px] font-bold text-primary-700 ring-1 ring-inset ring-primary-100">
+            {nivel}
+          </span>
+        </span>
+      ))}
+      {extras > 0 && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onTogglePopover() }}
+          className="popover-trigger inline-flex items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-100 hover:bg-accent-100"
+        >
+          +{extras} más
+        </button>
+      )}
+      {popoverOpen && (
+        <div
+          className="popover-resumen absolute left-0 top-full z-50 mt-1.5 w-64 rounded-lg border border-border bg-white p-3 text-left shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-accent-700">
+            Dependencias asignadas
+          </p>
+          <ul className="space-y-1.5">
+            {filas.map(({ dep, nivel }) => (
+              <li key={dep.id} className="flex items-center gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary-500">
+                  <DepIcon tipo={dep.tipo} className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-primary">
+                  {dep.nombre}
+                </span>
+                <span className="rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-100">
+                  {nivel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PermisosPorPersona({
   usuarios, dependencias, isLoading,
   puedeEditarUsuario, onInvitar, onError,
@@ -521,12 +639,29 @@ function PermisosPorPersona({
   // la key se elimina (y si la fila queda vacía, también).
   const [cambiosPendientes, setCambiosPendientes] = useState({})
   const [saving, setSaving]                       = useState(false)
+  // Popover "+N más" — sólo uno abierto a la vez. Se cierra al
+  // clickear afuera (listener registrado más abajo) o al cambiar
+  // de empleado seleccionado.
+  const [popoverUserId, setPopoverUserId]         = useState(null)
 
   useEffect(() => {
     if (!okMsg) return
     const t = setTimeout(() => setOkMsg(''), 2000)
     return () => clearTimeout(t)
   }, [okMsg])
+
+  // Listener global para cerrar el popover al clickear afuera. Se
+  // registra solo mientras hay un popover abierto para evitar
+  // costo innecesario y se limpia en la cleanup del efecto.
+  useEffect(() => {
+    if (!popoverUserId) return
+    const handler = (e) => {
+      const inside = e.target.closest('.popover-resumen, .popover-trigger')
+      if (!inside) setPopoverUserId(null)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [popoverUserId])
 
   const candidatos = useMemo(() => {
     return (usuarios ?? [])
@@ -728,12 +863,21 @@ function PermisosPorPersona({
               const seleccionado = u.id === selectedId
               const isDirector   = rol === 'admin_comuna'
               const pending      = userHasPending(u.id)
+              const popoverOpen  = popoverUserId === u.id
+              // La card se vuelve <div role="button"> para poder
+              // anidar el botón "+N más" del resumen (HTML no
+              // permite buttons dentro de buttons).
+              const onActivate = () => { setSelectedId(u.id); onError?.('') }
               return (
-                <button
+                <div
                   key={u.id}
-                  type="button"
-                  onClick={() => { setSelectedId(u.id); onError?.('') }}
-                  className={`relative flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                  role="button"
+                  tabIndex={0}
+                  onClick={onActivate}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate() }
+                  }}
+                  className={`relative flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                     seleccionado
                       ? 'border-accent-300 bg-primary-50/60 ring-1 ring-accent-200'
                       : pending
@@ -762,8 +906,17 @@ function PermisosPorPersona({
                       </span>
                       <EstadoBadge activo={!!u.activo} />
                     </div>
+                    {/* Línea separadora antes del resumen de deps. */}
+                    <div className="mt-2 h-px w-full bg-border/70" aria-hidden="true" />
+                    <ResumenDependenciasUsuario
+                      usuario={u}
+                      dependencias={dependencias}
+                      isDirector={isDirector}
+                      popoverOpen={popoverOpen}
+                      onTogglePopover={() => setPopoverUserId(popoverOpen ? null : u.id)}
+                    />
                   </div>
-                </button>
+                </div>
               )
             })}
           </div>
