@@ -177,7 +177,10 @@ const EMPTY_FORM = {
   derivacion_destino: '',
 }
 
-function AtencionForm({ turno, atencion, municipioId, profesionalId }) {
+// Exportada — reusable desde AtencionDetalle (página full) además
+// del drawer. `extraSlot` renderiza contenido entre Indicaciones y
+// Próxima consulta (lo usa la página para meter Documentos).
+export function AtencionForm({ turno, atencion, municipioId, profesionalId, extraSlot = null }) {
   // Key remount: si cambia la atención persistida, el form se
   // re-monta con los valores correctos sin useEffect→setState.
   return (
@@ -187,11 +190,12 @@ function AtencionForm({ turno, atencion, municipioId, profesionalId }) {
       atencion={atencion}
       municipioId={municipioId}
       profesionalId={profesionalId}
+      extraSlot={extraSlot}
     />
   )
 }
 
-function AtencionFormInner({ turno, atencion, municipioId, profesionalId }) {
+function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraSlot }) {
   const [form, setForm] = useState(() => atencion ? {
     motivo:             atencion.motivo             ?? '',
     anamnesis:          atencion.anamnesis          ?? '',
@@ -331,6 +335,11 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId }) {
         onChange={v => set('indicaciones', v)}
         disabled={yaCerrada}
       />
+
+      {/* Slot opcional — el page-version pasa <DocumentosAtencion />
+          acá para que aparezca entre Indicaciones y Próxima consulta. */}
+      {extraSlot}
+
       <Input
         label="Próxima consulta (opcional)"
         type="date"
@@ -411,7 +420,7 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId }) {
 // Tab 2 — Insumos utilizados
 // ─────────────────────────────────────────────────────────────────
 
-function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
+export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
   const insumosQ   = useAtencionInsumos(atencion?.id)
   const catalogoQ  = useInsumosDisponibles({ municipioId, dependenciaId: dependenciaSaludId })
   const createMut  = useCreateAtencionInsumo()
@@ -562,7 +571,7 @@ function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
 // Tab 3 — Historia Clínica
 // ─────────────────────────────────────────────────────────────────
 
-function HCTab({ vecinoId, atencionActualId }) {
+export function HCTab({ vecinoId, atencionActualId }) {
   const hcQ = useAtencionesVecino(vecinoId, { limit: 50 })
   const [expandedId, setExpandedId] = useState(null)
 

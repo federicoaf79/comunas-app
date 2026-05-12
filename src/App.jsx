@@ -22,6 +22,7 @@ import VecinoDetail        from './pages/admin/VecinoDetail'
 import TablazoCross        from './pages/admin/TablazoCross'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
+import AtencionDetalle      from './pages/admin/AtencionDetalle'
 import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
 import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
@@ -115,7 +116,8 @@ const router = createBrowserRouter([
                   { path: '/admin/turnos',     element: <Navigate to="/admin/tablero" replace /> },
                   { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
-                  { path: '/admin/sala',       element: <SalaPrimerosAuxilios /> },
+                  { path: '/admin/sala',                       element: <SalaPrimerosAuxilios /> },
+                  { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { medicoGuardia } from '../../lib/mockData'
 import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
-import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
 import RecetaUploader from '../../components/hc/RecetaUploader'
-import AtencionDrawer from '../../components/admin/AtencionDrawer'
 import CalendarioSemanal, {
   COLOR_BY_SPEC,
   SPEC_LABEL,
@@ -55,15 +54,15 @@ function ymdLocal(d) {
 }
 
 export default function SalaPrimerosAuxilios() {
+  const navigate = useNavigate()
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
-  // Turno seleccionado → abre el drawer de atención clínica.
-  const [turnoSel, setTurnoSel] = useState(null)
 
-  const municipioId = useEffectiveMunicipioId()
-  // Dependencia de salud para filtrar el catálogo de insumos en el
-  // drawer + restringir las queries de turnos a la Sala PA.
+  // Dependencia de salud para restringir las queries de turnos a
+  // la Sala PA. La navegación a la página de atención lleva
+  // turno_id como param — el municipioId se resuelve dentro de
+  // AtencionDetalle.
   const depSaludQ  = useDependenciaByTipo('caps')
   const dependenciaSaludId = depSaludQ.data?.id ?? null
 
@@ -175,7 +174,7 @@ export default function SalaPrimerosAuxilios() {
                     <li key={t.id}>
                       <button
                         type="button"
-                        onClick={() => setTurnoSel(t)}
+                        onClick={() => navigate(`/admin/sala/atencion/${t.id}`)}
                         className="flex w-full flex-wrap items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-primary-50/50"
                       >
                         <span className="w-14 shrink-0 text-sm font-semibold text-primary">
@@ -269,14 +268,6 @@ export default function SalaPrimerosAuxilios() {
         </>
       )}
 
-      {turnoSel && (
-        <AtencionDrawer
-          turno={turnoSel}
-          dependenciaSaludId={dependenciaSaludId}
-          municipioId={municipioId}
-          onClose={() => setTurnoSel(null)}
-        />
-      )}
     </div>
   )
 }

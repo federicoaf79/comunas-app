@@ -279,6 +279,140 @@ export function useCloseAtencion() {
   })
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Documentos adjuntos (hc_documentos)
+//
+// Schema real: id, municipio_id, vecino_id, consulta_id, tipo,
+// descripcion, storage_path, mime_type, uploaded_by, created_at,
+// atencion_id (migration 20260511_atencion_documentos).
+//
+// `tipo` está restringido por check constraint a:
+//   ('estudio','receta','informe','imagen','otro')
+// El UI mapea "Derivación" → 'informe' para encajar.
+// ─────────────────────────────────────────────────────────────────
+
+const DOC_COLS = `
+  id, municipio_id, vecino_id, atencion_id, consulta_id,
+  tipo, descripcion, storage_path, mime_type, uploaded_by, created_at
+`
+
+export function useDocumentosAtencion(atencionId) {
+  return useQuery({
+    queryKey: ['hc-documentos', 'atencion', atencionId ?? '__none__'],
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from('hc_documentos')
+        .select(DOC_COLS)
+        .eq('atencion_id', atencionId)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []).map(d => ({
+        ...d,
+        public_url: publicUrlFor(d.storage_path),
+        nombre_archivo: filenameFromPath(d.storage_path),
+      }))
+    },
+    enabled: !!atencionId,
+  })
+}
+
+function filenameFromPath(path) {
+  if (!path) return ''
+  const idx = path.lastIndexOf('/')
+  return idx === -1 ? path : path.slice(idx + 1)
+}
+
+function publicUrlFor(path) {
+  if (!path) return null
+  const { data } = supabase.storage.from('documentos-hc').getPublicUrl(path)
+  return data?.publicUrl ?? null
+}
+
+// Sanitiza un filename para usarlo en el path del bucket: minúsculas,
+// guiones, sin acentos, sin caracteres raros. Conserva la extensión.
+function safeFilename(name) {
+  if (!name) return `doc-${Date.now()}`
+  const dot = name.lastIndexOf('.')
+  const base = (dot > 0 ? name.slice(0, dot) : name)
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'doc'
+  const ext = dot > 0 ? name.slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, '') : ''
+  return `${base}${ext}`
+}
+
+async function uploadDocumento({
+  file, atencionId, vecinoId, municipioId, uploadedBy,
+  tipo, descripcion,
+}) {
+  if (!file || !atencionId || !vecinoId || !municipioId) {
+    throw new Error('Faltan datos para subir el documento.')
+  }
+  const path = `${municipioId}/${vecinoId}/${atencionId}/${Date.now()}_${safeFilename(file.name)}`
+  const { error: upErr } = await supabase.storage
+    .from('documentos-hc')
+    .upload(path, file, {
+      contentType: file.type || 'application/octet-stream',
+      upsert:      false,
+    })
+  if (upErr) {
+    console.error('[useAtenciones] upload documento:', upErr)
+    throw new Error(upErr.message ?? 'No pudimos subir el archivo.')
+  }
+  const payload = {
+    municipio_id: municipioId,
+    vecino_id:    vecinoId,
+    atencion_id:  atencionId,
+    tipo,                                  // estudio|receta|informe|imagen|otro
+    descripcion:  descripcion?.trim() || null,
+    storage_path: path,
+    mime_type:    file.type || null,
+    uploaded_by:  uploadedBy ?? null,
+  }
+  const { data: row, error: insErr } = await supabase
+    .from('hc_documentos').insert(payload).select(DOC_COLS).single()
+  if (insErr) {
+    // Si el INSERT falla, el archivo quedó huérfano en storage.
+    // Best-effort cleanup.
+    await supabase.storage.from('documentos-hc').remove([path]).catch(() => {})
+    throw insErr
+  }
+  return row
+}
+
+export function useUploadDocumento() {
+  const qc = useQueryClient()
+  const { perfil } = useAuth()
+  return useMutation({
+    mutationFn: (vars) => uploadDocumento({ uploadedBy: perfil?.id, ...vars }),
+    onSuccess:  (row) => qc.invalidateQueries({ queryKey: ['hc-documentos', 'atencion', row.atencion_id] }),
+  })
+}
+
+async function deleteDocumento({ id, storagePath }) {
+  // Primero saco el archivo del bucket, después la fila. Si falla
+  // el storage seguimos con el delete de la fila para no dejar
+  // referencias colgadas.
+  if (storagePath) {
+    const { error } = await supabase.storage.from('documentos-hc').remove([storagePath])
+    if (error) console.warn('[useAtenciones] remove storage:', error.message)
+  }
+  const { error } = await supabase.from('hc_documentos').delete().eq('id', id)
+  if (error) throw error
+}
+
+export function useDeleteDocumento() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: deleteDocumento,
+    onSuccess:  (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['hc-documentos', 'atencion', vars.atencionId] })
+    },
+  })
+}
+
 // Helper: edad en años a partir de fecha_nac (YYYY-MM-DD).
 export function edadDesdeFechaNac(iso) {
   if (!iso) return null
