@@ -17,28 +17,71 @@ import { useAuth } from '../context/AuthContext'
 //   - whatsapp           text     (solo dígitos)
 // =============================================================
 
-const COLUMNS = 'id, municipio_id, nombre, tipo, capa, activo, descripcion_larga, servicios, fotos, canal_atencion, email_contacto, whatsapp'
+// Columnas opcionales (horario_atencion / telefono / direccion / slug)
+// se incluyen en el SELECT — si el municipio todavía no corrió la
+// migration 20260513_dependencias_portal_extras, PostgREST las
+// ignora con un error y caemos al SELECT base sin esos campos.
+const COLUMNS_BASE   = 'id, municipio_id, nombre, tipo, capa, activo, descripcion_larga, servicios, fotos, canal_atencion, email_contacto, whatsapp'
+const COLUMNS_EXTRA  = 'horario_atencion, telefono, direccion, slug'
+const COLUMNS        = `${COLUMNS_BASE}, ${COLUMNS_EXTRA}`
 
-// Lectura pública por `tipo` dentro de un municipio. Devuelve la
-// primer dependencia activa que matchee.
-export function useDependenciaPublica(tipo, municipioId) {
+// Normaliza un identificador para matcheo flexible: minúsculas, sin
+// acentos, sin espacios/guiones/underscores. "Alumbrado Público" y
+// "alumbrado-publico" colapsan al mismo string.
+function normalizar(s) {
+  return (s ?? '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[\s_\-/]+/g, '')
+}
+
+async function fetchDependenciasPublicas(municipioId) {
+  // Intento 1 — con columnas extra. Si el schema todavía no las tiene,
+  // Postgres devuelve un error 42703 y reintento con COLUMNS_BASE.
+  let q = supabaseAnon
+    .from('dependencias')
+    .select(COLUMNS)
+    .eq('activo', true)
+  if (municipioId) q = q.eq('municipio_id', municipioId)
+  let { data, error } = await q
+  if (error && /column.*does not exist|42703/i.test(error.message ?? '')) {
+    q = supabaseAnon
+      .from('dependencias')
+      .select(COLUMNS_BASE)
+      .eq('activo', true)
+    if (municipioId) q = q.eq('municipio_id', municipioId)
+    ;({ data, error } = await q)
+  }
+  if (error) {
+    console.warn('[useDependenciaPublica] error:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
+// Lectura pública por slug/tipo/nombre dentro de un municipio.
+// Matching flexible: normalizamos el input y cada candidato a una
+// versión sin acentos / sin separadores, y devolvemos la primera
+// dependencia activa cuyo slug, tipo o nombre coincida.
+export function useDependenciaPublica(slug, municipioId) {
   return useQuery({
-    queryKey: ['dependencia-publica', tipo ?? '__none__', municipioId ?? '__any__'],
+    queryKey: ['dependencia-publica', slug ?? '__none__', municipioId ?? '__any__'],
     queryFn:  async () => {
-      if (!tipo) return null
-      let q = supabaseAnon
-        .from('dependencias')
-        .select(COLUMNS)
-        .eq('tipo', tipo)
-        .eq('activo', true)
-        .limit(1)
-      if (municipioId) q = q.eq('municipio_id', municipioId)
-      const { data, error } = await q.maybeSingle()
-      if (error) {
-        console.warn('[useDependenciaPublica] error:', error.message)
-        return null
-      }
-      return data ?? null
+      if (!slug) return null
+      const candidatos = await fetchDependenciasPublicas(municipioId)
+      const target = normalizar(slug)
+      // Prioridad: slug exacto → tipo exacto → nombre exacto →
+      // contiene. La búsqueda parcial usa "incluye" para tolerar
+      // tipos compuestos (ej. "alumbrado" matchea "alumbrado_publico").
+      const match = candidatos.find(d => normalizar(d.slug) === target)
+                 ?? candidatos.find(d => normalizar(d.tipo) === target)
+                 ?? candidatos.find(d => normalizar(d.nombre) === target)
+                 ?? candidatos.find(d => {
+                       const nt = normalizar(d.tipo)
+                       return !!nt && (nt.includes(target) || target.includes(nt))
+                     })
+      return match ?? null
     },
     staleTime: 5 * 60 * 1000,
   })

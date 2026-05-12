@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   useFuentesRssAdmin, useUpsertFuentesRss,
 } from '../../hooks/useConfigPortal'
@@ -19,7 +20,6 @@ import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
-import Tabs from '../../components/ui/Tabs'
 import FuenteRssFormModal from '../../components/admin/FuenteRssFormModal'
 import AutoridadFormModal from '../../components/admin/AutoridadFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
@@ -27,20 +27,26 @@ import AdministracionTab from '../../components/admin/AdministracionTab'
 // =============================================================
 // Configuración del portal — CMS del Portal Ciudadano.
 //
-// 4 tabs:
-//   - Fuentes RSS    → configuracion_portal clave='fuentes_rss'
-//   - Autoridades    → tabla autoridades (CRUD)
-//   - Historia       → configuracion_portal clave='historia_municipio'
-//   - Dependencias   → tabla dependencias (UPDATE de campos públicos)
+// La página no renderiza una barra de tabs interna: navega entre
+// sub-secciones leyendo el ?tab= que pone el sidebar
+// (AdminLayout NavGroup "Portal Web").
+//
+// Secciones (?tab= → interno):
+//   sin ?tab / 'rss'   → 'rss'           Fuentes RSS
+//   'autoridades'      → 'autoridades'   CRUD autoridades
+//   'historia'         → 'historia'      Historia del municipio
+//   'dependencias'     → 'dependencias'  UPDATE campos públicos
+//   'admin'            → 'administracion' Tab financiero
 // =============================================================
 
-const TABS = [
-  { value: 'rss',            label: 'Fuentes RSS' },
-  { value: 'autoridades',    label: 'Autoridades' },
-  { value: 'historia',       label: 'Historia' },
-  { value: 'deps',           label: 'Dependencias' },
-  { value: 'administracion', label: 'Administración' },
-]
+const SECCION_LABEL = {
+  rss:            'Fuentes RSS',
+  autoridades:    'Autoridades',
+  historia:       'Historia',
+  dependencias:   'Dependencias',
+  administracion: 'Administración',
+}
+const SECCIONES_VALIDAS = new Set(Object.keys(SECCION_LABEL))
 
 // ─────────────────────────────────────────────────────────────────
 // TAB 1 · Fuentes RSS
@@ -817,14 +823,24 @@ export default function ConfigPortal() {
   // Administración muestra el empty state estándar — no rompe.
   const { data: depPortal = null } = useDependenciaByTipo('portal')
 
-  const [tab, setTab] = useState('rss')
+  // Lectura del ?tab= desde URL. Aliases:
+  //   'admin' → 'administracion'
+  //   sin ?tab → 'rss'
+  // Si el valor no está en SECCIONES_VALIDAS, cae a 'rss'.
+  const [searchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') || ''
+  const seccion  = tabParam === 'admin'
+    ? 'administracion'
+    : (SECCIONES_VALIDAS.has(tabParam) ? tabParam : 'rss')
 
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-primary">Configuración del portal</h1>
-        <p className="text-sm text-primary-400">
-          Settings y contenidos del Portal Ciudadano público.
+        <h1 className="font-sora text-2xl font-bold text-primary">Configuración del portal</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">Portal Web</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
         </p>
       </header>
 
@@ -835,13 +851,11 @@ export default function ConfigPortal() {
         </div>
       )}
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
-
-      {tab === 'rss'            && <TabFuentesRss sinMunicipio={sinMunicipio} />}
-      {tab === 'autoridades'    && <TabAutoridades municipioId={municipioId} sinMunicipio={sinMunicipio} />}
-      {tab === 'historia'       && <TabHistoria   municipioId={municipioId} sinMunicipio={sinMunicipio} />}
-      {tab === 'deps'           && <TabDependencias municipioId={municipioId} sinMunicipio={sinMunicipio} />}
-      {tab === 'administracion' && (
+      {seccion === 'rss'            && <TabFuentesRss sinMunicipio={sinMunicipio} />}
+      {seccion === 'autoridades'    && <TabAutoridades municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {seccion === 'historia'       && <TabHistoria   municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {seccion === 'dependencias'   && <TabDependencias municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {seccion === 'administracion' && (
         <AdministracionTab
           dependenciaId={depPortal?.id ?? null}
           dependenciaNombre={depPortal?.nombre ?? 'Portal Web'}

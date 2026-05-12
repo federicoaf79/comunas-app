@@ -1,55 +1,60 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
-import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
+import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPortal'
+import { useAuth } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
-// DependenciaPublica — página de detalle de una dependencia del
-// portal ciudadano. Ruta /portal/dependencia/:tipo.
+// DependenciaPublica — landing pública de una dependencia.
+// Ruta /portal/dependencia/:tipo (acepta también slug o nombre
+// normalizado — el match lo resuelve useDependenciaPublica).
 //
-// Renderiza:
-//   - Header con nombre + ícono grande + descripcion_larga
-//   - Galería de fotos (fotos[])
-//   - Servicios que ofrecemos (servicios[])
-//   - Cómo contactarnos (horario, tel, email, whatsapp, canal)
-//   - Botón "Sacar turno →" si la dep acepta turnos por su tipo
-//   - Botón "← Volver"
+// Secciones:
+//   1) Header con ícono + nombre + descripción + horario badge
+//   2) Servicios (con CTA admin si está vacío)
+//   3) Cómo contactarnos (horario, tel, email, WhatsApp, canal)
+//   4) Dónde encontrarnos (dirección + Google Maps embed)
+//   5) Fotos (si hay)
+//   6) Botones "Sacar turno" + "Volver al portal" arriba y abajo
+//   7) Banner gold para admin si la dep está vacía
 // =============================================================
 
-const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
+// Tipos de dependencia que aceptan turnos online — alineado con
+// DEP_OPTIONS de SacarTurnoFormPortal.
+const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin'])
 
-// Tipos de dependencia que aceptan turnos online — debe quedar
-// alineado con DEP_OPTIONS de SacarTurnoFormPortal.
-const TIPOS_CON_TURNOS = new Set(['caps', 'juzgado', 'sum', 'intendencia', 'admin'])
-
-// Detalle/horario por tipo (mismo descriptor que PortalPublico).
-// Usado solo como fallback de horario cuando la dependencia no
-// tiene info propia cargada.
-const DEP_DESCRIPTOR = {
-  salud:       { horario: 'Lun a Vie · 8:00 – 20:00' },
-  caps:        { horario: 'Lun a Vie · 8:00 – 20:00' },
-  juzgado:     { horario: 'Lun a Vie · 7:00 – 13:00' },
-  sum:         { horario: 'Reservas · consultar disponibilidad' },
-  intendencia: { horario: 'Lun a Vie · 7:00 – 13:00' },
-  admin:       { horario: 'Lun a Vie · 7:00 – 13:00' },
-  obras:       { horario: 'Lun a Vie · 7:00 – 13:00' },
-  deporte:     { horario: 'Consultar horarios' },
-  cementerio:  { horario: 'Todos los días · 8:00 – 18:00' },
-  velatorio:   { horario: 'Disponibilidad 24/7' },
-  policia:     { horario: '24/7 · 911 / 101' },
-  educacion:   { horario: 'Lun a Vie · 7:00 – 13:00' },
-  bienes:      { horario: 'Lun a Vie · 7:00 – 13:00' },
-  social:      { horario: 'Lun a Vie · 7:00 – 13:00' },
-  ayuda_social:{ horario: 'Lun a Vie · 7:00 – 13:00' },
+// Fallback de horario por tipo cuando la dependencia no tiene
+// `horario_atencion` cargado en la DB.
+const HORARIO_FALLBACK = {
+  salud:        'Lun a Vie · 8:00 – 20:00',
+  caps:         'Lun a Vie · 8:00 – 20:00',
+  juzgado:      'Lun a Vie · 7:00 – 13:00',
+  sum:          'Reservas · consultar disponibilidad',
+  intendencia:  'Lun a Vie · 7:00 – 13:00',
+  admin:        'Lun a Vie · 7:00 – 13:00',
+  obras:        'Lun a Vie · 7:00 – 13:00',
+  obras_publicas:'Lun a Vie · 7:00 – 13:00',
+  deporte:      'Consultar horarios',
+  polideportivo:'Consultar horarios',
+  cementerio:   'Todos los días · 8:00 – 18:00',
+  velatorio:    'Disponibilidad 24/7',
+  policia:      '24/7 · 911 / 101',
+  policial:     '24/7 · 911 / 101',
+  educacion:    'Lun a Vie · 7:00 – 13:00',
+  bienes:       'Lun a Vie · 7:00 – 13:00',
+  social:       'Lun a Vie · 7:00 – 13:00',
+  ayuda_social: 'Lun a Vie · 7:00 – 13:00',
+  alumbrado:    'Lun a Vie · 7:00 – 13:00',
+  verde:        'Lun a Vie · 7:00 – 13:00',
+  espacios_verdes:'Lun a Vie · 7:00 – 13:00',
 }
 
 // Ícono grande de cabecera. Conjunto reducido — los tipos que no
 // matchean caen al edificio genérico.
 function IconForTipo({ tipo, className = 'h-12 w-12' }) {
   const t = (tipo ?? '').toLowerCase()
-  const stroke = '1.4'
-  const common = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: stroke, 'aria-hidden': 'true', className }
+  const common = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '1.4', 'aria-hidden': 'true', className }
   if (/caps|salud|sala/.test(t)) return (
     <svg {...common}><circle cx="12" cy="12" r="9" /><path strokeLinecap="round" d="M12 8v8M8 12h8" /></svg>
   )
@@ -65,8 +70,23 @@ function IconForTipo({ tipo, className = 'h-12 w-12' }) {
   if (/obra|construc|infra|catastro/.test(t)) return (
     <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M3 18h18M5 18v-3a7 7 0 0 1 14 0v3M9 7v4M15 7v4M9 11h6" /></svg>
   )
-  if (/social|familia|comunidad|asisten/.test(t)) return (
-    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M9 11.5V8a2 2 0 1 1 4 0v6l3-1 2 1v3a2 2 0 0 1-2 2h-6l-4-4-2 1V8a2 2 0 1 1 4 0v3.5" /></svg>
+  if (/social|familia|comunidad|asisten|ayuda/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" /></svg>
+  )
+  if (/alumbrado|elect/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></svg>
+  )
+  if (/verde|parque|plaza|forestaci/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M11 20A7 7 0 0 1 4 13c0-6 6-9 16-9 0 6-3 16-9 16zM4 20l6-6" /></svg>
+  )
+  if (/polic|seguridad|defensa/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z" /></svg>
+  )
+  if (/cementerio|necr/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M8 21v-9a4 4 0 0 1 8 0v9M12 8V4M10 6h4M5 21h14" /></svg>
+  )
+  if (/educ|escuel|jardi|primaria|secundaria|biblioteca/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h7a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H3V5zM21 5h-7a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h7V5z" /></svg>
   )
   return (
     <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" /><path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" /></svg>
@@ -88,9 +108,6 @@ function Escudo({ className = 'h-9 w-9' }) {
   )
 }
 
-// Etiqueta humana del canal de atención. La columna en la DB es
-// libre — soportamos las 3 opciones del select + cualquier otro
-// valor a modo de fallback.
 function canalLabel(canal) {
   const c = (canal ?? '').toLowerCase()
   if (c === 'presencial') return 'Atención presencial'
@@ -99,14 +116,29 @@ function canalLabel(canal) {
   return canal ?? null
 }
 
-// Construye el link de WhatsApp con el formato que pidió el sprint:
-// https://wa.me/549{whatsapp}. Solo dígitos; si la entrada ya empieza
-// con 549 no lo duplicamos.
 function whatsappLink(whatsapp) {
   const digits = (whatsapp ?? '').replace(/[^0-9]/g, '')
   if (!digits) return null
   const prefixed = digits.startsWith('549') ? digits : `549${digits.replace(/^54/, '')}`
   return `https://wa.me/${prefixed}`
+}
+
+// Sanea el teléfono para tel:. Conserva +; descarta paréntesis, guiones, espacios.
+function telLink(tel) {
+  const t = (tel ?? '').replace(/[^\d+]/g, '')
+  return t || null
+}
+
+// Construye la URL del iframe de Google Maps embed. Cae al
+// nombre del municipio + provincia si la dependencia no tiene
+// dirección propia.
+function mapaEmbedUrl(direccion, muniDatos) {
+  const muniFallback = [muniDatos?.nombre, muniDatos?.provincia, 'Argentina']
+    .filter(Boolean).join(' ')
+  const q = (direccion && direccion.trim())
+    ? direccion.trim()
+    : (muniFallback || 'Argentina')
+  return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&output=embed`
 }
 
 function Lightbox({ src, onClose }) {
@@ -144,18 +176,46 @@ function Lightbox({ src, onClose }) {
   )
 }
 
+function BackLink({ extra = '' }) {
+  return (
+    <Link
+      to="/portal"
+      className={`inline-flex items-center gap-2 rounded-lg border-2 border-primary/30 bg-white px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white active:scale-95 ${extra}`}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+      </svg>
+      Volver al portal
+    </Link>
+  )
+}
+
 export default function DependenciaPublica() {
   const { tipo } = useParams()
   const { data: municipioId } = usePortalMunicipioId()
   const { data: dep, isLoading } = useDependenciaPublica(tipo, municipioId)
+  const { datos: muniDatos } = useDatosMunicipio()
+  const { perfil, hasRole } = useAuth()
+  const esAdmin = !!perfil && hasRole(['admin_comuna', 'superadmin', 'admin_portal'])
+
   const [lightbox, setLightbox] = useState(null)
+
+  const muniNombre = muniDatos?.nombre || 'Comisión Municipal Real Sayana'
+  const tipoMatch  = (dep?.tipo ?? tipo ?? '').toLowerCase()
 
   const servicios = Array.isArray(dep?.servicios) ? dep.servicios.filter(Boolean) : []
   const fotos     = Array.isArray(dep?.fotos)     ? dep.fotos.filter(Boolean)     : []
-  const horario   = DEP_DESCRIPTOR[tipo]?.horario ?? null
+  const horario   = dep?.horario_atencion || HORARIO_FALLBACK[tipoMatch] || null
+  const direccion = dep?.direccion || null
+  const telefono  = telLink(dep?.telefono)
   const waUrl     = whatsappLink(dep?.whatsapp)
   const canal     = canalLabel(dep?.canal_atencion)
-  const aceptaTurnos = TIPOS_CON_TURNOS.has(tipo)
+  const aceptaTurnos = TIPOS_CON_TURNOS.has(tipoMatch)
+
+  // Banner para admin si la landing está prácticamente vacía. Sirve
+  // para que el equipo se entere de que falta cargar contenido sin
+  // exponer ese mensaje al vecino.
+  const contenidoVacio = !dep?.descripcion_larga && servicios.length === 0 && fotos.length === 0
 
   return (
     <div className="min-h-svh bg-background">
@@ -164,7 +224,7 @@ export default function DependenciaPublica() {
           <Link to="/portal" className="flex items-center gap-3 text-white">
             <Escudo className="h-9 w-9 shrink-0" />
             <div className="leading-tight">
-              <p className="font-sora text-sm font-bold sm:text-base">{MUNICIPIO_NOMBRE}</p>
+              <p className="font-sora text-sm font-bold sm:text-base">{muniNombre}</p>
               <p className="text-[10px] font-medium uppercase tracking-wide text-white/60">
                 Portal Ciudadano
               </p>
@@ -196,17 +256,27 @@ export default function DependenciaPublica() {
             <p className="mt-2 text-sm text-primary-500">
               Es posible que el enlace haya cambiado o que la dependencia esté inactiva.
             </p>
-            <Link to="/portal" className="btn-primary mt-6 inline-flex">
-              ← Volver al portal
-            </Link>
+            <BackLink extra="mt-6" />
           </div>
         ) : (
           <>
-            {/* Header de la dependencia */}
+            {esAdmin && contenidoVacio && (
+              <div className="mb-6 rounded-xl border border-[#C9A84C]/40 bg-[#C9A84C]/10 p-4 text-sm text-primary-800">
+                <p className="font-sora font-semibold">Esta dependencia no tiene contenido configurado.</p>
+                <p className="mt-1 text-primary-700">
+                  Cargá descripción, servicios y fotos desde{' '}
+                  <Link to="/admin/config?tab=dependencias" className="font-semibold text-primary underline decoration-[#C9A84C] underline-offset-2 hover:text-primary-900">
+                    Portal Web → Dependencias →
+                  </Link>
+                </p>
+              </div>
+            )}
+
+            {/* ===== 1. Header de la dependencia ===== */}
             <section className="rounded-2xl border border-border bg-white p-6 shadow-card sm:p-10">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-7">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-primary text-accent sm:h-24 sm:w-24">
-                  <IconForTipo tipo={tipo} className="h-12 w-12 sm:h-14 sm:w-14" />
+                  <IconForTipo tipo={tipoMatch} className="h-12 w-12 sm:h-14 sm:w-14" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
@@ -220,11 +290,20 @@ export default function DependenciaPublica() {
                       {dep.descripcion_larga}
                     </p>
                   )}
+                  {horario && (
+                    <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-100">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                        <circle cx="12" cy="12" r="9" />
+                        <path strokeLinecap="round" d="M12 7v5l3 2" />
+                      </svg>
+                      {horario}
+                    </span>
+                  )}
                   {/* Botones de acción */}
                   <div className="mt-5 flex flex-wrap gap-3">
                     {aceptaTurnos && (
                       <Link
-                        to={`/portal/turno?dep=${encodeURIComponent(tipo)}`}
+                        to={`/portal/turno?dep=${encodeURIComponent(tipoMatch)}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-all hover:bg-accent-600 hover:text-white active:scale-95"
                       >
                         Sacar turno
@@ -233,63 +312,46 @@ export default function DependenciaPublica() {
                         </svg>
                       </Link>
                     )}
-                    <Link
-                      to="/portal"
-                      className="inline-flex items-center gap-2 rounded-lg border-2 border-primary/30 bg-white px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white active:scale-95"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-                      </svg>
-                      Volver
-                    </Link>
+                    <BackLink />
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Galería de fotos */}
-            {fotos.length > 0 && (
-              <section className="mt-8">
-                <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Fotos</h2>
-                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
-                  {fotos.map((url, i) => (
-                    <button
-                      key={url + i}
-                      type="button"
-                      onClick={() => setLightbox(url)}
-                      className="group relative overflow-hidden rounded-lg border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </section>
-            )}
-
             <div className="mt-8 grid gap-6 lg:grid-cols-2">
-              {/* Servicios */}
-              {servicios.length > 0 && (
-                <section className="rounded-xl border border-border bg-white p-6 shadow-card">
-                  <h2 className="font-sora text-xl font-bold text-primary">
-                    Servicios que ofrecemos
-                  </h2>
-                  <ul className="mt-4 space-y-2">
+              {/* ===== 2. Servicios ===== */}
+              <section className="rounded-xl border border-border bg-white p-6 shadow-card">
+                <h2 className="font-sora text-xl font-bold text-primary">
+                  Servicios que ofrecemos
+                </h2>
+                {servicios.length > 0 ? (
+                  <ul className="mt-4 space-y-2.5">
                     {servicios.map((s, i) => (
-                      <li key={s + i} className="flex items-start gap-2 text-sm text-primary-700">
-                        <span className="mt-1 inline-flex h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden="true" />
+                      <li key={s + i} className="flex items-start gap-2.5 text-sm text-primary-700">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-white" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="h-3 w-3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </span>
                         <span>{s}</span>
                       </li>
                     ))}
                   </ul>
-                </section>
-              )}
+                ) : esAdmin ? (
+                  <p className="mt-4 rounded-md border border-dashed border-[#C9A84C]/40 bg-[#C9A84C]/5 p-3 text-xs text-primary-700">
+                    Configurá los servicios desde{' '}
+                    <Link to="/admin/config?tab=dependencias" className="font-semibold underline decoration-[#C9A84C] underline-offset-2">
+                      Portal Web → Dependencias
+                    </Link>
+                  </p>
+                ) : (
+                  <p className="mt-4 text-sm text-primary-400">
+                    Próximamente vas a poder ver el detalle de los servicios.
+                  </p>
+                )}
+              </section>
 
-              {/* Contacto */}
+              {/* ===== 3. Contacto ===== */}
               <section className="rounded-xl border border-border bg-white p-6 shadow-card">
                 <h2 className="font-sora text-xl font-bold text-primary">
                   Cómo contactarnos
@@ -306,6 +368,21 @@ export default function DependenciaPublica() {
                       <dd className="text-primary-700">
                         <span className="block text-xs font-semibold uppercase tracking-wide text-primary-400">Horario</span>
                         <span>{horario}</span>
+                      </dd>
+                    </div>
+                  )}
+                  {telefono && (
+                    <div className="flex items-start gap-3">
+                      <dt className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                      </dt>
+                      <dd className="text-primary-700">
+                        <span className="block text-xs font-semibold uppercase tracking-wide text-primary-400">Teléfono</span>
+                        <a href={`tel:${telefono}`} className="hover:underline">
+                          {dep.telefono}
+                        </a>
                       </dd>
                     </div>
                   )}
@@ -338,7 +415,7 @@ export default function DependenciaPublica() {
                           href={waUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white"
+                          className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
                         >
                           Enviar mensaje
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
@@ -358,17 +435,87 @@ export default function DependenciaPublica() {
                       </dt>
                       <dd className="text-primary-700">
                         <span className="block text-xs font-semibold uppercase tracking-wide text-primary-400">Canal de atención</span>
-                        <span>{canal}</span>
+                        <span className="inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent-700 ring-1 ring-inset ring-accent-100">
+                          {canal}
+                        </span>
                       </dd>
                     </div>
                   )}
-                  {!horario && !dep.email_contacto && !waUrl && !canal && (
+                  {!horario && !telefono && !dep.email_contacto && !waUrl && !canal && (
                     <p className="text-sm text-primary-400">
                       Próximamente vas a poder contactarnos por más canales.
                     </p>
                   )}
                 </dl>
               </section>
+            </div>
+
+            {/* ===== 4. Dónde encontrarnos ===== */}
+            <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-card">
+              <h2 className="font-sora text-xl font-bold text-primary">
+                Dónde encontrarnos
+              </h2>
+              {direccion ? (
+                <p className="mt-2 text-sm text-primary-700">
+                  <span className="font-semibold">Dirección:</span> {direccion}
+                </p>
+              ) : (
+                <p className="mt-2 text-xs italic text-primary-400">
+                  Mostrando la ubicación general del municipio — esta dependencia no
+                  tiene una dirección específica cargada.
+                </p>
+              )}
+              <div className="mt-4 overflow-hidden rounded-lg border border-border">
+                <iframe
+                  title={`Mapa de ${dep.nombre}`}
+                  src={mapaEmbedUrl(direccion, muniDatos)}
+                  width="100%"
+                  height="240"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </section>
+
+            {/* ===== 5. Fotos ===== */}
+            {fotos.length > 0 && (
+              <section className="mt-8">
+                <h2 className="font-sora text-xl font-bold text-primary sm:text-2xl">Fotos</h2>
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
+                  {fotos.map((url, i) => (
+                    <button
+                      key={url + i}
+                      type="button"
+                      onClick={() => setLightbox(url)}
+                      className="group relative overflow-hidden rounded-lg border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* ===== 6. Botones inferiores ===== */}
+            <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+              <BackLink />
+              {aceptaTurnos && (
+                <Link
+                  to={`/portal/turno?dep=${encodeURIComponent(tipoMatch)}`}
+                  className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-all hover:bg-accent-600 hover:text-white active:scale-95"
+                >
+                  Sacar turno
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </Link>
+              )}
             </div>
           </>
         )}
