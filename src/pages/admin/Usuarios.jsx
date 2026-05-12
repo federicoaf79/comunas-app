@@ -125,58 +125,6 @@ async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id
 //   'info'     → tipo solo informativo, sin permisos asignables
 // ─────────────────────────────────────────────────────────────────
 
-const SECCIONES_POR_TIPO = {
-  caps:           [{ kind: 'gestion', label: 'Gestión',                  desc: 'Agenda, turnos y atención' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos, insumos y rendición' }],
-  salud:          [{ kind: 'gestion', label: 'Gestión',                  desc: 'Agenda, turnos y atención' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos, insumos y rendición' }],
-  juzgado:        [{ kind: 'gestion', label: 'Gestión',                  desc: 'Turnos, agenda y expedientes' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos y partidas' }],
-  sum:            [{ kind: 'gestion', label: 'Gestión',                  desc: 'Reservas y calendario' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del salón' }],
-  ayuda_social:   [{ kind: 'gestion', label: 'Gestión',                  desc: 'Beneficiarios y entregas' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos de Ayuda Social' }],
-  social:         [{ kind: 'gestion', label: 'Gestión',                  desc: 'Beneficiarios y entregas' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos de Ayuda Social' }],
-  obras:          [{ kind: 'gestion', label: 'Gestión',                  desc: 'Servicios y reclamos' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Presupuesto y compras' }],
-  obras_publicas: [{ kind: 'gestion', label: 'Gestión',                  desc: 'Servicios y reclamos' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Presupuesto y compras' }],
-  deporte:        [{ kind: 'gestion', label: 'Gestión',                  desc: 'Reservas de canchas' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del polideportivo' }],
-  polideportivo:  [{ kind: 'gestion', label: 'Gestión',                  desc: 'Reservas de canchas' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del polideportivo' }],
-  cementerio:     [{ kind: 'gestion', label: 'Gestión',                  desc: 'Trámites y registros' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del cementerio' }],
-  velatorio:      [{ kind: 'gestion', label: 'Gestión',                  desc: 'Servicios y agenda' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del velatorio' }],
-  alumbrado:      [{ kind: 'gestion', label: 'Gestión',                  desc: 'Reclamos y reparaciones' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos y materiales' }],
-  verde:          [{ kind: 'gestion', label: 'Gestión',                  desc: 'Plazas, parques y forestación' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del área' }],
-  espacios_verdes:[{ kind: 'gestion', label: 'Gestión',                  desc: 'Plazas, parques y forestación' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del área' }],
-  bienes:         [{ kind: 'gestion', label: 'Gestión',                  desc: 'Catastro y patrimonio' },
-                   { kind: 'admin',   label: 'Administración',           desc: 'Gastos del área' }],
-  // Solo-info: educación / jardín / primaria / secundaria / policial.
-  educacion:      [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-  jardin:         [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-  primaria:       [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-  secundaria:     [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-  policia:        [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-  policial:       [{ kind: 'info',    label: 'Información pública',      desc: 'Sin permisos asignables' }],
-}
-
-const SECCIONES_DEFAULT = [
-  { kind: 'gestion', label: 'Gestión',        desc: 'Operaciones del día a día' },
-  { kind: 'admin',   label: 'Administración', desc: 'Gastos y presupuesto' },
-]
-
-function seccionesParaTipo(tipo) {
-  const t = (tipo ?? '').toLowerCase().trim()
-  return SECCIONES_POR_TIPO[t] ?? SECCIONES_DEFAULT
-}
-
 // Glifo por tipo — versión compacta del que usa AdminLayout.
 function DepIcon({ tipo, className = 'h-5 w-5' }) {
   const t = (tipo ?? '').toLowerCase()
@@ -509,35 +457,56 @@ export default function Usuarios() {
 //
 // Flujo:
 //   1) Buscador + lista de empleados como cards horizontales.
-//      Click selecciona y monta el grid de dependencias debajo.
-//   2) Grid de cards de dependencia. Sin acceso → borde gris,
-//      "Asignar acceso". Con acceso → borde gold + chips de
-//      secciones activas + "Editar".
-//   3) Card expandida: checkboxes (Gestión / Administración)
-//      + Guardar + Quitar.
+//      Click selecciona y monta el panel de permisos debajo.
+//   2) Panel "Permisos de: <Nombre>" con botón X para deseleccionar.
+//   3) Tabla compacta de 3 columnas: dependencia + checkbox Gestión
+//      + checkbox Administración. Auto-guarda al cambiar cualquier
+//      checkbox. Separadores visuales por grupo (CIC / Dependencias
+//      operativas / Solo información).
 //
-// Mobile-first: en pantallas chicas la grilla es de 1 columna
-// y las cards expandidas ocupan el ancho completo.
+// Mobile-first: la tabla tiene overflow-x-auto para scrollearse en
+// pantallas chicas sin romper el layout.
 // ─────────────────────────────────────────────────────────────────
+
+// Agrupamiento de tipos para los separadores de la tabla. CIC son
+// las 4 dependencias del CIC con módulo dedicado; SOLO_INFO son las
+// que no tienen permisos (educación / jardín / policial); el resto
+// cae en DEPENDENCIAS.
+const TIPOS_GRUPO_CIC = new Set(['caps', 'salud', 'sala', 'juzgado', 'juez', 'sum', 'salon', 'social', 'ayuda_social'])
+const TIPOS_GRUPO_INFO = new Set([
+  'educacion', 'educacion_sec', 'escuela',
+  'jardin', 'jardin_infantes', 'primaria', 'secundaria',
+  'policia', 'policial', 'delegacion_policial',
+])
+
+function grupoDeTipo(tipo) {
+  const t = (tipo ?? '').toLowerCase()
+  if (TIPOS_GRUPO_CIC.has(t))  return 'cic'
+  if (TIPOS_GRUPO_INFO.has(t)) return 'info'
+  return 'deps'
+}
+
+const GRUPO_LABEL = {
+  cic:  'CIC',
+  deps: 'Dependencias',
+  info: 'Solo información',
+}
 
 function PermisosPorPersona({
   usuarios, dependencias, isLoading,
   puedeEditarUsuario, onInvitar, onError,
 }) {
-  const [query, setQuery]             = useState('')
-  const [selectedId, setSelectedId]   = useState(null)
-  const [expandedDepId, setExpandedDepId] = useState(null)
-  const [okMsg, setOkMsg]             = useState('')
+  const [query, setQuery]           = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [okMsg, setOkMsg]           = useState('')
 
   useEffect(() => {
     if (!okMsg) return
-    const t = setTimeout(() => setOkMsg(''), 2000)
+    const t = setTimeout(() => setOkMsg(''), 1500)
     return () => clearTimeout(t)
   }, [okMsg])
 
   const candidatos = useMemo(() => {
-    // Excluimos superadmin (acceso global por rol) y mantenemos
-    // ordenado alfabéticamente por nombre.
     return (usuarios ?? [])
       .filter(u => !u.roles?.includes('superadmin'))
       .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
@@ -602,7 +571,7 @@ function PermisosPorPersona({
                 <button
                   key={u.id}
                   type="button"
-                  onClick={() => { setSelectedId(u.id); setExpandedDepId(null); onError?.('') }}
+                  onClick={() => { setSelectedId(u.id); onError?.('') }}
                   className={`flex items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
                     seleccionado
                       ? 'border-accent-300 bg-primary-50/60 ring-1 ring-accent-200'
@@ -631,55 +600,21 @@ function PermisosPorPersona({
         )}
       </section>
 
-      {/* PASO 2 · Grid de dependencias para el empleado seleccionado */}
+      {/* PASO 2 · Tabla compacta de permisos. Se monta con key
+          basada en el usuario seleccionado para que el estado
+          local (acceso pendiente) se reinicie con el snapshot
+          fresco de dependencias_acceso al cambiar de persona. */}
       {selectedUser && (
-        <section className="space-y-3">
-          <div className="rounded-lg border border-border bg-primary-50/40 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
-              Permisos de
-            </p>
-            <p className="font-sora text-lg font-bold text-primary">
-              {selectedUser.nombre || selectedUser.email || 'Sin nombre'}
-            </p>
-            {esDirector && (
-              <p className="mt-1 text-xs text-primary-500">
-                Tiene rol de <strong>Admin Comuna</strong> — acceso total a todas las
-                dependencias por rol. No requiere asignación manual.
-              </p>
-            )}
-            {!esDirector && !editable && (
-              <p className="mt-1 text-xs text-primary-500">
-                No podés editar los permisos de este usuario desde tu rol.
-              </p>
-            )}
-          </div>
-
-          {dependencias.length === 0 ? (
-            <div className="card p-8 text-center text-sm text-primary-400">
-              Este municipio no tiene dependencias activas. Cargá al menos una para
-              configurar permisos por área.
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {dependencias
-                .slice()
-                .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
-                .map(dep => (
-                  <DependenciaCard
-                    key={dep.id}
-                    dep={dep}
-                    usuario={selectedUser}
-                    expanded={expandedDepId === dep.id}
-                    onExpand={() => setExpandedDepId(prev => prev === dep.id ? null : dep.id)}
-                    onCollapse={() => setExpandedDepId(null)}
-                    onSaved={(msg) => { setOkMsg(msg); setExpandedDepId(null) }}
-                    onError={onError}
-                    disabled={!editable || esDirector}
-                  />
-                ))}
-            </div>
-          )}
-        </section>
+        <TablaPermisos
+          key={selectedUser.id}
+          usuario={selectedUser}
+          dependencias={dependencias}
+          esDirector={esDirector}
+          editable={editable}
+          onDeseleccionar={() => setSelectedId(null)}
+          onSaved={(msg) => setOkMsg(msg)}
+          onError={onError}
+        />
       )}
 
       {!selectedUser && filtrados.length > 0 && (
@@ -692,195 +627,201 @@ function PermisosPorPersona({
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Card de dependencia con su wizard inline de secciones
+// TablaPermisos — vista compacta del acceso del usuario seleccionado
+//
+// Mantiene un snapshot LOCAL de `dependencias_acceso` para evitar
+// la race condition de clicks consecutivos en checkboxes distintos:
+// si esperáramos a que cada mutación refresque el server antes de
+// la siguiente, el segundo click leería el array stale. El snapshot
+// se inicializa al montar (la key del padre fuerza remount al
+// cambiar de usuario) y se actualiza sincrónicamente con cada
+// toggle, antes de disparar la mutación.
 // ─────────────────────────────────────────────────────────────────
 
-function DependenciaCard({
-  dep, usuario, expanded, onExpand, onCollapse, onSaved, onError, disabled,
+function TablaPermisos({
+  usuario, dependencias, esDirector, editable,
+  onDeseleccionar, onSaved, onError,
 }) {
   const updateMut = useUpdatePermisosUsuario()
-  const secciones = seccionesParaTipo(dep.tipo)
-  const soloInfo  = secciones.every(s => s.kind === 'info')
-
-  const accesoActual = useMemo(
-    () => (usuario?.dependencias_acceso ?? []).find(d => d?.dependencia_id === dep.id) ?? null,
-    [usuario, dep.id],
+  const [acceso, setAcceso] = useState(() =>
+    Array.isArray(usuario?.dependencias_acceso) ? usuario.dependencias_acceso : [],
   )
-  const tieneGestion = !!accesoActual?.puede_gestionar
-  const tieneAdmin   = !!accesoActual?.puede_administrar
-  const tieneAcceso  = tieneGestion || tieneAdmin
 
-  const cardClasses = `flex flex-col rounded-lg border p-4 transition-colors ${
-    tieneAcceso
-      ? 'border-accent-200 bg-primary-50/40'
-      : 'border-border bg-white'
-  } ${expanded ? 'ring-2 ring-accent-200' : ''}`
-
-  function resumenAcceso() {
-    if (soloInfo)      return 'Información pública'
-    if (!tieneAcceso)  return 'Sin acceso'
-    const partes = []
-    if (tieneGestion) partes.push('Gestión')
-    if (tieneAdmin)   partes.push('Administración')
-    return partes.join(' + ')
+  function flagFor(depId, kind) {
+    const row = acceso.find(d => d?.dependencia_id === depId)
+    return kind === 'gestion' ? !!row?.puede_gestionar : !!row?.puede_administrar
   }
 
-  async function persistir({ nuevoG, nuevoA }) {
+  async function togglePermiso(dep, kind, nextValue) {
     onError?.('')
     if (!usuario?.id) return
-    const base = Array.isArray(usuario.dependencias_acceso)
-      ? usuario.dependencias_acceso.filter(d => d?.dependencia_id !== dep.id)
-      : []
-    const proximas = [...base]
-    if (nuevoG || nuevoA) {
+    const otras = acceso.filter(d => d?.dependencia_id !== dep.id)
+    const actual = acceso.find(d => d?.dependencia_id === dep.id)
+    const nuevaG = kind === 'gestion' ? !!nextValue : !!actual?.puede_gestionar
+    const nuevaA = kind === 'admin'   ? !!nextValue : !!actual?.puede_administrar
+    const proximas = [...otras]
+    if (nuevaG || nuevaA) {
       proximas.push({
         dependencia_id:    dep.id,
-        puede_gestionar:   !!nuevoG,
-        puede_administrar: !!nuevoA,
+        puede_gestionar:   nuevaG,
+        puede_administrar: nuevaA,
       })
     }
+    // Update optimista local — se confirma o revierte según el server.
+    const previo = acceso
+    setAcceso(proximas)
     try {
       await updateMut.mutateAsync({ id: usuario.id, dependencias_acceso: proximas })
-      onSaved?.(nuevoG || nuevoA ? '✓ Permisos guardados' : '✓ Acceso removido')
+      onSaved?.('✓ Guardado')
     } catch (e) {
+      setAcceso(previo)
       onError?.(e?.message ?? 'No pudimos guardar los permisos.')
     }
   }
 
+  // Ordeno y agrupo dependencias: CIC → Dependencias → Solo info.
+  const filasPorGrupo = useMemo(() => {
+    const out = { cic: [], deps: [], info: [] }
+    for (const d of (dependencias ?? [])) {
+      out[grupoDeTipo(d.tipo)].push(d)
+    }
+    for (const g of Object.keys(out)) {
+      out[g].sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+    }
+    return out
+  }, [dependencias])
+
+  const disabled = !editable || esDirector || updateMut.isPending
+
   return (
-    <div className={cardClasses}>
-      <div className="flex items-start gap-3">
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-          tieneAcceso ? 'bg-accent-50 text-accent-700' : 'bg-primary-50 text-primary-500'
-        }`}>
-          <DepIcon tipo={dep.tipo} />
-        </div>
+    <section className="space-y-3">
+      {/* Header del panel — título + nombre + botón X */}
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-border bg-primary-50/40 p-4">
         <div className="min-w-0 flex-1">
-          <p className="font-sora text-sm font-bold text-primary">{dep.nombre}</p>
-          <p className="text-xs text-primary-400">{resumenAcceso()}</p>
-        </div>
-      </div>
-
-      {tieneAcceso && !expanded && !soloInfo && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {tieneGestion && (
-            <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
-              Gestión
-            </span>
-          )}
-          {tieneAdmin && (
-            <span className="inline-flex items-center rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-semibold text-accent-700">
-              Administración
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="mt-4">
-        {soloInfo ? (
-          <p className="text-xs italic text-primary-400">
-            Esta dependencia es solo informativa — no requiere asignar permisos.
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
+            Permisos de
           </p>
-        ) : !expanded ? (
-          <Button
-            variant={tieneAcceso ? 'secondary' : 'primary'}
-            size="sm"
-            onClick={onExpand}
-            disabled={disabled}
-            className="w-full"
-          >
-            {tieneAcceso ? 'Editar acceso' : 'Asignar acceso'}
-          </Button>
-        ) : (
-          // Re-mount cuando se expande: la key cambia y el form
-          // local se inicializa con el acceso actual sin necesidad
-          // de useEffect+setState (que React Compiler prohíbe).
-          <DependenciaCardForm
-            key={`${dep.id}-${tieneGestion ? 1 : 0}-${tieneAdmin ? 1 : 0}`}
-            secciones={secciones}
-            initialG={tieneGestion}
-            initialA={tieneAdmin}
-            tieneAcceso={tieneAcceso}
-            saving={updateMut.isPending}
-            onCancel={onCollapse}
-            onSave={({ g, a }) => persistir({ nuevoG: g, nuevoA: a })}
-            onQuitar={() => persistir({ nuevoG: false, nuevoA: false })}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-// Form local de la card. Se monta al abrir y se desmonta al
-// cerrar, así el estado inicial siempre refleja el acceso
-// vigente sin disparar setState dentro de un effect.
-function DependenciaCardForm({
-  secciones, initialG, initialA, tieneAcceso, saving,
-  onCancel, onSave, onQuitar,
-}) {
-  const [pendG, setPendG] = useState(initialG)
-  const [pendA, setPendA] = useState(initialA)
-
-  return (
-    <div className="space-y-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
-        Secciones
-      </p>
-      <div className="space-y-2">
-        {secciones.map(s => {
-          const checked = s.kind === 'gestion' ? pendG : pendA
-          const onChange = s.kind === 'gestion' ? setPendG : setPendA
-          return (
-            <label
-              key={s.kind}
-              className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-white p-2.5 text-sm hover:border-primary-200"
-            >
-              <input
-                type="checkbox"
-                checked={!!checked}
-                onChange={e => onChange(e.target.checked)}
-                className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-primary">{s.label}</p>
-                {s.desc && <p className="text-xs text-primary-400">{s.desc}</p>}
-              </div>
-            </label>
-          )
-        })}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <p className="truncate font-sora text-base font-bold text-primary">
+            {usuario.nombre || usuario.email || 'Sin nombre'}
+          </p>
+          {esDirector && (
+            <p className="mt-1 text-xs text-primary-500">
+              Tiene rol de <strong>Admin Comuna</strong> — acceso total por rol. No
+              requiere asignación manual.
+            </p>
+          )}
+          {!esDirector && !editable && (
+            <p className="mt-1 text-xs text-primary-500">
+              No podés editar los permisos de este usuario desde tu rol.
+            </p>
+          )}
+        </div>
         <button
           type="button"
-          onClick={onCancel}
-          className="text-xs font-medium text-primary-500 hover:text-primary"
-          disabled={saving}
+          onClick={onDeseleccionar}
+          className="rounded-md p-1.5 text-primary-400 transition-colors hover:bg-primary-100 hover:text-primary"
+          aria-label="Deseleccionar"
         >
-          Cancelar
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
+          </svg>
         </button>
-        <div className="flex gap-2">
-          {tieneAcceso && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={onQuitar}
-              loading={saving}
-            >
-              Quitar acceso
-            </Button>
-          )}
-          <Button
-            size="sm"
-            onClick={() => onSave({ g: pendG, a: pendA })}
-            loading={saving}
-            disabled={!pendG && !pendA && !tieneAcceso}
-          >
-            Guardar
-          </Button>
-        </div>
       </div>
-    </div>
+
+      {dependencias.length === 0 ? (
+        <div className="card p-8 text-center text-sm text-primary-400">
+          Este municipio no tiene dependencias activas. Cargá al menos una para
+          configurar permisos por área.
+        </div>
+      ) : (
+        // Scroll horizontal en mobile para que la tabla no se rompa.
+        <div className="card overflow-x-auto p-0">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-primary-50/60">
+              <tr>
+                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-primary-500">
+                  Dependencia
+                </th>
+                <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-primary-500" style={{ width: 140 }}>
+                  Gestión
+                </th>
+                <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-primary-500" style={{ width: 160 }}>
+                  Administración
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {(['cic', 'deps', 'info']).flatMap(g => {
+                const filas = filasPorGrupo[g]
+                if (!filas?.length) return []
+                const rows = [
+                  <tr key={`sep-${g}`} className="bg-[#0F1C35]/5">
+                    <td colSpan={3} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
+                      {GRUPO_LABEL[g]}
+                    </td>
+                  </tr>,
+                ]
+                for (const dep of filas) {
+                  const grupo = g
+                  const isInfo = grupo === 'info'
+                  const gestion = flagFor(dep.id, 'gestion')
+                  const admin   = flagFor(dep.id, 'admin')
+                  rows.push(
+                    <tr key={dep.id} className="hover:bg-primary-50/40">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                            (gestion || admin)
+                              ? 'bg-accent-50 text-accent-700'
+                              : 'bg-primary-50 text-primary-500'
+                          }`}>
+                            <DepIcon tipo={dep.tipo} className="h-4 w-4" />
+                          </span>
+                          <span className="text-sm font-medium text-primary">{dep.nombre}</span>
+                        </div>
+                      </td>
+                      {isInfo ? (
+                        <>
+                          <td className="px-4 py-2 text-center">
+                            <span className="text-xs italic text-primary-400">Solo informativa</span>
+                          </td>
+                          <td className="px-4 py-2 text-center text-primary-300">—</td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-2 text-center">
+                            <label className="inline-flex cursor-pointer items-center justify-center" aria-label={`Gestión en ${dep.nombre}`}>
+                              <input
+                                type="checkbox"
+                                checked={gestion}
+                                disabled={disabled}
+                                onChange={e => togglePermiso(dep, 'gestion', e.target.checked)}
+                                className="h-4 w-4 cursor-pointer accent-[#C9A84C] disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </label>
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <label className="inline-flex cursor-pointer items-center justify-center" aria-label={`Administración en ${dep.nombre}`}>
+                              <input
+                                type="checkbox"
+                                checked={admin}
+                                disabled={disabled}
+                                onChange={e => togglePermiso(dep, 'admin', e.target.checked)}
+                                className="h-4 w-4 cursor-pointer accent-[#C9A84C] disabled:cursor-not-allowed disabled:opacity-50"
+                              />
+                            </label>
+                          </td>
+                        </>
+                      )}
+                    </tr>,
+                  )
+                }
+                return rows
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
