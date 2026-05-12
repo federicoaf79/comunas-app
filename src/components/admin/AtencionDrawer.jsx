@@ -7,6 +7,7 @@ import {
   useCreateAtencionInsumo, useDeleteAtencionInsumo, useCloseAtencion,
   edadDesdeFechaNac,
 } from '../../hooks/useAtenciones'
+import { useUpdateTurnoEstado } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
 import Spinner from '../ui/Spinner'
 import Button from '../ui/Button'
@@ -153,6 +154,7 @@ export default function AtencionDrawer({ turno, dependenciaSaludId, municipioId,
               atencion={atencion}
               municipioId={municipioId}
               dependenciaSaludId={dependenciaSaludId}
+              onSwitchToAtencion={() => setTab('atencion')}
             />
           ) : (
             <HCTab vecinoId={vecino?.id} atencionActualId={atencion?.id} />
@@ -207,90 +209,93 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
     proxima_consulta:   atencion.proxima_consulta   ?? '',
     derivacion_destino: atencion.derivacion_destino ?? '',
   } : { ...EMPTY_FORM, motivo: turno.motivo ?? '' })
-  const [estadoTarget, setEstadoTarget] = useState(atencion?.estado ?? 'borrador')
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
+  const [confirmCerrar, setConfirmCerrar] = useState(false)
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
-  const createMut = useCreateAtencion()
-  const updateMut = useUpdateAtencion()
-  const closeMut  = useCloseAtencion()
+  const createMut    = useCreateAtencion()
+  const updateMut    = useUpdateAtencion()
+  const closeMut     = useCloseAtencion()
+  const updateTurnoM = useUpdateTurnoEstado()
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
 
-  async function persist({ estado } = {}) {
-    setError(''); setOk('')
-    const targetEstado = estado ?? estadoTarget
-    const payload = {
+  // Toast de éxito autoclearea a los 2.5s — feedback no intrusivo
+  // que confirma cada acción sin pisar la pantalla.
+  useEffect(() => {
+    if (!ok) return
+    const t = setTimeout(() => setOk(''), 2500)
+    return () => clearTimeout(t)
+  }, [ok])
+
+  // Si el médico llena "Derivar a", el cierre marca la atención
+  // como 'derivada' y el botón se relabel a "Cerrar y derivar".
+  const esDerivacion = !!form.derivacion_destino?.trim()
+  const labelCerrar  = esDerivacion ? 'Cerrar y derivar' : 'Cerrar atención'
+
+  function payloadForm(estado = 'borrador') {
+    return {
       ...form,
-      // Vacíos como null para no contaminar la fila con strings vacíos.
-      proxima_consulta:   form.proxima_consulta || null,
-      derivacion_destino: targetEstado === 'derivada' ? (form.derivacion_destino || null) : null,
-      estado: targetEstado,
+      proxima_consulta:   form.proxima_consulta   || null,
+      derivacion_destino: form.derivacion_destino?.trim() || null,
+      estado,
     }
+  }
+
+  async function handleGuardar() {
+    setError(''); setOk('')
     try {
       if (atencion) {
-        await updateMut.mutateAsync({ id: atencion.id, ...payload })
+        await updateMut.mutateAsync({ id: atencion.id, ...payloadForm('borrador') })
       } else {
         await createMut.mutateAsync({
           municipio_id:   municipioId,
           turno_id:       turno.id,
           vecino_id:      turno.vecino_id ?? turno.vecino?.id,
           profesional_id: profesionalId,
-          ...payload,
+          ...payloadForm('borrador'),
         })
       }
-      setOk(targetEstado === 'borrador' ? 'Borrador guardado.' : 'Estado actualizado.')
+      setOk('✓ Guardado')
     } catch (e) {
       setError(e?.message ?? 'No pudimos guardar la atención.')
     }
   }
 
-  async function handleCerrar() {
+  async function handleNoSePresento() {
     setError(''); setOk('')
-    if (!atencion) {
-      // Hay que persistir primero como borrador para tener un id
-      // sobre el cual descontar insumos. Solo cierra si el guardado
-      // sale bien.
-      try {
-        const row = await createMut.mutateAsync({
-          municipio_id:   municipioId,
-          turno_id:       turno.id,
-          vecino_id:      turno.vecino_id ?? turno.vecino?.id,
-          profesional_id: profesionalId,
-          ...form,
-          proxima_consulta:   form.proxima_consulta || null,
-          derivacion_destino: null,
-          estado: 'borrador',
-        })
-        const { errores } = await closeMut.mutateAsync({ atencionId: row.id })
-        setOk(errores.length === 0
-          ? 'Atención cerrada y stock descontado.'
-          : `Cerrada con ${errores.length} insumo${errores.length === 1 ? '' : 's'} que no pudieron descontarse — revisá manualmente.`)
-      } catch (e) {
-        setError(e?.message ?? 'No pudimos cerrar la atención.')
-      }
-      return
-    }
     try {
-      // Persistir cambios pendientes del form antes de cerrar.
-      await updateMut.mutateAsync({
-        id: atencion.id,
-        ...form,
-        proxima_consulta:   form.proxima_consulta || null,
-        derivacion_destino: null,
-        estado: 'borrador',
+      await updateTurnoM.mutateAsync({ id: turno.id, estado: 'ausente' })
+      setOk('Turno marcado como ausente')
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos marcar el turno como ausente.')
+    }
+  }
+
+  async function ejecutarCerrar() {
+    setError(''); setOk('')
+    setConfirmCerrar(false)
+    const targetEstado = esDerivacion ? 'derivada' : 'cerrada'
+    try {
+      // 1) Persistir cambios pendientes del form como borrador (el
+      //    estado final lo aplica useCloseAtencion).
+      await updateMut.mutateAsync({ id: atencion.id, ...payloadForm('borrador') })
+      // 2) Cerrar: descuenta insumos + marca turno atendido + estado final.
+      const { errores } = await closeMut.mutateAsync({
+        atencionId: atencion.id,
+        estado:     targetEstado,
       })
-      const { errores } = await closeMut.mutateAsync({ atencionId: atencion.id })
       setOk(errores.length === 0
-        ? 'Atención cerrada y stock descontado.'
+        ? (targetEstado === 'derivada' ? '✓ Atención derivada' : '✓ Atención cerrada')
         : `Cerrada con ${errores.length} insumo${errores.length === 1 ? '' : 's'} sin descontar — revisá stock.`)
     } catch (e) {
       setError(e?.message ?? 'No pudimos cerrar la atención.')
     }
   }
 
-  const saving = createMut.isPending || updateMut.isPending || closeMut.isPending
+  const saving = createMut.isPending || updateMut.isPending ||
+                 closeMut.isPending  || updateTurnoM.isPending
 
   return (
     <div className="space-y-4 p-5">
@@ -349,70 +354,84 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         disabled={yaCerrada}
       />
 
-      <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-primary-700">Estado al guardar</label>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {['borrador', 'cerrada', 'derivada'].map(v => {
-            const sel = estadoTarget === v
-            return (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setEstadoTarget(v)}
-                disabled={yaCerrada}
-                className={
-                  'rounded-lg border-2 px-3 py-2 text-sm font-semibold capitalize transition-all disabled:opacity-50 ' +
-                  (sel
-                    ? 'border-accent bg-primary-50 text-primary'
-                    : 'border-border bg-white text-primary-500 hover:border-primary-200')
-                }
-              >
-                {v === 'cerrada' ? 'Cerrar atención' : v === 'derivada' ? 'Derivar' : 'Borrador'}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {estadoTarget === 'derivada' && (
-        <Input
-          label="Destino de derivación"
-          value={form.derivacion_destino}
-          onChange={e => set('derivacion_destino', e.target.value)}
-          placeholder="Hospital, especialista, etc."
-          disabled={yaCerrada}
-        />
-      )}
+      {/* Derivar a — textarea siempre visible. Si tiene contenido,
+          el botón "Cerrar atención" se relabel a "Cerrar y derivar"
+          y el cierre marca la atención como `derivada` en vez de
+          `cerrada`. */}
+      <Input
+        label="Derivar a (opcional)"
+        value={form.derivacion_destino}
+        onChange={e => set('derivacion_destino', e.target.value)}
+        placeholder="Hospital, especialista, etc."
+        disabled={yaCerrada}
+      />
 
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>
       )}
       {ok && (
-        <div className="rounded-md border border-ok-100 bg-ok-50 p-3 text-xs text-ok-700">{ok}</div>
+        <div className="rounded-md border border-ok-100 bg-ok-50 p-3 text-xs font-medium text-ok-700">
+          {ok}
+        </div>
       )}
 
+      {/* Tres acciones simples — sin selector de estado intermedio.
+          Cada botón hace exactamente una cosa: guardar borrador,
+          marcar ausente, o cerrar (con confirmación). */}
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <Button
           variant="secondary"
-          onClick={() => persist({ estado: 'borrador' })}
+          onClick={handleGuardar}
           loading={saving}
           disabled={yaCerrada}
         >
-          Guardar borrador
+          Guardar
         </Button>
-        <Button
-          onClick={handleCerrar}
-          loading={saving}
-          disabled={yaCerrada}
+        <button
+          type="button"
+          onClick={handleNoSePresento}
+          disabled={saving || turno?.estado === 'ausente'}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-accent bg-white px-4 py-2.5 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Cerrar atención
-        </Button>
-        {!yaCerrada && (
-          <p className="text-xs text-primary-400">
-            Cerrar descuenta los insumos del stock y marca el turno como atendido.
-          </p>
+          No se presentó
+        </button>
+        {atencion && !yaCerrada && (
+          <Button
+            onClick={() => setConfirmCerrar(true)}
+            loading={saving}
+          >
+            {labelCerrar}
+          </Button>
         )}
       </div>
+
+      {/* Confirmación de cierre — modal mínimo en lugar del botón
+          inline. Si la atención lleva derivacion_destino, el copy
+          se ajusta para no confundir. */}
+      {confirmCerrar && (
+        <Modal
+          open
+          onClose={() => setConfirmCerrar(false)}
+          title={esDerivacion ? 'Cerrar y derivar' : 'Cerrar atención'}
+          size="sm"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmCerrar(false)} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button onClick={ejecutarCerrar} loading={saving}>
+                {esDerivacion ? 'Confirmar y derivar' : 'Confirmar y cerrar'}
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-primary-700">
+            {esDerivacion
+              ? '¿Cerrar esta atención y derivarla? Se descontarán los insumos del stock y el turno quedará marcado como atendido.'
+              : '¿Cerrar esta atención? Se descontarán los insumos del stock y el turno quedará marcado como atendido.'}
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -429,7 +448,7 @@ function normalizar(s) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
+export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitchToAtencion }) {
   const qc         = useQueryClient()
   const insumosQ   = useAtencionInsumos(atencion?.id)
   const catalogoQ  = useInsumosDisponibles({ municipioId, dependenciaId: dependenciaSaludId })
@@ -555,201 +574,220 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId }) {
         ? 'Ingresá una cantidad mayor a 0.'
         : null
 
+  // Layout: en mobile arriba va el form, abajo la lista. En desktop
+  // dos columnas (form 40% / lista 60%). Cuando no hay atencion, un
+  // banner navy bloquea visualmente el área e invita a tab Atención.
   return (
     <div className="space-y-4 p-5">
       {!atencion && (
-        <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-xs text-accent-700">
-          Guardá un borrador de la atención primero (tab <b>Atención</b>) para poder
-          agregar insumos.
+        <div className="flex flex-wrap items-start gap-3 rounded-xl bg-primary p-4 text-white shadow-card sm:p-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/20 text-accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4M12 17h.01M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.4 0z" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-sora text-sm font-bold sm:text-base">
+              Guardá la atención como borrador antes de registrar insumos
+            </p>
+            <p className="mt-0.5 text-xs text-white/70 sm:text-sm">
+              Volvé al tab <b>Atención</b> y apretá <b>Guardar</b> — los insumos se
+              vinculan al asiento clínico.
+            </p>
+          </div>
+          {onSwitchToAtencion && (
+            <button
+              type="button"
+              onClick={onSwitchToAtencion}
+              className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-bold text-primary shadow-sm transition-colors hover:bg-accent-400"
+            >
+              Ir a Atención →
+            </button>
+          )}
         </div>
       )}
 
-      <section>
-        <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
-          Insumos cargados {items.length > 0 && <span className="ml-1 text-primary-400">({items.length})</span>}
-        </h3>
-        {insumosQ.isLoading ? (
-          <div className="mt-2 flex justify-center p-6"><Spinner /></div>
-        ) : items.length === 0 ? (
-          <p className="mt-2 text-sm text-primary-400">Todavía no se cargaron insumos.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-white">
-            {items.map(it => {
-              const unidad = it.unidad || it.inventario?.unidad || ''
-              return (
-                <li
-                  key={it.id}
-                  className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-3 py-2 text-sm"
+      <div className="grid gap-4 lg:grid-cols-[2fr_3fr]">
+        {/* ── Columna izquierda: AGREGAR INSUMO ── */}
+        {!yaCerrada && (
+          <section className="rounded-lg border border-border bg-white p-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
+              Agregar insumo
+            </h3>
+
+            {/* Combobox custom — input + dropdown absoluto. */}
+            <div className="relative mt-3">
+              <input
+                type="text"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar insumo... (ej: gasas, alcohol)"
+                role="combobox"
+                aria-expanded={busqueda.length > 0}
+                aria-autocomplete="list"
+                disabled={!atencion}
+                className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm placeholder:text-primary-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:bg-primary-50 disabled:opacity-60"
+              />
+
+              {busqueda && (
+                <ul
+                  role="listbox"
+                  className="absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-white shadow-card"
                 >
-                  <span className="min-w-0 truncate font-medium text-primary" title={it.inventario?.nombre ?? '—'}>
-                    {it.inventario?.nombre ?? '—'}
-                  </span>
-                  <span className="whitespace-nowrap font-bold tabular-nums text-primary">
-                    {it.cantidad}
-                  </span>
-                  <span className="whitespace-nowrap text-xs text-primary-500">
-                    {unidad || '—'}
-                  </span>
-                  {!yaCerrada ? (
-                    <button
-                      onClick={() => handleEliminar(it)}
-                      aria-label={`Eliminar ${it.inventario?.nombre ?? 'insumo'}`}
-                      title="Eliminar"
-                      className="rounded p-1 text-primary-400 transition-colors hover:bg-red-50 hover:text-danger"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
-                      </svg>
-                    </button>
-                  ) : <span />}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-        {items.length > 0 && totalEstimado > 0 && (
-          <p className="mt-2 text-right text-xs text-primary-500">
-            Total estimado: <b className="text-primary">{fmtMoney.format(totalEstimado)}</b>
-          </p>
-        )}
-      </section>
-
-      {!yaCerrada && (
-        <section className="rounded-lg border border-border bg-white p-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
-            Agregar insumo
-          </h3>
-
-          {/* Combobox custom — input + dropdown absoluto. No usa
-              <select> nativo: el dropdown aparece automáticamente al
-              tipear y se cierra al elegir (set busqueda='' lo oculta).
-              Filtra por nombre o categoría client-side. */}
-          <div className="relative mt-3">
-            <label className="text-sm font-medium text-primary-700">
-              {insumoSeleccionado ? 'Cambiar insumo' : 'Buscar insumo'}
-            </label>
-            <input
-              type="text"
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              placeholder="Buscar insumo... (ej: gasas, alcohol)"
-              role="combobox"
-              aria-expanded={busqueda.length > 0}
-              aria-autocomplete="list"
-              className="mt-1 w-full rounded-md border border-border bg-white px-3 py-2 text-sm placeholder:text-primary-300 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-
-            {/* Dropdown — solo visible cuando hay texto. */}
-            {busqueda && (
-              <ul
-                role="listbox"
-                className="absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-white shadow-card"
-              >
-                {catalogoQ.isLoading ? (
-                  <li className="px-3 py-2 text-sm text-primary-400">Cargando catálogo...</li>
-                ) : catalogFiltrado.length === 0 ? (
-                  <li className="px-3 py-2 text-sm text-primary-400">Sin coincidencias</li>
-                ) : (
-                  catalogFiltrado.map(insumo => {
-                    const critico = Number(insumo.stock_actual ?? 0) <= Number(insumo.stock_minimo ?? 0)
-                    return (
-                      <li
-                        key={insumo.id}
-                        role="option"
-                        // mousedown vs click — el input pierde foco al
-                        // hacer click, y un onBlur lateral podría cerrar
-                        // el dropdown antes que se dispare el onClick.
-                        // mousedown se dispara antes del blur.
-                        onMouseDown={(e) => { e.preventDefault(); seleccionarInsumo(insumo) }}
-                        className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2 text-sm hover:bg-background"
-                      >
-                        <span className="min-w-0 flex-1">
-                          {critico && <span aria-label="stock crítico">⚠️ </span>}
-                          <span className="font-medium text-primary">{insumo.nombre}</span>
-                          {insumo.categoria && (
-                            <span className="ml-1 text-[11px] uppercase tracking-wide text-primary-400">
-                              · {insumo.categoria}
-                            </span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-xs text-primary-500">
-                          Stock: {insumo.stock_actual ?? 0}{insumo.unidad ? ` ${insumo.unidad}` : ''}
-                        </span>
-                      </li>
-                    )
-                  })
-                )}
-              </ul>
-            )}
-          </div>
-
-          {/* Chip del insumo seleccionado */}
-          {insumoSeleccionado && (
-            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 text-sm ring-1 ring-inset ring-primary/10">
-              <span className="font-medium text-primary">{insumoSeleccionado.nombre}</span>
-              <span className="text-xs text-primary-400">
-                — Stock: {insumoSeleccionado.stock_actual ?? 0}
-                {insumoSeleccionado.unidad ? ` ${insumoSeleccionado.unidad}` : ''}
-              </span>
-              <button
-                type="button"
-                onClick={limpiarSeleccion}
-                aria-label="Quitar selección"
-                className="ml-auto rounded p-0.5 text-primary-400 hover:bg-primary/10 hover:text-danger"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
-                </svg>
-              </button>
+                  {catalogoQ.isLoading ? (
+                    <li className="px-3 py-2 text-sm text-primary-400">Cargando catálogo...</li>
+                  ) : catalogFiltrado.length === 0 ? (
+                    <li className="px-3 py-2 text-sm text-primary-400">Sin coincidencias</li>
+                  ) : (
+                    catalogFiltrado.map(insumo => {
+                      const critico = Number(insumo.stock_actual ?? 0) <= Number(insumo.stock_minimo ?? 0)
+                      return (
+                        <li
+                          key={insumo.id}
+                          role="option"
+                          // mousedown antes del blur del input para que
+                          // no se cierre el dropdown antes del click.
+                          onMouseDown={(e) => { e.preventDefault(); seleccionarInsumo(insumo) }}
+                          className="flex cursor-pointer items-start justify-between gap-3 px-3 py-2 text-sm hover:bg-background"
+                        >
+                          <span className="min-w-0 flex-1">
+                            {critico && <span aria-label="stock crítico">⚠️ </span>}
+                            <span className="font-medium text-primary">{insumo.nombre}</span>
+                            {insumo.categoria && (
+                              <span className="ml-1 text-[11px] uppercase tracking-wide text-primary-400">
+                                · {insumo.categoria}
+                              </span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-xs text-primary-500">
+                            Stock: {insumo.stock_actual ?? 0}{insumo.unidad ? ` ${insumo.unidad}` : ''}
+                          </span>
+                        </li>
+                      )
+                    })
+                  )}
+                </ul>
+              )}
             </div>
-          )}
 
-          {/* Cantidad + botón — solo aparecen cuando hay insumo. */}
-          {insumoSeleccionado && (
-            <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-primary-700">Cantidad</label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={cantidad}
-                  onChange={e => setCantidad(e.target.value)}
-                  placeholder="Cantidad"
-                  autoFocus
-                  className="input-field min-w-[100px]"
-                />
-                <p className="text-[11px] text-primary-400">
-                  {insumoSeleccionado.unidad
-                    ? `Unidad: ${insumoSeleccionado.unidad}`
-                    : 'Sin unidad definida en el catálogo.'}
-                </p>
+            {/* Chip compacto del insumo elegido — una sola línea. */}
+            {insumoSeleccionado && (
+              <div className="mt-2 flex items-center gap-2 truncate rounded-lg bg-primary/5 px-2.5 py-1 text-xs ring-1 ring-inset ring-primary/10">
+                <span className="truncate font-medium text-primary" title={insumoSeleccionado.nombre}>
+                  {insumoSeleccionado.nombre}
+                </span>
+                <span className="shrink-0 text-primary-400">
+                  · Stock {insumoSeleccionado.stock_actual ?? 0}{insumoSeleccionado.unidad ? ` ${insumoSeleccionado.unidad}` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={limpiarSeleccion}
+                  aria-label="Quitar selección"
+                  className="ml-auto shrink-0 rounded p-0.5 text-primary-400 hover:bg-primary/10 hover:text-danger"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M6 18L18 6" />
+                  </svg>
+                </button>
               </div>
-              <div className="flex flex-col items-stretch gap-1 sm:items-end">
+            )}
+
+            {/* Cantidad + unidad + botón en una sola fila horizontal. */}
+            {insumoSeleccionado && (
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="flex w-24 flex-col gap-1">
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-primary-500">Cantidad</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={cantidad}
+                    onChange={e => setCantidad(e.target.value)}
+                    placeholder="0"
+                    autoFocus
+                    className="input-field min-w-0"
+                  />
+                </div>
+                <span className="pb-2 text-sm text-primary-500">
+                  {insumoSeleccionado.unidad || 'unidad'}
+                </span>
                 <Button
                   onClick={handleAgregar}
                   loading={createMut.isPending}
                   disabled={!!disabledHint}
+                  className="ml-auto"
                 >
                   + Agregar
                 </Button>
-                {disabledHint && (
-                  <p className="text-[11px] text-primary-400">{disabledHint}</p>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {error && (
-            <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">{error}</div>
+            {disabledHint && insumoSeleccionado && (
+              <p className="mt-2 text-[11px] text-primary-400">{disabledHint}</p>
+            )}
+
+            {error && (
+              <div className="mt-3 rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">{error}</div>
+            )}
+            {ok && (
+              <div className="mt-3 rounded-md border border-ok-100 bg-ok-50 p-2 text-xs font-medium text-ok-700">
+                {ok}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Columna derecha: INSUMOS CARGADOS ── */}
+        <section>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
+            Insumos cargados {items.length > 0 && <span className="ml-1 text-primary-400">({items.length})</span>}
+          </h3>
+          {insumosQ.isLoading ? (
+            <div className="mt-2 flex justify-center p-6"><Spinner /></div>
+          ) : items.length === 0 ? (
+            <p className="mt-2 text-sm text-primary-400">Sin insumos aún.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-border rounded-lg border border-border bg-white">
+              {items.map(it => {
+                const unidad = it.unidad || it.inventario?.unidad || ''
+                return (
+                  <li
+                    key={it.id}
+                    className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate font-medium text-primary" title={it.inventario?.nombre ?? '—'}>
+                      {it.inventario?.nombre ?? '—'}
+                    </span>
+                    <span className="whitespace-nowrap font-bold tabular-nums text-primary">
+                      {it.cantidad}
+                    </span>
+                    <span className="whitespace-nowrap text-xs text-primary-500">
+                      {unidad || '—'}
+                    </span>
+                    {!yaCerrada ? (
+                      <button
+                        onClick={() => handleEliminar(it)}
+                        aria-label={`Eliminar ${it.inventario?.nombre ?? 'insumo'}`}
+                        title="Eliminar"
+                        className="rounded p-1 text-primary-400 transition-colors hover:bg-red-50 hover:text-danger"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+                        </svg>
+                      </button>
+                    ) : <span />}
+                  </li>
+                )
+              })}
+            </ul>
           )}
-          {ok && (
-            <div className="mt-3 rounded-md border border-ok-100 bg-ok-50 p-3 text-xs font-medium text-ok-700">
-              {ok}
-            </div>
+          {items.length > 0 && totalEstimado > 0 && (
+            <p className="mt-2 text-right text-xs text-primary-500">
+              Total estimado: <b className="text-primary">{fmtMoney.format(totalEstimado)}</b>
+            </p>
           )}
         </section>
-      )}
+      </div>
 
       <p className="text-xs text-primary-400">
         Al cerrar la atención, estos insumos se descontarán automáticamente del stock

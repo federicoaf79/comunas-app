@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
-import { useDatosMunicipio } from '../../hooks/useConfigPortal'
+import { useDatosMunicipio, usePortalMunicipioId } from '../../hooks/useConfigPortal'
+import { useAutoridades } from '../../hooks/useAutoridades'
+import { useHistoriaMunicipio } from '../../hooks/useHistoriaMunicipio'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { supabaseAnon } from '../../lib/supabaseAnon'
@@ -827,12 +829,13 @@ function ServiciosSection() {
               const desc    = DEP_DESCRIPTOR[d.tipo]
               const detalle = desc?.detalle ?? null
               const horario = desc?.horario ?? null
-              return (
-                <div
-                  key={d.id ?? d.nombre}
-                  className="flex flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-shadow hover:shadow-lg sm:p-6"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent">
+              // Si la dependencia tiene `tipo` la card se transforma
+              // en un Link a la página de detalle pública. Sin tipo
+              // (fallback raro), queda como bloque inerte.
+              const cardClasses = 'group flex flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg sm:p-6'
+              const inner = (
+                <>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
                     {iconForTipo(d.tipo)}
                   </div>
                   <p className="text-base font-semibold text-primary">{d.nombre}</p>
@@ -840,7 +843,7 @@ function ServiciosSection() {
                     <p className="text-xs text-primary-500 sm:text-sm">{detalle}</p>
                   )}
                   {horario && (
-                    <p className="mt-auto inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
+                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
                         <circle cx="12" cy="12" r="9" />
                         <path strokeLinecap="round" d="M12 7v5l3 2" />
@@ -848,12 +851,228 @@ function ServiciosSection() {
                       {horario}
                     </p>
                   )}
-                </div>
+                  <span className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-700 group-hover:text-accent-800">
+                    Ver detalle
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </span>
+                </>
+              )
+              return d.tipo ? (
+                <Link key={d.id ?? d.nombre} to={`/portal/dependencia/${d.tipo}`} className={cardClasses}>
+                  {inner}
+                </Link>
+              ) : (
+                <div key={d.id ?? d.nombre} className={cardClasses}>{inner}</div>
               )
             })}
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sección: Autoridades de la Comisión Municipal
+// ─────────────────────────────────────────────────────────────────
+
+// Genera las iniciales para el fallback de avatar cuando no hay
+// foto cargada — primer carácter del nombre + primer carácter del
+// segundo término. Devuelve "?" si no se pudo derivar nada.
+function initialsFor(name) {
+  if (!name) return '?'
+  return name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+}
+
+function AutoridadesSection({ municipioId }) {
+  const { data: autoridades = [], isLoading } = useAutoridades(municipioId)
+  if (!municipioId) return null
+  if (!isLoading && autoridades.length === 0) return null
+  return (
+    <section id="autoridades" aria-labelledby="autoridades-h2" className="scroll-mt-20 border-t border-border bg-white">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <header className="mb-8 sm:mb-10">
+          <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
+            Quiénes nos representan
+          </p>
+          <h2 id="autoridades-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
+            Autoridades de la Comisión Municipal
+          </h2>
+        </header>
+
+        {isLoading ? (
+          <div className="card flex items-center justify-center p-12">
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+            {autoridades.map(a => (
+              <article
+                key={a.id}
+                className="flex flex-col items-center gap-3 rounded-xl border border-border bg-white p-5 text-center shadow-card transition-shadow hover:shadow-lg"
+              >
+                {a.foto_url ? (
+                  <img
+                    src={a.foto_url}
+                    alt={`Foto de ${a.nombre}`}
+                    className="h-24 w-24 rounded-full object-cover ring-2 ring-accent/60"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className="flex h-24 w-24 items-center justify-center rounded-full bg-primary text-2xl font-bold text-white ring-2 ring-accent/60"
+                  >
+                    {initialsFor(a.nombre)}
+                  </div>
+                )}
+                <p className="text-base font-semibold text-primary leading-tight">
+                  {a.nombre}
+                </p>
+                <span className="inline-flex items-center rounded-full bg-accent px-3 py-1 text-xs font-bold uppercase tracking-wide text-primary-900">
+                  {a.cargo}
+                </span>
+                {a.descripcion && (
+                  <p className="text-xs leading-relaxed text-primary-500">
+                    {a.descripcion}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sección: Historia del municipio
+// ─────────────────────────────────────────────────────────────────
+
+function Lightbox({ src, onClose }) {
+  useEffect(() => {
+    if (!src) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [src, onClose])
+  if (!src) return null
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/85 p-4 backdrop-blur-sm"
+    >
+      <img
+        src={src}
+        alt=""
+        className="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar"
+        className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
+          <path strokeLinecap="round" d="M6 6l12 12M6 18L18 6" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
+function HistoriaSection({ municipioId, municipioNombre }) {
+  const { data: historia, isLoading } = useHistoriaMunicipio(municipioId)
+  const [lightbox, setLightbox] = useState(null)
+  if (!municipioId) return null
+  const tieneContenido = historia && (
+    historia.fundacion || historia.resena ||
+    historia.importancia_regional || historia.recursos_naturales ||
+    (Array.isArray(historia.fotos) && historia.fotos.length > 0)
+  )
+  if (!isLoading && !tieneContenido) return null
+
+  const fotos = Array.isArray(historia?.fotos) ? historia.fotos.slice(0, 4) : []
+  const nombreMostrar = municipioNombre || 'Nuestra comunidad'
+  const titulo = historia?.fundacion
+    ? `${nombreMostrar} — Fundada en ${historia.fundacion}`
+    : nombreMostrar
+
+  return (
+    <section id="historia" aria-labelledby="historia-h2" className="scroll-mt-20 bg-background">
+      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
+        <header className="mb-8 sm:mb-10">
+          <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
+            Nuestra historia
+          </p>
+          <h2 id="historia-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
+            {titulo}
+          </h2>
+        </header>
+
+        {isLoading ? (
+          <div className="card flex items-center justify-center p-12">
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-5 lg:gap-10">
+            {/* Texto — 60% del ancho en desktop (3 de 5 columnas) */}
+            <div className="space-y-6 lg:col-span-3">
+              {historia?.resena && (
+                <p className="whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
+                  {historia.resena}
+                </p>
+              )}
+              {historia?.importancia_regional && (
+                <div>
+                  <h3 className="font-sora text-lg font-bold text-primary">Importancia regional</h3>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
+                    {historia.importancia_regional}
+                  </p>
+                </div>
+              )}
+              {historia?.recursos_naturales && (
+                <div>
+                  <h3 className="font-sora text-lg font-bold text-primary">Recursos naturales</h3>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
+                    {historia.recursos_naturales}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Galería — 40% del ancho (2 de 5 columnas), grid 2x2 */}
+            {fotos.length > 0 && (
+              <div className="lg:col-span-2">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  {fotos.map((url, i) => (
+                    <button
+                      key={url + i}
+                      type="button"
+                      onClick={() => setLightbox(url)}
+                      className="group relative overflow-hidden rounded-lg border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        loading="lazy"
+                        className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
     </section>
   )
 }
@@ -1024,6 +1243,9 @@ export default function PortalPublico() {
     isLoading: loadingNoticias,
     error: errNoticias,
   } = useNoticiasPublicas({ limit: 15 })
+  const { data: municipioId } = usePortalMunicipioId()
+  const { datos } = useDatosMunicipio()
+  const municipioNombre = datos?.nombre ?? datos?.nombre_oficial ?? MUNICIPIO_NOMBRE
 
   return (
     <div className="min-h-svh bg-background">
@@ -1040,6 +1262,8 @@ export default function PortalPublico() {
         />
         <NoticiasProvinciales />
         <ServiciosSection />
+        <AutoridadesSection municipioId={municipioId} />
+        <HistoriaSection municipioId={municipioId} municipioNombre={municipioNombre} />
         <RecursosSection />
       </main>
 

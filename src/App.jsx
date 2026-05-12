@@ -36,6 +36,7 @@ import ConfigGeneral       from './pages/admin/ConfigGeneral'
 import PortalPublico       from './pages/portal/PortalPublico'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
+import DependenciaPublica  from './pages/portal/DependenciaPublica'
 import SacarTurno          from './pages/portal/SacarTurno'
 import MiTurno             from './pages/portal/MiTurno'
 import MiSalud             from './pages/portal/MiSalud'
@@ -78,6 +79,7 @@ const router = createBrowserRouter([
   // el matcher prefiera la ruta estática sobre el segmento dinámico.
   { path: '/portal/noticias',       element: <NoticiasListado /> },
   { path: '/portal/noticias/:id',   element: <NoticiaDetalle /> },
+  { path: '/portal/dependencia/:tipo', element: <DependenciaPublica /> },
   { path: '/portal/turno',          element: <SacarTurno /> },
   { path: '/portal/mi-turno',       element: <MiTurno /> },
   { path: '/portal/mi-salud',       element: <MiSalud /> },

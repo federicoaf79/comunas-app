@@ -321,6 +321,20 @@ export function useProximosTurnos({ municipioId, enabled = false, limit = 5 } = 
   })
 }
 
+// Mutación standalone para cambiar el estado de un turno desde
+// fuera del scope de useTurnos (ej: AtencionDetalle marca 'ausente'
+// o 'atendido' sin necesitar el resto del hook).
+export function useUpdateTurnoEstado() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, estado }) => updateTurnoEstado(id, estado),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['turnos'] })
+      qc.invalidateQueries({ queryKey: ['turno'] })
+    },
+  })
+}
+
 export function useTurnosByVecino(vecinoId) {
   const { perfil } = useAuth()
   const enabled = !!perfil && !!vecinoId

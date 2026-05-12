@@ -162,7 +162,7 @@ async function deleteAtencionInsumo(id) {
 // Sin transacción real client-side — si algún paso falla, se loggea
 // y el caller decide. Lo razonable es revisar manualmente el stock
 // si se reportó error en el descuento.
-async function closeAtencion({ atencionId, registradoPor }) {
+async function closeAtencion({ atencionId, registradoPor, estado = 'cerrada' }) {
   // 1) traer atención + insumos
   const { data: atencion, error: aErr } = await supabase
     .from('atenciones').select('id, estado, turno_id').eq('id', atencionId).single()
@@ -204,10 +204,10 @@ async function closeAtencion({ atencionId, registradoPor }) {
     }
   }
 
-  // 3) marcar atención como cerrada
+  // 3) marcar atención como cerrada o derivada
   const { data: cerrada, error: cErr } = await supabase
     .from('atenciones')
-    .update({ estado: 'cerrada', updated_at: new Date().toISOString() })
+    .update({ estado, updated_at: new Date().toISOString() })
     .eq('id', atencionId)
     .select(ATENCION_COLS)
     .single()
@@ -267,7 +267,7 @@ export function useCloseAtencion() {
   const qc = useQueryClient()
   const { perfil } = useAuth()
   return useMutation({
-    mutationFn: ({ atencionId }) => closeAtencion({ atencionId, registradoPor: perfil?.id }),
+    mutationFn: ({ atencionId, estado }) => closeAtencion({ atencionId, registradoPor: perfil?.id, estado }),
     onSuccess:  ({ atencion }) => {
       qc.invalidateQueries({ queryKey: ['atencion', 'turno', atencion.turno_id] })
       qc.invalidateQueries({ queryKey: ['atenciones', 'vecino', atencion.vecino_id] })

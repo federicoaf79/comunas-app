@@ -206,6 +206,7 @@ export default function AtencionDetalle() {
                 atencion={atencion}
                 municipioId={municipioId}
                 dependenciaSaludId={dependenciaSaludId}
+                onSwitchToAtencion={() => setTab('atencion')}
               />
             )}
             {tab === 'hc' && (

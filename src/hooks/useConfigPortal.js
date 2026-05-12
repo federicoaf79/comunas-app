@@ -201,3 +201,34 @@ export function useDatosMunicipio() {
     isLoading: datosQ.isLoading || redesQ.isLoading || identQ.isLoading,
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Resolver del municipio del portal (público)
+// ─────────────────────────────────────────────────────────────────
+
+// usePortalMunicipioId — devuelve el `municipio_id` del portal
+// público. Lee la fila `datos_municipio` (clave del whitelist anon)
+// y aprovecha la columna municipio_id que viene en el SELECT.
+// Útil para hooks anon que necesitan filtrar por municipio
+// (useAutoridades, useHistoriaMunicipio, useDependenciaPublica).
+export function usePortalMunicipioId() {
+  return useQuery({
+    queryKey: ['portal-municipio-id'],
+    queryFn:  async () => {
+      const { data, error } = await supabaseAnon
+        .from('configuracion_portal')
+        .select('municipio_id')
+        .eq('clave', 'datos_municipio')
+        .limit(1)
+        .maybeSingle()
+      if (error) {
+        if (!/permission|policy/i.test(error.message ?? '')) {
+          console.warn('[usePortalMunicipioId] error:', error.message)
+        }
+        return null
+      }
+      return data?.municipio_id ?? null
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+}
