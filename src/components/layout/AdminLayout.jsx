@@ -154,11 +154,21 @@ const TIPOS_INFO_ONLY = new Set([
   'primaria', 'secundaria',
 ])
 
+// Tipos cuyo módulo ya ES "Administración Municipal" — no tienen
+// sentido tener un sub-item "Administración" porque eso es la
+// página completa. Solo se renderiza el sub-item "Gestión".
+const TIPOS_SIN_ADMIN_TAB = new Set(['admin', 'administracion', 'intendencia', 'comuna'])
+
 // Sub-items por NavGroup de cada tipo de dependencia. `kind`
 // determina si el subitem se filtra por puede_gestionar o
 // puede_administrar al renderizar.
 function subitemsParaTipo(tipo, basePath) {
   const t = (tipo ?? '').toLowerCase()
+  if (TIPOS_SIN_ADMIN_TAB.has(t)) {
+    return [
+      { to: basePath, label: 'Gestión', kind: 'gestion' },
+    ]
+  }
   if (t === 'caps' || t === 'salud' || t === 'sala') {
     return [
       { to: basePath,                  label: 'Agenda',          kind: 'gestion' },

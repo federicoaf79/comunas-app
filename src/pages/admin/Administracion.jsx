@@ -12,7 +12,6 @@ import {
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
-import Tabs from '../../components/ui/Tabs'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
 import StatCard from '../../components/ui/StatCard'
@@ -36,7 +35,12 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 0,
 })
 
-const TABS = [
+// Secciones del módulo Administración. La página no renderiza una
+// barra de tabs interna: la navegación viene del sidebar (Gestión
+// Municipal → Administración) vía ?tab=. Acá solo necesitamos
+// validar el valor de la URL y derivar la etiqueta para el
+// breadcrumb del header.
+const SECCIONES = [
   { value: 'dashboard',    label: 'Dashboard' },
   { value: 'solicitudes',  label: 'Solicitudes' },
   { value: 'gastos',       label: 'Gastos' },
@@ -44,6 +48,8 @@ const TABS = [
   { value: 'presupuesto',  label: 'Presupuesto' },
   { value: 'partidas',     label: 'Partidas' },
 ]
+const SECCION_LABEL = Object.fromEntries(SECCIONES.map(s => [s.value, s.label]))
+const SECCION_VALORES = new Set(SECCIONES.map(s => s.value))
 
 const FUENTES_PARTIDA = [
   { value: 'coparticipacion',   label: 'Coparticipación' },
@@ -1084,25 +1090,23 @@ export default function Administracion() {
   const municipioId = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
 
-  // ?tab= en URL. Tabs válidos en TABS. Default 'dashboard'.
-  const [searchParams, setSearchParams] = useSearchParams()
+  // Lectura del ?tab= desde URL. Sin escritura: la navegación
+  // entre sub-secciones viene del sidebar (Gestión Municipal →
+  // Administración). Default 'dashboard' si no hay ?tab o si el
+  // valor no está en el catálogo.
+  const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') || ''
-  const tabFromUrl = TABS.some(t => t.value === tabParam) ? tabParam : 'dashboard'
-  const tab = tabFromUrl
-  const setTab = (v) => {
-    const next = new URLSearchParams(searchParams)
-    if (v === 'dashboard') next.delete('tab')
-    else next.set('tab', v)
-    setSearchParams(next, { replace: true })
-  }
+  const seccion  = SECCION_VALORES.has(tabParam) ? tabParam : 'dashboard'
   const { data: dependencias = [] } = useDependencias()
 
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-2xl font-bold text-primary">Administración municipal</h1>
-        <p className="text-sm text-primary-400">
-          Gestión financiera — gastos, ingresos y presupuesto del municipio.
+        <h1 className="font-sora text-2xl font-bold text-primary">Administración municipal</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">Administración municipal</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
         </p>
       </header>
 
@@ -1113,15 +1117,13 @@ export default function Administracion() {
         </div>
       )}
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
-
       <div>
-        {tab === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
-        {tab === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
-        {tab === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
-        {tab === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
-        {tab === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
-        {tab === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
+        {seccion === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
+        {seccion === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
+        {seccion === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
+        {seccion === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
+        {seccion === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
+        {seccion === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
       </div>
     </div>
   )
