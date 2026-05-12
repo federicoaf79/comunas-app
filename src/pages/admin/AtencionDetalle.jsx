@@ -129,14 +129,16 @@ export default function AtencionDetalle() {
       />
 
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-        {/* Sidebar paciente (sticky en desktop) */}
+        {/* Sidebar paciente (sticky en desktop). Paleta COMUNAS:
+            fondo navy/5 suave + ring navy/10; etiquetas en gold
+            (#C9A84C) y valores en navy oscuro (#0F1C35). */}
         <aside className="lg:sticky lg:top-4 lg:self-start">
-          <div className="card space-y-3 p-4">
+          <div className="space-y-3 rounded-xl border border-[#0F1C35]/10 bg-[#0F1C35]/5 p-4">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-primary-400">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
                 Paciente
               </p>
-              <p className="mt-0.5 font-sora text-base font-bold text-primary">
+              <p className="mt-0.5 font-sora text-base font-bold text-[#0F1C35]">
                 {nombreVecino(vecino)}
               </p>
             </div>
@@ -148,10 +150,10 @@ export default function AtencionDetalle() {
             <SidebarRow label="Dependencia"   value={turno.dependencia?.nombre || '—'} />
             {atencion?.estado && (
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-primary-400">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
                   Atención
                 </p>
-                <p className="mt-0.5 text-sm font-semibold capitalize text-primary">
+                <p className="mt-0.5 text-sm font-semibold capitalize text-[#0F1C35]">
                   {atencion.estado}
                 </p>
               </div>
@@ -268,8 +270,8 @@ function SidebarRow({ label, value, mono = false }) {
   if (!value) return null
   return (
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-primary-400">{label}</p>
-      <p className={`mt-0.5 text-sm font-semibold text-primary ${mono ? 'font-mono' : ''}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">{label}</p>
+      <p className={`mt-0.5 text-sm font-semibold text-[#0F1C35] ${mono ? 'font-mono' : ''}`}>
         {value}
       </p>
     </div>
