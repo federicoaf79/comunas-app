@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { medicoGuardia } from '../../lib/mockData'
 import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
@@ -70,7 +70,21 @@ export default function SalaPrimerosAuxilios() {
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
-  const [tab, setTab] = useState('agenda')
+  // ?tab= en URL: 'agenda' | 'admin' (alias de administracion).
+  // Si no viene, default 'agenda'. Cambios internos sincronizan la URL.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParamRaw = searchParams.get('tab') || ''
+  const tabFromUrl  = tabParamRaw === 'admin' ? 'administracion'
+                    : tabParamRaw === 'administracion' ? 'administracion'
+                    : tabParamRaw === 'agenda' ? 'agenda'
+                    : 'agenda'
+  const tab = tabFromUrl
+  const setTab = (v) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'agenda') next.delete('tab')
+    else next.set('tab', v === 'administracion' ? 'admin' : v)
+    setSearchParams(next, { replace: true })
+  }
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])

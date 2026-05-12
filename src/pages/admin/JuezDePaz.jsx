@@ -1,26 +1,82 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import { todayArgYMD, shortDateOf, timeOf } from '../../lib/datetime'
 import Tabs from '../../components/ui/Tabs'
+import Input from '../../components/ui/Input'
+import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import CalendarioSemanal from '../../components/turnos/CalendarioSemanal'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
+import ExpedienteFormModal from '../../components/admin/ExpedienteFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
+import {
+  useExpedientes, useCreateExpediente, useUpdateExpediente,
+} from '../../hooks/useExpedientes'
 
 // =============================================================
-// Juez de Paz — gestión de turnos del juzgado.
-// 3 tabs: Turnos del día | Agenda semanal | Consultas frecuentes.
+// Juez de Paz — gestión de turnos y expedientes del juzgado.
+// 5 tabs: Turnos del día | Agenda semanal | Consultas frecuentes |
+//         Expedientes | Administración
 // =============================================================
 
 const TABS = [
   { value: 'dia',            label: 'Turnos del día' },
   { value: 'semana',         label: 'Agenda semanal' },
   { value: 'consultas',      label: 'Consultas frecuentes' },
+  { value: 'expedientes',    label: 'Expedientes' },
   { value: 'administracion', label: 'Administración' },
+]
+
+const EXP_TIPO_LABEL = {
+  acta_matrimonio:         'Acta matrimonio civil',
+  certificado_domicilio:   'Cert. domicilio',
+  certificado_convivencia: 'Cert. convivencia',
+  notificacion:            'Notificación judicial',
+  conciliacion:            'Conciliación',
+  contravencion:           'Contravención',
+  auxilio_judicial:        'Auxilio judicial',
+  otro:                    'Otro',
+}
+
+const EXP_ESTADO_LABEL = {
+  abierto:    'Abierto',
+  en_proceso: 'En proceso',
+  cerrado:    'Cerrado',
+  derivado:   'Derivado',
+}
+
+// Paleta COMUNAS — sin verde. Activo/abierto = azul, en_proceso = gold,
+// cerrado = navy, derivado = gris.
+const EXP_ESTADO_CLASS = {
+  abierto:    'inline-flex items-center rounded-full bg-ok-50 px-2 py-0.5 text-xs font-semibold text-ok-700',
+  en_proceso: 'inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-xs font-semibold text-accent-700',
+  cerrado:    'inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-xs font-semibold text-primary-700',
+  derivado:   'inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600',
+}
+
+const EXP_ESTADO_OPTS = [
+  { value: '',           label: 'Todos los estados' },
+  { value: 'abierto',    label: 'Abierto' },
+  { value: 'en_proceso', label: 'En proceso' },
+  { value: 'cerrado',    label: 'Cerrado' },
+  { value: 'derivado',   label: 'Derivado' },
+]
+
+const EXP_TIPO_OPTS = [
+  { value: '',                        label: 'Todos los tipos' },
+  { value: 'acta_matrimonio',         label: 'Acta matrimonio civil' },
+  { value: 'certificado_domicilio',   label: 'Cert. domicilio' },
+  { value: 'certificado_convivencia', label: 'Cert. convivencia' },
+  { value: 'notificacion',            label: 'Notificación judicial' },
+  { value: 'conciliacion',            label: 'Conciliación' },
+  { value: 'contravencion',           label: 'Contravención' },
+  { value: 'auxilio_judicial',        label: 'Auxilio judicial' },
+  { value: 'otro',                    label: 'Otro' },
 ]
 
 const ESTADO_LABEL = {
@@ -316,6 +372,215 @@ function ConsultasTab({ depJuez }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TAB 4 · Expedientes
+// ─────────────────────────────────────────────────────────────────
+
+function vecinoNombreExp(v) {
+  if (!v) return null
+  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
+  return v.nombre_completo || v.apellido || v.nombre || null
+}
+
+function ExpedientesTab({ depJuez, municipioId, canCreate }) {
+  const [estado, setEstado]   = useState('')
+  const [tipo, setTipo]       = useState('')
+  const [q, setQ]             = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const expsQ      = useExpedientes({
+    municipioId,
+    dependenciaId: depJuez?.id ?? null,
+    estado:        estado || undefined,
+    tipo:          tipo   || undefined,
+  })
+  const createMut  = useCreateExpediente()
+  const updateMut  = useUpdateExpediente()
+
+  const expedientes = useMemo(() => expsQ.data ?? [], [expsQ.data])
+  const expsFiltrados = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    if (!needle) return expedientes
+    return expedientes.filter(e =>
+      (e.numero ?? '').toLowerCase().includes(needle)
+      || (e.caratula ?? '').toLowerCase().includes(needle)
+      || (e.contraparte ?? '').toLowerCase().includes(needle)
+      || (vecinoNombreExp(e.vecino) ?? '').toLowerCase().includes(needle),
+    )
+  }, [expedientes, q])
+
+  const totalAbiertos    = expedientes.filter(e => e.estado === 'abierto').length
+  const totalEnProceso   = expedientes.filter(e => e.estado === 'en_proceso').length
+  const totalCerrados    = expedientes.filter(e => e.estado === 'cerrado').length
+
+  async function handleCreate(data) {
+    if (!depJuez?.id || !municipioId) {
+      alert('Falta dependencia o municipio activo.')
+      return
+    }
+    await createMut.mutateAsync({
+      ...data,
+      municipio_id:   municipioId,
+      dependencia_id: depJuez.id,
+    })
+    setModalOpen(false)
+  }
+
+  async function cambiarEstado(id, nuevo) {
+    try {
+      const patch = { estado: nuevo }
+      if (nuevo === 'cerrado') patch.fecha_cierre = todayArgYMD()
+      await updateMut.mutateAsync({ id, patch })
+    } catch (e) {
+      alert(`No se pudo actualizar: ${e.message}`)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-primary">Expedientes del Juzgado</h2>
+          <p className="text-sm text-primary-500">
+            Actas, certificados, conciliaciones y notificaciones que tramita {depJuez?.nombre ?? 'el Juzgado'}.
+          </p>
+        </div>
+        {canCreate && (
+          <button onClick={() => setModalOpen(true)} className="btn-primary">+ Nuevo expediente</button>
+        )}
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="card p-4">
+          <p className="text-xs uppercase tracking-wide text-primary-400">Abiertos</p>
+          <p className="mt-1 text-2xl font-bold text-ok-700">{totalAbiertos}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs uppercase tracking-wide text-primary-400">En proceso</p>
+          <p className="mt-1 text-2xl font-bold text-accent-700">{totalEnProceso}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs uppercase tracking-wide text-primary-400">Cerrados</p>
+          <p className="mt-1 text-2xl font-bold text-primary-700">{totalCerrados}</p>
+        </div>
+      </div>
+
+      <div className="card p-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Input
+            label="Buscar"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Número, carátula, parte…"
+          />
+          <Select
+            label="Estado"
+            value={estado}
+            onChange={v => setEstado(v)}
+            options={EXP_ESTADO_OPTS}
+          />
+          <Select
+            label="Tipo"
+            value={tipo}
+            onChange={v => setTipo(v)}
+            options={EXP_TIPO_OPTS}
+          />
+        </div>
+      </div>
+
+      {expsQ.isLoading && (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      )}
+
+      {expsQ.error && (
+        <div className="card border-red-100 bg-red-50 p-4 text-sm text-danger">
+          No pudimos cargar los expedientes: {expsQ.error.message}
+        </div>
+      )}
+
+      {!expsQ.isLoading && !expsQ.error && expsFiltrados.length === 0 && (
+        <div className="card p-8 text-center text-sm text-primary-500">
+          {expedientes.length === 0
+            ? 'Todavía no hay expedientes cargados.'
+            : 'No hay expedientes que coincidan con los filtros.'}
+        </div>
+      )}
+
+      {!expsQ.isLoading && expsFiltrados.length > 0 && (
+        <div className="card overflow-hidden">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>N°</Th>
+                <Th>Tipo</Th>
+                <Th>Carátula</Th>
+                <Th>Parte</Th>
+                <Th>Apertura</Th>
+                <Th>Estado</Th>
+                <Th>Acciones</Th>
+              </Tr>
+            </THead>
+            <tbody>
+              {expsFiltrados.map(e => {
+                const parte = vecinoNombreExp(e.vecino) ?? e.contraparte ?? '—'
+                return (
+                  <Tr key={e.id}>
+                    <Td className="font-mono text-xs">{e.numero}</Td>
+                    <Td>{EXP_TIPO_LABEL[e.tipo] ?? e.tipo}</Td>
+                    <Td className="max-w-[280px] truncate" title={e.caratula}>{e.caratula}</Td>
+                    <Td>{parte}</Td>
+                    <Td className="whitespace-nowrap text-xs">{shortDateOf(e.fecha_apertura)}</Td>
+                    <Td>
+                      <span className={EXP_ESTADO_CLASS[e.estado] ?? EXP_ESTADO_CLASS.abierto}>
+                        {EXP_ESTADO_LABEL[e.estado] ?? e.estado}
+                      </span>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-1">
+                        {e.estado === 'abierto' && (
+                          <button
+                            className="rounded-md border border-accent-200 bg-accent-50 px-2 py-1 text-[11px] font-semibold text-accent-700 hover:bg-accent-100"
+                            onClick={() => cambiarEstado(e.id, 'en_proceso')}
+                          >
+                            En proceso
+                          </button>
+                        )}
+                        {(e.estado === 'abierto' || e.estado === 'en_proceso') && (
+                          <button
+                            className="rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary-700 hover:bg-primary-100"
+                            onClick={() => cambiarEstado(e.id, 'cerrado')}
+                          >
+                            Cerrar
+                          </button>
+                        )}
+                        {(e.estado === 'abierto' || e.estado === 'en_proceso') && (
+                          <button
+                            className="rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] font-semibold text-neutral-600 hover:bg-neutral-100"
+                            onClick={() => cambiarEstado(e.id, 'derivado')}
+                          >
+                            Derivar
+                          </button>
+                        )}
+                      </div>
+                    </Td>
+                  </Tr>
+                )
+              })}
+            </tbody>
+          </Table>
+        </div>
+      )}
+
+      <ExpedienteFormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSave={handleCreate}
+        saving={createMut.isPending}
+      />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────────
 
@@ -326,7 +591,24 @@ export default function JuezDePaz() {
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
-  const [tab, setTab] = useState('semana')
+
+  // ?tab= en URL. Aliases:
+  //   'gestion' → 'semana' (vista por defecto del módulo)
+  //   'admin'   → 'administracion'
+  // Resto: pass-through.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParamRaw = searchParams.get('tab') || ''
+  const tabFromUrl  = tabParamRaw === 'gestion' ? 'semana'
+                    : tabParamRaw === 'admin'   ? 'administracion'
+                    : tabParamRaw === ''        ? 'semana'
+                    : tabParamRaw
+  const tab = tabFromUrl
+  const setTab = (v) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'semana') next.delete('tab')
+    else next.set('tab', v === 'administracion' ? 'admin' : v)
+    setSearchParams(next, { replace: true })
+  }
   const [modalOpen, setModalOpen] = useState(false)
 
   // Busca la dependencia "juzgado" del municipio del operador. Si
@@ -378,6 +660,13 @@ export default function JuezDePaz() {
           {tabActivo === 'dia'            && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
           {tabActivo === 'semana'         && <AgendaSemanalTab depJuez={depJuez} />}
           {tabActivo === 'consultas'      && <ConsultasTab depJuez={depJuez} />}
+          {tabActivo === 'expedientes'    && (
+            <ExpedientesTab
+              depJuez={depJuez}
+              municipioId={municipioId}
+              canCreate={canCreate}
+            />
+          )}
           {tabActivo === 'administracion' && (
             <AdministracionTab
               dependenciaId={depJuez.id}

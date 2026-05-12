@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useDependenciaByTipo } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -422,7 +423,20 @@ export default function SUM() {
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 
-  const [tab, setTab] = useState('calendario')
+  // ?tab= en URL: 'reservas' | 'calendario' | 'tarifas' | 'admin' (alias).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParamRaw = searchParams.get('tab') || ''
+  const tabFromUrl  = tabParamRaw === 'admin' ? 'administracion'
+                    : ['reservas', 'calendario', 'tarifas', 'administracion'].includes(tabParamRaw)
+                      ? tabParamRaw
+                      : 'reservas'
+  const tab = tabFromUrl
+  const setTab = (v) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'reservas') next.delete('tab')
+    else next.set('tab', v === 'administracion' ? 'admin' : v)
+    setSearchParams(next, { replace: true })
+  }
   // Busca la dependencia "sum" del municipio del operador. Si es
   // superadmin (municipio_id = null), useDependenciaByTipo cae a la
   // primera dependencia activa con ese tipo en cualquier municipio.
@@ -442,7 +456,7 @@ export default function SUM() {
   }), [puedeGestionar, puedeAdministrar])
   const tabActivo = tabsVisibles.some(t => t.value === tab)
     ? tab
-    : (tabsVisibles[0]?.value ?? 'calendario')
+    : (tabsVisibles[0]?.value ?? 'reservas')
 
   return (
     <div className="space-y-5">

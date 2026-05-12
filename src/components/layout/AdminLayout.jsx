@@ -36,7 +36,10 @@ const LABEL_BY_TIPO = {
   social:         'Ayuda Social',
 }
 
-const NAV = [
+// NAV_TOP — links planos del header del sidebar. Dashboard +
+// herramientas cross-municipales que no son específicas de una
+// dependencia. Sala / Juez / SUM ahora viven en CIC con NavGroups.
+const NAV_TOP = [
   {
     to: '/admin',
     label: 'Dashboard',
@@ -93,40 +96,97 @@ const NAV = [
       </svg>
     ),
   },
-  {
-    to: '/admin/sala',
-    label: 'Sala',
-    modulo: 'sala_pa',
+]
+
+// CIC_BLUEPRINT — dependencias del CIC con módulo dedicado. Cada
+// una se renderiza como NavGroup con sus sub-items propios.
+// `tipo` debe coincidir con la fila de `dependencias` para poder
+// resolver el dep.id y leer permisos del perfil.
+const CIC_BLUEPRINT = [
+  { tipo: 'caps',    label: 'Sala PA',      basePath: '/admin/sala',                modulo: 'sala_pa',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
       </svg>
     ),
   },
-  {
-    to: '/admin/juez',
-    label: 'Juez de Paz',
-    modulo: 'juez_paz',
+  { tipo: 'juzgado', label: 'Juez de Paz',  basePath: '/admin/juez',                modulo: 'juez_paz',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
       </svg>
     ),
   },
-  {
-    to: '/admin/sum',
-    label: 'SUM',
-    modulo: 'sum',
+  { tipo: 'sum',     label: 'SUM',          basePath: '/admin/sum',                 modulo: 'sum',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
       </svg>
     ),
   },
-  // Portal Web — carpeta colapsable. Antes era un solo link a
-  // /admin/noticias; ahora agrupa noticias + configuración RSS
-  // bajo un acordeón anidado para que el sidebar sea más
-  // explorable cuando crezcan las opciones del portal.
+  { tipo: 'social',  label: 'Ayuda Social', basePath: '/admin/dependencia/social',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
+      </svg>
+    ),
+  },
+]
+
+// Tipos que viven en CIC — se excluyen de DEPENDENCIAS dinámicas
+// para no duplicar la entrada.
+const TIPOS_CIC = new Set(['caps', 'salud', 'sala', 'juzgado', 'sum', 'salon', 'social', 'ayuda_social'])
+
+// Tipos solo-informativos — un solo link "Información", sin
+// gestión ni administración. No verificamos permisos por dep para
+// estos (son meramente informativos en el sidebar).
+const TIPOS_INFO_ONLY = new Set([
+  'policia', 'policial',
+  'educacion', 'educacion_sec', 'jardin', 'primaria', 'secundaria',
+])
+
+// Sub-items por NavGroup de cada tipo de dependencia. `kind`
+// determina si el subitem se filtra por puede_gestionar o
+// puede_administrar al renderizar.
+function subitemsParaTipo(tipo, basePath) {
+  const t = (tipo ?? '').toLowerCase()
+  if (t === 'caps' || t === 'salud' || t === 'sala') {
+    return [
+      { to: basePath,                  label: 'Agenda',          kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+    ]
+  }
+  if (t === 'juzgado') {
+    return [
+      { to: basePath,                            label: 'Gestión',         kind: 'gestion' },
+      { to: `${basePath}?tab=expedientes`,       label: 'Expedientes',     kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,             label: 'Administración', kind: 'admin' },
+    ]
+  }
+  if (t === 'sum') {
+    return [
+      { to: basePath,                  label: 'Reservas',        kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+    ]
+  }
+  if (t === 'social' || t === 'ayuda_social') {
+    return [
+      { to: basePath,                  label: 'Beneficiarios',   kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+    ]
+  }
+  // Dependencias dinámicas genéricas
+  return [
+    { to: basePath,                    label: 'Gestión',         kind: 'gestion' },
+    { to: `${basePath}?tab=admin`,     label: 'Administración', kind: 'admin' },
+  ]
+}
+
+// NAV_GESTION — sección "Gestión Municipal" al pie del sidebar.
+// Portal Web + Administración con su nueva estructura ampliada
+// (Inventario y Flota viven adentro de Administración ahora) +
+// Config General como link plano.
+const NAV_GESTION = [
   {
     label: 'Portal Web',
     modulo: 'portal_web',
@@ -136,21 +196,14 @@ const NAV = [
       </svg>
     ),
     subitems: [
-      { to: '/admin/noticias', label: 'Noticias' },
-      { to: '/admin/config',   label: 'Configuración RSS' },
+      { to: '/admin/noticias',                  label: 'Noticias' },
+      { to: '/admin/config',                    label: 'Configuración RSS' },
+      { to: '/admin/config?tab=autoridades',    label: 'Autoridades' },
+      { to: '/admin/config?tab=historia',       label: 'Historia' },
+      { to: '/admin/config?tab=dependencias',   label: 'Dependencias' },
     ],
   },
-]
-
-// Sección "pie" del sidebar — va después de las dependencias y la
-// sección Recursos, separada por una línea fina. Concentra las
-// operaciones cross-municipales (Administración consolidada y
-// configuración global) que NO son específicas de una dependencia.
-const NAV_FOOTER = [
   {
-    // Carpeta "Administración" con subitems: el módulo financiero
-    // base (gastos/ingresos/presupuesto/partidas) y el módulo de
-    // rendición al Tribunal de Cuentas, alineado SARC.
     label: 'Administración',
     modulo: 'administracion',
     icon: (
@@ -162,8 +215,11 @@ const NAV_FOOTER = [
       </svg>
     ),
     subitems: [
-      { to: '/admin/administracion', label: 'Gastos e ingresos' },
-      { to: '/admin/rendicion',      label: 'Rendición de cuentas', modulo: 'rendicion' },
+      { to: '/admin/administracion',                 label: 'Gastos e ingresos' },
+      { to: '/admin/administracion?tab=solicitudes', label: 'Solicitudes' },
+      { to: '/admin/rendicion',                      label: 'Rendición',  modulo: 'rendicion' },
+      { to: '/admin/inventario',                     label: 'Inventario', modulo: 'inventario' },
+      { to: '/admin/flota',                          label: 'Flota',      modulo: 'flota' },
     ],
   },
   {
@@ -280,56 +336,25 @@ function SidebarDepLink({ tipo, label }) {
 //   - Otros roles → solo ven las dependencias cuyo `id` aparece en
 //     perfil.dependencias_acceso[].dependencia_id. Si el array está
 //     vacío o no existe, no muestran ninguna.
-function DependenciasFlat() {
-  const { data: deps = [], isLoading } = useDependencias()
-  const { perfil, hasRole } = useAuth()
-  const esDirector = hasRole(['admin_comuna', 'superadmin'])
-
-  // Set de UUIDs a los que el usuario tiene acceso explícito.
-  const misDepIds = useMemo(() => {
-    const arr = perfil?.dependencias_acceso ?? []
-    return new Set(arr.map(d => d?.dependencia_id).filter(Boolean))
-  }, [perfil])
-
-  // Dedupe por TIPO + orden alfabético. Mantenemos la exclusión de
-  // los tipos que ya tienen módulo top-level (Sala/Juez/SUM/etc).
-  // Para no-directores filtramos a las dependencias cuyo `id` está
-  // en su `dependencias_acceso`.
-  const items = useMemo(() => {
-    const seenTipo = new Set()
-    const out = []
-    for (const d of (deps ?? [])) {
-      if (d.activa === false) continue
-      const t = (d.tipo ?? '').toLowerCase().trim()
-      if (!t) continue
-      if (TIPOS_CON_MODULO_PROPIO.has(t)) continue
-      if (!esDirector && !misDepIds.has(d.id)) continue
-      if (seenTipo.has(t)) continue
-      seenTipo.add(t)
-      out.push({ tipo: t, label: LABEL_BY_TIPO[t] ?? d.nombre })
-    }
-    out.sort((a, b) => a.label.localeCompare(b.label))
-    return out
-  }, [deps, esDirector, misDepIds])
-
-  if (isLoading || items.length === 0) return null
-
-  return (
-    <div className="flex flex-col gap-0.5">
-      {items.map(d => (
-        <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} />
-      ))}
-    </div>
-  )
-}
-
 // Carpeta colapsable del NAV — el header no navega, solo abre/
 // cierra. Si la URL actual coincide con uno de los sub-items, el
 // grupo arranca abierto para que el ítem activo sea visible sin
 // que el usuario tenga que clickear el chevron.
+// Helper: pathname puro de un `to` que puede llevar query string.
+// `/admin/sala?tab=admin` → `/admin/sala`. Lo usa NavGroup para
+// resolver el auto-expand sin matchear contra el ?tab.
+function basePathOf(to) {
+  if (!to) return ''
+  const i = to.indexOf('?')
+  return i === -1 ? to : to.slice(0, i)
+}
+
 function NavGroup({ label, icon, subitems }) {
   const location = useLocation()
-  const hasActive = subitems.some(s => location.pathname === s.to || location.pathname.startsWith(`${s.to}/`))
+  const hasActive = subitems.some(s => {
+    const p = basePathOf(s.to)
+    return location.pathname === p || location.pathname.startsWith(`${p}/`)
+  })
   const [open, setOpen] = useState(hasActive)
 
   return (
@@ -371,63 +396,6 @@ function NavGroup({ label, icon, subitems }) {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// Sección "RECURSOS" — inventario y flota. Gateada por modulos_config
-// (`inventario` / `flota`) — si ninguno está activo la sección
-// completa se oculta para no dejar un header solitario.
-function RecursosSection({ tieneModulo }) {
-  const allItems = [
-    {
-      to: '/admin/inventario',
-      label: 'Inventario',
-      modulo: 'inventario',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8 12 3 3 8v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8" />
-        </svg>
-      ),
-    },
-    {
-      to: '/admin/flota',
-      label: 'Flota',
-      modulo: 'flota',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 14V9l3-4h7l3 5h4a1 1 0 0 1 1 1v3M3 14h18" />
-          <circle cx="7" cy="17" r="2" /><circle cx="17" cy="17" r="2" />
-        </svg>
-      ),
-    },
-  ]
-  const items = allItems.filter(it => tieneModulo(it.modulo))
-  if (items.length === 0) return null
-
-  return (
-    <div className="mt-1 border-t border-border pt-2">
-      <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary-500">
-        Recursos
-      </div>
-      <div className="flex flex-col gap-0.5">
-        {items.map(item => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
-              }`
-            }
-          >
-            <span aria-hidden="true">{item.icon}</span>
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-      </div>
     </div>
   )
 }
@@ -489,6 +457,38 @@ function SuperadminSection() {
   )
 }
 
+// Rótulo separador entre secciones del sidebar.
+function Rotulo({ children }) {
+  return (
+    <div className="hidden px-3 pb-1 pt-4 lg:block">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C] opacity-70">
+        {children}
+      </span>
+    </div>
+  )
+}
+
+// NavLink plano del sidebar — extracto para reusar entre NAV_TOP,
+// info-only deps y NAV_GESTION sin duplicar las clases largas.
+function FlatNavLink({ to, label, icon, end }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          isActive
+            ? 'bg-primary text-white shadow-sm'
+            : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+        }`
+      }
+    >
+      {icon && <span aria-hidden="true">{icon}</span>}
+      <span>{label}</span>
+    </NavLink>
+  )
+}
+
 export default function AdminLayout() {
   // Gating dinámico por módulos contratados. Cada item del NAV
   // declara su `modulo` — si no existe en modulos_config (o la
@@ -496,6 +496,8 @@ export default function AdminLayout() {
   // a true para no romper la navegación legacy.
   const municipioId = useEffectiveMunicipioId()
   const { data: modulos } = useModulosActivos(municipioId)
+  const { perfil, hasRole } = useAuth()
+  const esDirector = hasRole(['admin_comuna', 'superadmin'])
   const tieneModulo = useMemo(() => {
     const set = new Set((modulos ?? []).map(m => m.modulo))
     return (mod) => {
@@ -505,19 +507,78 @@ export default function AdminLayout() {
     }
   }, [modulos])
 
-  // Filtramos el NAV nivel-1 y, para los grupos con subitems, los
-  // subitems que también tienen `modulo`. Un grupo se oculta si su
-  // módulo principal está apagado o si quedó sin subitems visibles.
-  // Mismo filtro aplica al NAV_FOOTER (Administración + Config General).
-  const navFiltrado = useMemo(() => NAV.map(item => {
-    if (!tieneModulo(item.modulo)) return null
-    if (!item.subitems) return item
-    const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
-    if (subs.length === 0) return null
-    return { ...item, subitems: subs }
-  }).filter(Boolean), [tieneModulo])
+  const accesoByDepId = useMemo(() => {
+    const map = new Map()
+    for (const r of (perfil?.dependencias_acceso ?? [])) {
+      if (r?.dependencia_id) map.set(r.dependencia_id, r)
+    }
+    return map
+  }, [perfil])
 
-  const navFiltradoFooter = useMemo(() => NAV_FOOTER.map(item => {
+  // Lista de dependencias del municipio para mapear tipo→dep.
+  const { data: deps = [] } = useDependencias()
+  // Construye la entrada del sidebar para una dependencia. Devuelve:
+  //   - { kind: 'group', ...NavGroup } si tiene sub-items visibles
+  //   - { kind: 'link',  ...FlatNavLink } para tipos info-only
+  //   - null si el usuario no tiene acceso y/o el módulo está off
+  function entryParaDep({ tipo, label, basePath, modulo, icon, dep }) {
+    if (modulo && !tieneModulo(modulo)) return null
+    const tLower = (tipo ?? '').toLowerCase()
+    // Info-only: link plano sin verificar permisos (siempre visible)
+    if (TIPOS_INFO_ONLY.has(tLower)) {
+      return { kind: 'link', to: basePath, label, icon }
+    }
+    // Permisos: directores ven todo; el resto solo si tienen acceso
+    // explícito a este dep.id (gestión y/o administración).
+    const acceso = dep ? accesoByDepId.get(dep.id) : null
+    const puedeGestionar   = esDirector || !!acceso?.puede_gestionar
+    const puedeAdministrar = esDirector || !!acceso?.puede_administrar
+    if (!puedeGestionar && !puedeAdministrar) return null
+    const subs = subitemsParaTipo(tipo, basePath).filter(s =>
+      s.kind === 'admin' ? puedeAdministrar : puedeGestionar,
+    )
+    if (subs.length === 0) return null
+    return { kind: 'group', label, icon, subitems: subs }
+  }
+
+  // CIC: el blueprint dice qué dependencias hardcodear; cada una
+  // se matchea contra el dep real (por tipo) del municipio para
+  // resolver el dep.id que necesitan los checks de permisos.
+  const cicEntries = useMemo(() => {
+    return CIC_BLUEPRINT
+      .map(blue => {
+        const dep = deps.find(d => (d?.tipo ?? '').toLowerCase() === blue.tipo && d.activa !== false)
+        return entryParaDep({ ...blue, dep })
+      })
+      .filter(Boolean)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deps, accesoByDepId, esDirector, tieneModulo])
+
+  // DEPENDENCIAS dinámicas: el resto de filas de la tabla que NO
+  // están en CIC. Dedupe por tipo (un tipo = una entrada aunque
+  // existan varias filas).
+  const depEntries = useMemo(() => {
+    const seenTipo = new Set()
+    const out = []
+    for (const d of (deps ?? [])) {
+      if (d.activa === false) continue
+      const t = (d.tipo ?? '').toLowerCase().trim()
+      if (!t || TIPOS_CIC.has(t)) continue
+      if (seenTipo.has(t)) continue
+      seenTipo.add(t)
+      const label = LABEL_BY_TIPO[t] ?? d.nombre
+      const basePath = `/admin/dependencia/${t}`
+      const entry = entryParaDep({ tipo: t, label, basePath, dep: d })
+      if (entry) out.push(entry)
+    }
+    out.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
+    return out
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deps, accesoByDepId, esDirector, tieneModulo])
+
+  // Filtramos top + gestión por módulo (mismo patrón que antes).
+  const navTopFiltrado = useMemo(() => NAV_TOP.filter(item => tieneModulo(item.modulo)), [tieneModulo])
+  const navGestionFiltrado = useMemo(() => NAV_GESTION.map(item => {
     if (!tieneModulo(item.modulo)) return null
     if (!item.subitems) return item
     const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
@@ -528,72 +589,36 @@ export default function AdminLayout() {
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <aside className="lg:w-56 lg:shrink-0">
-        {/* En mobile: nav horizontal con scroll-x (los chips de cada
-            sección desfilan a lo ancho). En desktop: nav vertical
-            con scroll-y propio acotado al alto del viewport — sin
-            esto, con muchas dependencias o pantallas chicas el nav
-            crecía más allá de la altura visible y los últimos items
-            quedaban inaccesibles sin scrollear la página entera. */}
+        {/* En mobile: nav horizontal con scroll-x. En desktop: nav
+            vertical con scroll-y propio acotado al alto del viewport.
+            Los rótulos de sección se ocultan en mobile (degradación
+            consciente — mobile usa chips compactos). */}
         <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
           <SuperadminSection />
-          {navFiltrado.map(item => (
+          {navTopFiltrado.map(item => (
+            <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
+          ))}
+
+          {cicEntries.length > 0 && <Rotulo>CIC</Rotulo>}
+          {cicEntries.map(item => (
+            item.kind === 'link'
+              ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
+              : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
+          ))}
+
+          {depEntries.length > 0 && <Rotulo>Dependencias</Rotulo>}
+          {depEntries.map(item => (
+            item.kind === 'link'
+              ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
+              : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
+          ))}
+
+          {navGestionFiltrado.length > 0 && <Rotulo>Gestión municipal</Rotulo>}
+          {navGestionFiltrado.map(item => (
             item.subitems
               ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
-              : (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
-                    }`
-                  }
-                >
-                  <span aria-hidden="true">{item.icon}</span>
-                  <span>{item.label}</span>
-                </NavLink>
-              )
+              : <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
           ))}
-          {/* En desktop:
-              1) dependencias dinámicas como lista plana (sin header
-                 "Otras dependencias") siguiendo el NAV.
-              2) Sección RECURSOS (Inventario / Flota).
-              3) Separador fino.
-              4) NAV_FOOTER (Administración + Config. General).
-              En mobile aceptamos la degradación (el overflow-x mezcla
-              los chips) — el sidebar pasa a horizontal igual. */}
-          <div className="hidden lg:block">
-            <DependenciasFlat />
-            <RecursosSection tieneModulo={tieneModulo} />
-          </div>
-          {navFiltradoFooter.length > 0 && (
-            <div className="mt-1 hidden border-t border-border pt-2 lg:block">
-              {navFiltradoFooter.map(item => (
-                item.subitems
-                  ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
-                  : (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.end}
-                      className={({ isActive }) =>
-                        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-primary text-white shadow-sm'
-                            : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
-                        }`
-                      }
-                    >
-                      <span aria-hidden="true">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </NavLink>
-                  )
-              ))}
-            </div>
-          )}
         </nav>
       </aside>
 

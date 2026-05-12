@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   useGastos, useIngresos, usePresupuesto, usePresupuestoPartidas,
   useCreateGasto, useUpdateGastoEstado, useCreateIngreso,
@@ -1083,7 +1084,17 @@ export default function Administracion() {
   const municipioId = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
 
-  const [tab, setTab] = useState('dashboard')
+  // ?tab= en URL. Tabs válidos en TABS. Default 'dashboard'.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab') || ''
+  const tabFromUrl = TABS.some(t => t.value === tabParam) ? tabParam : 'dashboard'
+  const tab = tabFromUrl
+  const setTab = (v) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'dashboard') next.delete('tab')
+    else next.set('tab', v)
+    setSearchParams(next, { replace: true })
+  }
   const { data: dependencias = [] } = useDependencias()
 
   return (

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   useTurnos, useDependenciaByTipo,
@@ -806,7 +806,23 @@ export default function DependenciaGeneral() {
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
 
   const { data: dep, isLoading } = useDependenciaByTipo(tipo)
-  const [tab, setTab] = useState('info')
+
+  // ?tab= en URL. Aliases:
+  //   'informacion' → 'info'    (usado por sidebar info-only)
+  //   'admin'       → 'administracion'
+  // Resto: pass-through (turnos, inventario, contacto, beneficiarios, ...).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParamRaw = searchParams.get('tab') || ''
+  const tabFromUrl  = tabParamRaw === 'informacion' ? 'info'
+                    : tabParamRaw === 'admin'       ? 'administracion'
+                    : tabParamRaw || 'info'
+  const tab = tabFromUrl
+  const setTab = (v) => {
+    const next = new URLSearchParams(searchParams)
+    if (v === 'info') next.delete('tab')
+    else next.set('tab', v === 'administracion' ? 'admin' : v)
+    setSearchParams(next, { replace: true })
+  }
   const [modalOpen, setModalOpen] = useState(false)
 
   // Permisos por dependencia desde dependencias_acceso del perfil.
