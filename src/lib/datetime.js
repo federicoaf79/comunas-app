@@ -66,3 +66,29 @@ export function shortDateOf(iso) {
 export function todayArgYMD() {
   return _dateFmt.format(new Date())
 }
+
+// "miércoles 12 de mayo de 2026" — fecha larga en español para
+// documentos imprimibles. Acepta un YYYY-MM-DD plano (que viene de
+// un date input) y lo parsea como fecha local sin shift de TZ. Las
+// strings ISO con T y zone se pasan a Intl.DateTimeFormat tal cual.
+const _longDateFmt = new Intl.DateTimeFormat('es-AR', {
+  timeZone: ARG_TZ,
+  weekday: 'long',
+  day:     'numeric',
+  month:   'long',
+  year:    'numeric',
+})
+
+export function longDateOf(input) {
+  if (!input) return ''
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [y, m, d] = input.split('-').map(Number)
+    // Anclamos a mediodía para que la conversión TZ no termine en
+    // el día anterior por -3hs.
+    const date = new Date(y, m - 1, d, 12, 0, 0)
+    return _longDateFmt.format(date)
+  }
+  const date = input instanceof Date ? input : new Date(input)
+  if (isNaN(date)) return ''
+  return _longDateFmt.format(date)
+}

@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { medicoGuardia } from '../../lib/mockData'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useSalaPaConfigAdmin, DEFAULT_SALA_PA_CONFIG } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
@@ -144,6 +145,14 @@ export default function SalaPrimerosAuxilios() {
     dependenciaId: dependenciaSaludId ?? undefined,
   })
 
+  // Configuración operativa de Sala PA — la duración estándar de
+  // turno se imprime en el footer de la planilla. Si el hook todavía
+  // no resolvió, usamos el default para no romper el render.
+  const salaPaConfigQ = useSalaPaConfigAdmin({ municipioIdOverride: municipioId })
+  const duracionTurnoMin = Number(
+    salaPaConfigQ.data?.duracion_turno_min ?? DEFAULT_SALA_PA_CONFIG.duracion_turno_min,
+  )
+
   function prevWeek() { setWeekStart(prev => addDays(prev, -7)) }
   function nextWeek() { setWeekStart(prev => addDays(prev,  7)) }
   function thisWeek() { setWeekStart(startOfWeekMonday(new Date())) }
@@ -166,69 +175,16 @@ export default function SalaPrimerosAuxilios() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-sora text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
-          <p className="mt-1 text-sm text-primary-500">
-            <span className="text-primary-400">Sala PA</span>
-            <span className="mx-1.5 text-primary-300">›</span>
-            <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
-            {depSaludNombre && (
-              <span className="text-primary-400"> · {depSaludNombre}</span>
-            )}
-          </p>
-        </div>
-        {seccion === 'agenda' && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-md border border-border bg-white p-0.5 text-sm shadow-sm">
-              <button
-                onClick={() => setVista('dia')}
-                className={`rounded px-3 py-1 font-medium transition-colors ${
-                  vista === 'dia' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-                }`}
-              >
-                Vista día
-              </button>
-              <button
-                onClick={() => setVista('semana')}
-                className={`rounded px-3 py-1 font-medium transition-colors ${
-                  vista === 'semana' ? 'bg-primary text-white' : 'text-primary-500 hover:bg-primary-50'
-                }`}
-              >
-                Vista semana
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setTurnoModalOpen(true)}
-              disabled={!dependenciaSaludId}
-              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-              title={dependenciaSaludId ? '' : 'Configurá una dependencia de salud para crear turnos'}
-            >
-              + Turno presencial
-            </button>
-
-            <div className="inline-flex items-stretch overflow-hidden rounded-md border border-border bg-white shadow-sm">
-              <input
-                type="date"
-                value={printDate}
-                onChange={e => setPrintDate(e.target.value || todayArgYMD())}
-                aria-label="Fecha a imprimir"
-                className="border-0 bg-transparent px-2 text-sm text-primary-700 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleImprimir}
-                disabled={!dependenciaSaludId}
-                className="border-l border-border bg-accent-50 px-3 py-1.5 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-100 disabled:cursor-not-allowed disabled:opacity-50"
-                title={dependenciaSaludId ? `Imprimir planilla del ${printDate}` : 'Configurá una dependencia de salud'}
-              >
-                🖨 Imprimir planilla
-              </button>
-            </div>
-          </div>
-        )}
+      <header>
+        <h1 className="font-sora text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          <span className="text-primary-400">Sala PA</span>
+          <span className="mx-1.5 text-primary-300">›</span>
+          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
+          {depSaludNombre && (
+            <span className="text-primary-400"> · {depSaludNombre}</span>
+          )}
+        </p>
       </header>
 
       {!seccion && (
@@ -259,30 +215,86 @@ export default function SalaPrimerosAuxilios() {
       )}
 
       {seccion === 'agenda' && <>
-      {/* Médico de guardia (común a ambas vistas) */}
-      <div className="card flex flex-wrap items-center justify-between gap-4 p-5">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-50 text-accent-700">
-            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      {/* Header de Agenda — 2 columnas (médico compacto + controles).
+          Mobile: columnas apiladas verticalmente. */}
+      <div className="grid gap-3 lg:grid-cols-2 lg:items-stretch">
+        {/* Columna IZQ — médico compacto */}
+        <div className="card flex items-center gap-3 px-4 py-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-50 text-accent-700">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v6a4 4 0 0 1-4 4M12 2v6a4 4 0 0 0 4 4M8 12h8M12 12v8" />
             </svg>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary-400">Médico de guardia</p>
-            <p className="text-lg font-semibold text-primary">{medicoGuardia.nombre}</p>
-            <p className="text-xs text-primary-500">
-              {medicoGuardia.especialidad} · {medicoGuardia.matricula}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-400">
+              Médico de guardia
+            </p>
+            <p className="truncate font-sora text-sm font-semibold text-primary">
+              {medicoGuardia.nombre}
+              <span className="ml-2 text-xs font-medium text-primary-500">
+                · {medicoGuardia.especialidad} · {medicoGuardia.matricula}
+              </span>
+            </p>
+            <p className="truncate text-xs text-primary-500">
+              {medicoGuardia.desde} – {medicoGuardia.hasta} · {medicoGuardia.telefono}
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-6 text-sm text-primary-700">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary-400">Horario</p>
-            <p className="font-semibold">{medicoGuardia.desde} – {medicoGuardia.hasta}</p>
+
+        {/* Columna DER — controles (toggle vista arriba, acciones abajo) */}
+        <div className="card flex flex-col gap-2 p-3">
+          {/* Fila superior — toggle día/semana */}
+          <div className="inline-flex self-start rounded-md border border-border bg-white p-0.5 text-sm">
+            <button
+              type="button"
+              onClick={() => setVista('dia')}
+              className={`rounded px-3 py-1.5 font-medium transition-colors ${
+                vista === 'dia' ? 'bg-primary text-white shadow-sm' : 'text-primary-500 hover:bg-primary-50'
+              }`}
+            >
+              Vista día
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista('semana')}
+              className={`rounded px-3 py-1.5 font-medium transition-colors ${
+                vista === 'semana' ? 'bg-primary text-white shadow-sm' : 'text-primary-500 hover:bg-primary-50'
+              }`}
+            >
+              Vista semana
+            </button>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-primary-400">Contacto</p>
-            <p className="font-semibold">{medicoGuardia.telefono}</p>
+
+          {/* Fila inferior — turno presencial, imprimir, fecha */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTurnoModalOpen(true)}
+              disabled={!dependenciaSaludId}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-50"
+              title={dependenciaSaludId ? '' : 'Configurá una dependencia de salud para crear turnos'}
+            >
+              + Turno presencial
+            </button>
+            <button
+              type="button"
+              onClick={handleImprimir}
+              disabled={!dependenciaSaludId}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border-2 border-primary bg-white px-4 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              title={dependenciaSaludId ? `Imprimir turnos del ${printDate}` : 'Configurá una dependencia de salud'}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z" />
+              </svg>
+              Imprimir turnos
+            </button>
+            <input
+              type="date"
+              value={printDate}
+              onChange={e => setPrintDate(e.target.value || todayArgYMD())}
+              aria-label="Fecha a imprimir"
+              className="w-[145px] rounded-md border border-border bg-white px-2 py-2 text-sm text-primary-700 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+            />
           </div>
         </div>
       </div>
@@ -429,7 +441,7 @@ export default function SalaPrimerosAuxilios() {
       <PlanillaImprimir
         fecha={printDate}
         dependenciaId={dependenciaSaludId}
-        dependenciaNombre={depSaludNombre}
+        duracionTurnoMin={duracionTurnoMin}
       />
 
       {/* Estilos de impresión: oculta TODO el chrome del admin durante
@@ -439,7 +451,7 @@ export default function SalaPrimerosAuxilios() {
       <style>{`
         .planilla-print { display: none; }
         @media print {
-          @page { size: A4 portrait; margin: 12mm; }
+          @page { size: A4 portrait; margin: 15mm; }
           body * { visibility: hidden !important; }
           .planilla-print, .planilla-print * { visibility: visible !important; }
           .planilla-print {
@@ -450,22 +462,74 @@ export default function SalaPrimerosAuxilios() {
             color: #000;
             background: #fff;
             font-family: 'Sora', system-ui, sans-serif;
-            font-size: 11pt;
+            font-size: 10pt;
           }
-          .planilla-header { margin-bottom: 12mm; }
-          .planilla-header-row { display: flex; align-items: center; gap: 10mm; }
-          .planilla-logo { max-height: 18mm; max-width: 30mm; object-fit: contain; }
-          .planilla-muni { margin: 0; font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; color: #555; }
-          .planilla-title { margin: 1mm 0 0; font-size: 14pt; font-weight: 800; color: #0F1C35; }
-          .planilla-sub { margin: 1mm 0 0; font-size: 10pt; color: #555; }
-          .planilla-meta { margin-top: 6mm; font-size: 10pt; line-height: 1.4; }
+
+          /* === HEADER (~20% del área útil) ============================ */
+          .planilla-header {
+            border-bottom: 1.5pt solid #0F1C35;
+            padding-bottom: 4mm;
+            margin-bottom: 5mm;
+          }
+          .planilla-header-row {
+            display: flex;
+            align-items: center;
+            gap: 6mm;
+          }
+          .planilla-logo {
+            max-height: 20mm;
+            max-width: 20mm;
+            object-fit: contain;
+            flex-shrink: 0;
+          }
+          .planilla-titles { flex: 1; text-align: center; }
+          .planilla-title {
+            margin: 0;
+            font-size: 15pt;
+            font-weight: 800;
+            color: #0F1C35;
+            letter-spacing: 0.02em;
+          }
+          .planilla-sub {
+            margin: 1mm 0 0;
+            font-size: 10pt;
+            color: #555;
+            font-weight: 500;
+          }
+          .planilla-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 6mm;
+            margin-top: 4mm;
+            font-size: 9.5pt;
+            line-height: 1.4;
+          }
           .planilla-meta p { margin: 0; }
-          .planilla-table { width: 100%; border-collapse: collapse; margin-top: 6mm; }
+          .planilla-meta strong { color: #0F1C35; }
+
+          /* === TABLA (~70% del área útil) ============================ */
+          .planilla-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2mm;
+            table-layout: fixed;
+          }
+          .planilla-table col.col-hora      { width: 8%;  }
+          .planilla-table col.col-paciente  { width: 25%; }
+          .planilla-table col.col-dni       { width: 12%; }
+          .planilla-table col.col-telefono  { width: 13%; }
+          .planilla-table col.col-motivo    { width: 27%; }
+          .planilla-table col.col-atendido  { width: 15%; }
+
           .planilla-table th, .planilla-table td {
             border: 0.5pt solid #333;
-            padding: 2mm 2.5mm;
+            padding: 2.5mm 2mm;
             text-align: left;
             vertical-align: top;
+            font-size: 9.5pt;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           .planilla-table th {
             background: #f0eee7;
@@ -473,9 +537,46 @@ export default function SalaPrimerosAuxilios() {
             text-transform: uppercase;
             letter-spacing: 0.05em;
             font-weight: 700;
+            color: #0F1C35;
+            text-align: center;
           }
-          .planilla-footer { margin-top: 8mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 9pt; color: #444; }
-          .planilla-footer-meta { font-style: italic; }
+          .planilla-table tbody tr {
+            height: 35px;
+          }
+          .planilla-table tbody tr.row-empty {
+            color: transparent;
+          }
+          .planilla-table tbody tr:nth-child(even) td {
+            background: #fafafa;
+          }
+          .planilla-table .col-atendido-cell {
+            text-align: center;
+            font-size: 12pt;
+          }
+
+          /* === FOOTER (~10% del área útil) =========================== */
+          .planilla-footer {
+            margin-top: 5mm;
+            padding-top: 3mm;
+            border-top: 0.5pt solid #888;
+            font-size: 9pt;
+            color: #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 6mm;
+          }
+          .planilla-footer-left { line-height: 1.5; }
+          .planilla-footer-left p { margin: 0; }
+          .planilla-footer-right { min-width: 70mm; text-align: right; }
+          .planilla-footer-firma {
+            margin-top: 6mm;
+            border-top: 0.5pt solid #0F1C35;
+            padding-top: 1mm;
+            font-size: 9pt;
+            color: #0F1C35;
+          }
+          .planilla-footer-meta { font-style: italic; color: #777; }
         }
       `}</style>
     </div>

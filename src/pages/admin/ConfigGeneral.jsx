@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   useConfigClaveAdmin, useUpsertConfigClave,
+  useSalaPaConfigAdmin, useUpsertSalaPaConfig, DEFAULT_SALA_PA_CONFIG,
 } from '../../hooks/useConfigPortal'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -596,6 +597,87 @@ function PlanBSection({ disabled, municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Sección 4 — Sala PA (duración estándar de turno)
+// ─────────────────────────────────────────────────────────────────
+
+const DURACION_MIN = 10
+const DURACION_MAX = 60
+
+function SalaPaForm({ initial, disabled, municipioId }) {
+  const upsertMut = useUpsertSalaPaConfig({ municipioIdOverride: municipioId })
+  const [duracion, setDuracion] = useState(
+    Number(initial?.duracion_turno_min ?? DEFAULT_SALA_PA_CONFIG.duracion_turno_min),
+  )
+  const [error, setError] = useState('')
+  const [ok, setOk]       = useState('')
+
+  const valor = Number(duracion) || DEFAULT_SALA_PA_CONFIG.duracion_turno_min
+  const fueraDeRango = valor < DURACION_MIN || valor > DURACION_MAX
+
+  async function handleSave() {
+    setError(''); setOk('')
+    if (fueraDeRango) {
+      setError(`La duración debe estar entre ${DURACION_MIN} y ${DURACION_MAX} minutos.`)
+      return
+    }
+    try {
+      await upsertMut.mutateAsync({
+        ...DEFAULT_SALA_PA_CONFIG,
+        ...(initial ?? {}),
+        duracion_turno_min: valor,
+      })
+      setOk('Configuración de Sala PA guardada.')
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos guardar la configuración.')
+    }
+  }
+
+  return (
+    <SectionShell
+      title="Sala de Primeros Auxilios"
+      desc="Parámetros operativos de la Sala PA. La duración estándar de turno se muestra en la planilla imprimible y, a partir del Sprint 3, va a controlar el espaciado del calendario semanal."
+      error={error}
+      ok={ok}
+    >
+      <div className="grid gap-4 sm:max-w-md">
+        <div>
+          <Input
+            label="Duración estándar de turno (minutos)"
+            type="number"
+            min={DURACION_MIN}
+            max={DURACION_MAX}
+            step="5"
+            value={duracion}
+            onChange={e => setDuracion(e.target.value)}
+            inputMode="numeric"
+          />
+          <p className="mt-1 text-xs text-primary-400">
+            Mínimo {DURACION_MIN} min · Máximo {DURACION_MAX} min · Default {DEFAULT_SALA_PA_CONFIG.duracion_turno_min} min.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 flex justify-end">
+        <Button onClick={handleSave} loading={upsertMut.isPending} disabled={disabled || fueraDeRango}>
+          Guardar Sala PA
+        </Button>
+      </div>
+    </SectionShell>
+  )
+}
+
+function SalaPaSection({ disabled, municipioId }) {
+  const { data, isLoading } = useSalaPaConfigAdmin({ municipioIdOverride: municipioId })
+  if (isLoading) return <LoadingShell title="Cargando configuración de Sala PA..." />
+  return (
+    <SalaPaForm
+      initial={{ ...DEFAULT_SALA_PA_CONFIG, ...(data ?? {}) }}
+      disabled={disabled}
+      municipioId={municipioId}
+    />
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Marco Legal y Normativo — referencias institucionales
 //
 // Solo se muestra a admin_comuna / superadmin (los operadores no
@@ -755,6 +837,7 @@ export default function ConfigGeneral() {
           <RedesSocialesSection   disabled={sinMunicipio} municipioId={municipioId} />
           <DatosMunicipioSection  disabled={sinMunicipio} municipioId={municipioId} />
           <PlanBSection           disabled={sinMunicipio} municipioId={municipioId} />
+          <SalaPaSection          disabled={sinMunicipio} municipioId={municipioId} />
         </div>
       )}
 

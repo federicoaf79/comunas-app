@@ -206,6 +206,30 @@ export function useDatosMunicipio() {
 // Resolver del municipio del portal (público)
 // ─────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────
+// Sala PA — configuración operativa
+// ─────────────────────────────────────────────────────────────────
+
+// Defaults del módulo Sala PA. `duracion_turno_min` controla la
+// duración estándar de cada turno. Se muestra hoy en el footer de
+// la planilla imprimible; en el Sprint 3 va a alimentar también el
+// espaciado del calendario.
+export const DEFAULT_SALA_PA_CONFIG = {
+  duracion_turno_min: 30,
+}
+
+// Lectura admin de sala_pa_config (autenticada, todas las claves
+// para staff). El consumer hace `{ ...DEFAULT, ...(data ?? {}) }`.
+export function useSalaPaConfigAdmin({ municipioIdOverride } = {}) {
+  return useConfigClaveAdmin('sala_pa_config', DEFAULT_SALA_PA_CONFIG, {
+    municipioIdOverride,
+  })
+}
+
+export function useUpsertSalaPaConfig({ municipioIdOverride } = {}) {
+  return useUpsertConfigClave('sala_pa_config', { municipioIdOverride })
+}
+
 // usePortalMunicipioId — devuelve el `municipio_id` del portal
 // público. Lee la fila `datos_municipio` (clave del whitelist anon)
 // y aprovecha la columna municipio_id que viene en el SELECT.
