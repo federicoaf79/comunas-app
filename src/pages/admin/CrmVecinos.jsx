@@ -22,11 +22,36 @@ function avatarName(v) {
   return v.nombre_completo || v.apellido || v.nombre || '?'
 }
 
+// Paleta COMUNAS — Urbano azul (ok), Rural gold. Sin verde.
+const ZONA_OPTS = [
+  { value: 'urbano', label: 'Urbano' },
+  { value: 'rural',  label: 'Rural' },
+]
+
+function ZonaBadge({ zona }) {
+  if (zona === 'rural') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent-700 ring-1 ring-inset ring-accent-100">
+        Rural
+      </span>
+    )
+  }
+  if (zona === 'urbano') {
+    return (
+      <span className="inline-flex items-center rounded-full bg-ok-50 px-2 py-0.5 text-[11px] font-semibold text-ok-700 ring-1 ring-inset ring-ok-100">
+        Urbano
+      </span>
+    )
+  }
+  return <span className="text-primary-300">—</span>
+}
+
 export default function CrmVecinos() {
   const navigate = useNavigate()
   const [q, setQ]               = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [barrio, setBarrio]     = useState('')
+  const [zona, setZona]         = useState('')
   const [open, setOpen]         = useState(false)
 
   // Debounce de la búsqueda — evita una query por tecla.
@@ -37,9 +62,9 @@ export default function CrmVecinos() {
 
   const {
     rows, total, isLoading, isFetching, error, create,
-  } = useVecinos({ search: debouncedQ, barrio, page: 0 })
+  } = useVecinos({ search: debouncedQ, barrio, zona, page: 0 })
 
-  const hasFilters  = !!debouncedQ.trim() || !!barrio
+  const hasFilters  = !!debouncedQ.trim() || !!barrio || !!zona
   const showRows    = !isLoading && !error
   const empty       = showRows && rows.length === 0
 
@@ -74,6 +99,13 @@ export default function CrmVecinos() {
           placeholder="Todos los barrios"
           options={barrios.map(b => ({ value: b, label: b }))}
           className="min-w-[200px]"
+        />
+        <Select
+          value={zona}
+          onChange={setZona}
+          placeholder="Todas las zonas"
+          options={ZONA_OPTS}
+          className="min-w-[160px]"
         />
       </div>
 
@@ -114,6 +146,7 @@ export default function CrmVecinos() {
             <tr>
               <Th>Vecino</Th>
               <Th>DNI</Th>
+              <Th>Zona</Th>
               <Th>Barrio</Th>
               <Th>Teléfono</Th>
               <Th>Email</Th>
@@ -131,6 +164,7 @@ export default function CrmVecinos() {
                   </div>
                 </Td>
                 <Td>{v.dni || '—'}</Td>
+                <Td><ZonaBadge zona={v.zona} /></Td>
                 <Td>{v.barrio || '—'}</Td>
                 <Td>{v.telefono || '—'}</Td>
                 <Td className="text-primary-400">{v.email || '—'}</Td>

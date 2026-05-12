@@ -5,7 +5,15 @@ import Select from '../ui/Select'
 import Button from '../ui/Button'
 import { barrios } from '../../lib/mockData'
 
-const EMPTY = { apellido: '', nombre: '', dni: '', telefono: '', email: '', barrio: '', direccion: '' }
+const EMPTY = {
+  apellido: '', nombre: '', dni: '', telefono: '', email: '',
+  zona: 'urbano', barrio: '', direccion: '',
+}
+
+const ZONA_OPTS = [
+  { value: 'urbano', label: 'Urbano' },
+  { value: 'rural',  label: 'Rural' },
+]
 
 export default function VecinoFormModal({ open, onClose, onSubmit }) {
   const [form, setForm]     = useState(EMPTY)
@@ -61,6 +69,12 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
         <Input label="DNI"      value={form.dni}      onChange={e => set('dni', e.target.value)} />
         <Input label="Teléfono" value={form.telefono} onChange={e => set('telefono', e.target.value)} />
         <Input label="Email"    type="email" value={form.email} onChange={e => set('email', e.target.value)} />
+        <Select
+          label="Zona"
+          value={form.zona}
+          onChange={v => set('zona', v || 'urbano')}
+          options={ZONA_OPTS}
+        />
         <Select
           label="Barrio"
           value={form.barrio}

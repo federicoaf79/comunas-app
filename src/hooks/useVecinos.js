@@ -9,11 +9,11 @@ const TIMEOUT_MS = 8000
 // COLS mínimas para el listado del CRM. Si en algún momento se
 // necesitan campos adicionales en otra vista (detalle, edición),
 // se hace un select propio con sus columnas.
-const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono'
+const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono, zona'
 
 // Columnas para la ficha de detalle del vecino — incluye datos
 // personales que el listado no necesita (email, dirección, sexo, etc.).
-const DETAIL_COLS = 'id, municipio_id, dni, nombre_completo, apellido, nombre, telefono, email, barrio, direccion, fecha_nac, sexo, localidad'
+const DETAIL_COLS = 'id, municipio_id, dni, nombre_completo, apellido, nombre, telefono, email, barrio, direccion, fecha_nac, sexo, localidad, zona'
 
 // Escapa wildcards de ilike (% y _) para que no se interpreten como
 // comodines cuando el usuario los tipee en el buscador.
@@ -28,7 +28,7 @@ function escapeLike(s) {
 //
 // Timeout de 8s: si el fetch no responde, el AbortController dispara
 // y la query falla con un error claro en lugar de quedar colgada.
-export async function fetchVecinos(municipioId, { search = '', barrio = '', page = 0 } = {}) {
+export async function fetchVecinos(municipioId, { search = '', barrio = '', zona = '', page = 0 } = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
@@ -44,6 +44,7 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', page
   // los vecinos de TODOS los municipios.
   if (municipioId != null) q = q.eq('municipio_id', municipioId)
   if (barrio)              q = q.eq('barrio', barrio)
+  if (zona)                q = q.eq('zona', zona)
 
   if (search.trim()) {
     const pattern = `%${escapeLike(search.trim())}%`
@@ -132,7 +133,7 @@ export async function updateVecino(id, data) {
 // superadmin sin municipio asignado cae al primer municipio activo.
 // Sin este fallback, el listado quedaba sin datos para superadmin
 // porque la RLS o el query devolvían 0 filas.
-export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
+export function useVecinos({ search = '', barrio = '', zona = '', page = 0 } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
   const municipioId = useEffectiveMunicipioId()
@@ -148,8 +149,8 @@ export function useVecinos({ search = '', barrio = '', page = 0 } = {}) {
     // descartamos cualquier issue con object identity en la key.
     // Para municipioId null usamos el sentinel '__ALL__' para que
     // el key sea estable y no colisione con un uuid real.
-    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, page],
-    queryFn:  () => fetchVecinos(municipioId, { search, barrio, page }),
+    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, zona, page],
+    queryFn:  () => fetchVecinos(municipioId, { search, barrio, zona, page }),
     enabled,
   })
 
