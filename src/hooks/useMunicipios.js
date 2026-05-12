@@ -84,18 +84,42 @@ export function useMunicipios() {
 // Provincias soportadas
 // ─────────────────────────────────────────────────────────────────
 
-export function useProvinciasConfig() {
+// Provincias del catálogo. Si se pasa `paisId` se filtra por país
+// (multi-país); sin él trae todas y el wizard filtra en cliente.
+export function useProvinciasConfig({ paisId } = {}) {
   return useQuery({
-    queryKey: ['provincias-config'],
+    queryKey: ['provincias-config', paisId ?? '__ALL__'],
     queryFn:  async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('provincias_config')
         .select('*')
         .order('nombre', { ascending: true })
+      if (paisId) q = q.eq('pais_id', paisId)
+      const { data, error } = await q
       if (error) throw error
       return data ?? []
     },
     staleTime: 60 * 60 * 1000, // 1h — el catálogo cambia muy poco
+  })
+}
+
+// Países soportados (paises_config.activo = true). Se renderiza en
+// el paso 1 del wizard cuando hay más de 1. La detección de
+// "Argentina" se hace por código o por nombre — depende del schema
+// real; el caller intenta ambos.
+export function usePaisesConfig() {
+  return useQuery({
+    queryKey: ['paises-config'],
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from('paises_config')
+        .select('*')
+        .eq('activo', true)
+        .order('nombre', { ascending: true })
+      if (error) throw error
+      return data ?? []
+    },
+    staleTime: 60 * 60 * 1000,
   })
 }
 
@@ -138,6 +162,10 @@ async function createMunicipio(payload, onProgress = () => {}) {
     direccion, telefono, email,
     ley_marco, organo_control,
     dependenciasNombres,
+    // PASO F — set de ids de modulos_config a activar en el alta.
+    // Si el wizard no lo pasa, no se crean filas (default-open en
+    // sidebar vía useTieneModulo).
+    modulos,
   } = payload
 
   // PASO A — INSERT municipio
@@ -260,6 +288,31 @@ async function createMunicipio(payload, onProgress = () => {}) {
     }
   } else {
     onProgress('e:done')
+  }
+
+  // PASO F — modulos_config. Insertamos una fila por módulo activo
+  // con `orden` según el índice del array recibido. Si falla,
+  // loggeamos pero no abortamos: el sidebar cae al default-open
+  // (todos los módulos visibles) hasta que se complete a mano.
+  onProgress('f:start')
+  if (Array.isArray(modulos) && modulos.length > 0) {
+    const modulosRows = modulos.map((id, idx) => ({
+      municipio_id: muni.id,
+      modulo:       id,
+      activo:       true,
+      orden:        idx + 1,
+    }))
+    const { error: modErr } = await supabase
+      .from('modulos_config')
+      .insert(modulosRows)
+    if (modErr) {
+      console.warn('[useMunicipios] modulos_config:', modErr.message)
+      onProgress('f:warn')
+    } else {
+      onProgress('f:done')
+    }
+  } else {
+    onProgress('f:done')
   }
 
   return muni

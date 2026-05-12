@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useModulosActivos } from '../../hooks/useModulos'
 
 // Tipos de dependencia que tienen su propio módulo top-level —
 // se EXCLUYEN de la lista "Otras dependencias" para no duplicar
@@ -53,6 +55,7 @@ const NAV = [
   {
     to: '/admin/usuarios',
     label: 'Usuarios',
+    modulo: 'usuarios',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <circle cx="12" cy="8" r="3.5" />
@@ -64,6 +67,7 @@ const NAV = [
   {
     to: '/admin/crm',
     label: 'CRM Vecinal',
+    modulo: 'crm_vecinal',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <circle cx="9" cy="8" r="3.5" />
@@ -74,6 +78,7 @@ const NAV = [
   {
     to: '/admin/tablero',
     label: 'Tablero turnos',
+    modulo: 'tablero_turnos',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <rect x="3" y="3"  width="7" height="7"  rx="1" />
@@ -86,6 +91,7 @@ const NAV = [
   {
     to: '/admin/mensajeria',
     label: 'Mensajería',
+    modulo: 'mensajeria',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z" />
@@ -95,6 +101,7 @@ const NAV = [
   {
     to: '/admin/sala',
     label: 'Sala',
+    modulo: 'sala_pa',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
@@ -104,6 +111,7 @@ const NAV = [
   {
     to: '/admin/juez',
     label: 'Juez de Paz',
+    modulo: 'juez_paz',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
@@ -113,6 +121,7 @@ const NAV = [
   {
     to: '/admin/sum',
     label: 'SUM',
+    modulo: 'sum',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
@@ -125,6 +134,7 @@ const NAV = [
   // explorable cuando crezcan las opciones del portal.
   {
     label: 'Portal Web',
+    modulo: 'portal_web',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 11l18-7v16L3 13v-2zM7 13v5a2 2 0 0 0 4 0v-3" />
@@ -140,6 +150,7 @@ const NAV = [
     // base (gastos/ingresos/presupuesto/partidas) y el módulo de
     // rendición al Tribunal de Cuentas, alineado SARC.
     label: 'Administración',
+    modulo: 'administracion',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h13M8 12h13M8 17h13M3 7h.01M3 12h.01M3 17h.01" />
@@ -150,7 +161,9 @@ const NAV = [
     ),
     subitems: [
       { to: '/admin/administracion', label: 'Gastos e ingresos' },
-      { to: '/admin/rendicion',      label: 'Rendición de cuentas' },
+      // Tag `modulo` por subitem: si rendición está apagada pero el
+      // grupo Administración encendido, ocultamos solo el subitem.
+      { to: '/admin/rendicion',      label: 'Rendición de cuentas', modulo: 'rendicion' },
     ],
   },
   {
@@ -345,13 +358,15 @@ function NavGroup({ label, icon, subitems }) {
   )
 }
 
-// Sección "RECURSOS" — inventario y flota. Va siempre visible para
-// cualquier rol staff; el superadmin/admin_comuna también la ve.
-function RecursosSection() {
-  const items = [
+// Sección "RECURSOS" — inventario y flota. Gateada por modulos_config
+// (`inventario` / `flota`) — si ninguno está activo la sección
+// completa se oculta para no dejar un header solitario.
+function RecursosSection({ tieneModulo }) {
+  const allItems = [
     {
       to: '/admin/inventario',
       label: 'Inventario',
+      modulo: 'inventario',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
           <path strokeLinecap="round" strokeLinejoin="round" d="M21 8 12 3 3 8v8l9 5 9-5V8zM3 8l9 5 9-5M12 13v8" />
@@ -361,6 +376,7 @@ function RecursosSection() {
     {
       to: '/admin/flota',
       label: 'Flota',
+      modulo: 'flota',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 14V9l3-4h7l3 5h4a1 1 0 0 1 1 1v3M3 14h18" />
@@ -369,6 +385,8 @@ function RecursosSection() {
       ),
     },
   ]
+  const items = allItems.filter(it => tieneModulo(it.modulo))
+  if (items.length === 0) return null
 
   return (
     <div className="mt-1 border-t border-border pt-2">
@@ -455,6 +473,34 @@ function SuperadminSection() {
 }
 
 export default function AdminLayout() {
+  // Gating dinámico por módulos contratados. Cada item del NAV
+  // declara su `modulo` — si no existe en modulos_config (o la
+  // tabla todavía está vacía para el municipio), tieneModulo cae
+  // a true para no romper la navegación legacy.
+  const municipioId = useEffectiveMunicipioId()
+  const { data: modulos } = useModulosActivos(municipioId)
+  const tieneModulo = useMemo(() => {
+    const set = new Set((modulos ?? []).map(m => m.modulo))
+    return (mod) => {
+      if (!mod) return true
+      if (!modulos || modulos.length === 0) return true
+      return set.has(mod)
+    }
+  }, [modulos])
+
+  // Filtramos el NAV nivel-1 y, para los grupos con subitems, los
+  // subitems que también tienen `modulo`. Un grupo se oculta si su
+  // módulo principal está apagado o si quedó sin subitems visibles.
+  const navFiltrado = useMemo(() => {
+    return NAV.map(item => {
+      if (!tieneModulo(item.modulo)) return null
+      if (!item.subitems) return item
+      const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
+      if (subs.length === 0) return null
+      return { ...item, subitems: subs }
+    }).filter(Boolean)
+  }, [tieneModulo])
+
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <aside className="lg:w-56 lg:shrink-0">
@@ -466,7 +512,7 @@ export default function AdminLayout() {
             quedaban inaccesibles sin scrollear la página entera. */}
         <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
           <SuperadminSection />
-          {NAV.map(item => (
+          {navFiltrado.map(item => (
             item.subitems
               ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
               : (
@@ -493,7 +539,7 @@ export default function AdminLayout() {
               degradación para no duplicar nav layout. */}
           <div className="hidden lg:block">
             <OtrasDependenciasSection />
-            <RecursosSection />
+            <RecursosSection tieneModulo={tieneModulo} />
           </div>
         </nav>
       </aside>

@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  useMunicipios, useProvinciasConfig, useCreateMunicipio,
+  useMunicipios, useProvinciasConfig, usePaisesConfig, useCreateMunicipio,
   slugify,
   DEPENDENCIAS_DEFAULT_COMISION, DEPENDENCIAS_DEFAULT_MUNICIPIO,
 } from '../../hooks/useMunicipios'
+import {
+  MODULOS_DISPONIBLES, MODULOS_DESC,
+  CATEGORIA_LABEL, CATEGORIA_ORDEN, MODULOS_DEFAULT_ON,
+} from '../../hooks/useModulos'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -130,6 +134,7 @@ export default function Municipios() {
 function emptyWizardState() {
   return {
     paso: 1,
+    pais: null,                // fila de paises_config (auto-Argentina)
     provincia: null,           // objeto provincias_config seleccionado
     tipo_gobierno: 'comision', // 'comision' | 'municipio'
     nombre: '',
@@ -141,13 +146,18 @@ function emptyWizardState() {
     direccion: '',
     telefono: '',
     email: '',
-    // step 4: resultado tras crear
-    creado: null,              // { id, nombre, slug } cuando termina ok
+    // Paso 3 NUEVO — módulos contratados. Default: todos los del
+    // catálogo, excepto Mensajería y Flota (módulos opcionales).
+    modulos: new Set(MODULOS_DEFAULT_ON),
+    // step final: resultado tras crear
+    creado: null,
     creando: false,
     errorCreacion: '',
     progress: {},              // { a:'done', b:'done', ... }
   }
 }
+
+const WIZARD_TOTAL_PASOS = 4
 
 function WizardModal({ onClose }) {
   const [s, setS] = useState(emptyWizardState)
@@ -159,7 +169,7 @@ function WizardModal({ onClose }) {
 
   const titulo = s.creado
     ? 'Municipio creado'
-    : `Nuevo municipio · Paso ${s.paso} de 3`
+    : `Nuevo municipio · Paso ${s.paso} de ${WIZARD_TOTAL_PASOS}`
 
   return (
     <Modal
@@ -180,7 +190,7 @@ function WizardModal({ onClose }) {
       {/* Stepper visual */}
       {!s.creado && (
         <div className="mb-5 flex items-center gap-2">
-          {[1, 2, 3].map(n => (
+          {[1, 2, 3, 4].map(n => (
             <div key={n} className="flex flex-1 items-center gap-2">
               <span
                 className={
@@ -194,7 +204,7 @@ function WizardModal({ onClose }) {
               >
                 {n < s.paso ? '✓' : n}
               </span>
-              {n < 3 && (
+              {n < WIZARD_TOTAL_PASOS && (
                 <span className={'h-0.5 flex-1 ' + (n < s.paso ? 'bg-accent' : 'bg-primary-100')} />
               )}
             </div>
@@ -209,8 +219,10 @@ function WizardModal({ onClose }) {
           <Paso1Provincia state={s} set={set} />
         ) : s.paso === 2 ? (
           <Paso2Datos state={s} set={set} />
+        ) : s.paso === 3 ? (
+          <Paso3Modulos state={s} set={set} />
         ) : (
-          <Paso3Confirmacion state={s} set={set} dependenciasDefault={dependenciasDefault} />
+          <Paso4Confirmacion state={s} set={set} dependenciasDefault={dependenciasDefault} />
         )}
       </div>
     </Modal>
@@ -233,6 +245,9 @@ function WizardFooter({ state, set, onClose, onResetForOther, dependenciasDefaul
 
   const puedeAvanzar1 = !!state.provincia
   const puedeAvanzar2 = !!state.nombre.trim() && !!state.slug.trim() && !!state.localidad.trim()
+  // Paso 3: al menos un módulo seleccionado — sin módulos no tiene
+  // sentido crear el municipio.
+  const puedeAvanzar3 = state.modulos.size > 0
 
   if (state.paso === 1) {
     return (
@@ -254,12 +269,22 @@ function WizardFooter({ state, set, onClose, onResetForOther, dependenciasDefaul
       </>
     )
   }
-  // paso 3 — botón crear
+  if (state.paso === 3) {
+    return (
+      <>
+        <Button variant="secondary" onClick={() => set({ paso: 2 })}>← Anterior</Button>
+        <Button onClick={() => set({ paso: 4 })} disabled={!puedeAvanzar3}>
+          Siguiente →
+        </Button>
+      </>
+    )
+  }
+  // paso 4 — botón crear
   return (
     <>
       <Button
         variant="secondary"
-        onClick={() => set({ paso: 2, errorCreacion: '' })}
+        onClick={() => set({ paso: 3, errorCreacion: '' })}
         disabled={state.creando}
       >
         ← Anterior
@@ -290,6 +315,7 @@ function WizardFooter({ state, set, onClose, onResetForOther, dependenciasDefaul
                 ley_marco:        state.provincia.ley_marco ?? null,
                 organo_control:   state.provincia.organo_control ?? null,
                 dependenciasNombres: dependenciasDefault,
+                modulos:          Array.from(state.modulos),
               },
               onProgress,
             })
@@ -309,58 +335,242 @@ function WizardFooter({ state, set, onClose, onResetForOther, dependenciasDefaul
 // Paso 1 — Provincia
 // ─────────────────────────────────────────────────────────────────
 
-function Paso1Provincia({ state, set }) {
-  const { data: provincias = [], isLoading, error } = useProvinciasConfig()
+// Detecta la fila "Argentina" en paises_config tolerando que la
+// instancia use `codigo` o que solo tenga `nombre`. El wizard
+// arranca con Argentina pre-seleccionada para no obligar al
+// superadmin a clickear cuando el universo de países es ~1.
+function esArgentina(pais) {
+  const cod = (pais?.codigo ?? '').toLowerCase()
+  if (cod === 'ar' || cod === 'arg') return true
+  return /argentina/i.test(pais?.nombre ?? '')
+}
 
-  if (isLoading) return <div className="flex justify-center p-12"><Spinner /></div>
-  if (error) return (
+function Paso1Provincia({ state, set }) {
+  const paisesQ = usePaisesConfig()
+  const paises = paisesQ.data ?? []
+  // Auto-selección de país: si el estado todavía no tiene país,
+  // arrancamos con Argentina; si no existe, con el primero activo.
+  useEffect(() => {
+    if (state.pais || paises.length === 0) return
+    const arg = paises.find(esArgentina) ?? paises[0]
+    set({ pais: arg })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paises])
+
+  const paisId = state.pais?.id ?? null
+  const provQ = useProvinciasConfig({ paisId })
+  const provincias = provQ.data ?? []
+
+  // Si el país cambia y la provincia previamente elegida ya no es
+  // de ese país, la reseteamos.
+  useEffect(() => {
+    if (!state.provincia || !state.pais) return
+    if (provincias.length === 0) return
+    const sigueVigente = provincias.some(p => p.id === state.provincia.id)
+    if (!sigueVigente) set({ provincia: null })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paisId, provincias])
+
+  if (paisesQ.isLoading) return <div className="flex justify-center p-12"><Spinner /></div>
+  if (paisesQ.error) return (
     <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
-      No se pudieron cargar las provincias: {error.message}
+      No se pudieron cargar los países: {paisesQ.error.message}
     </div>
   )
 
+  const hayVariosPaises = paises.length > 1
+  const paisSeleccionado = state.pais
+  const paisListo = !!paisSeleccionado
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {hayVariosPaises && (
+        <section className="space-y-3">
+          <div>
+            <h3 className="font-sora text-lg font-bold text-primary">¿En qué país está?</h3>
+            <p className="text-sm text-primary-400">
+              Define el catálogo de provincias y la normativa aplicable.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {paises.map(p => {
+              const sel = paisSeleccionado?.id === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => set({ pais: p, provincia: null })}
+                  className={
+                    'flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ' +
+                    (sel
+                      ? 'border-accent bg-primary-50 shadow-card'
+                      : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30')
+                  }
+                >
+                  <ArgentinaIcon className={'h-7 w-7 ' + (sel ? 'text-accent' : 'text-primary-400')} />
+                  <div className="font-sora text-base font-bold text-primary">{p.nombre}</div>
+                  {p.codigo && (
+                    <div className="font-mono text-[11px] uppercase text-primary-400">{p.codigo}</div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      <section className="space-y-3">
+        <div>
+          <h3 className="font-sora text-lg font-bold text-primary">¿En qué provincia está?</h3>
+          <p className="text-sm text-primary-400">
+            Esto define el marco legal y el órgano de control que se aplicará al municipio.
+            {paisSeleccionado && hayVariosPaises && (
+              <> Mostrando provincias de <b>{paisSeleccionado.nombre}</b>.</>
+            )}
+          </p>
+        </div>
+
+        {provQ.isLoading ? (
+          <div className="flex justify-center p-12"><Spinner /></div>
+        ) : provQ.error ? (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+            No se pudieron cargar las provincias: {provQ.error.message}
+          </div>
+        ) : !paisListo ? (
+          <div className="rounded-md border border-border bg-primary-50/40 p-4 text-sm text-primary-500">
+            Elegí un país primero.
+          </div>
+        ) : provincias.length === 0 ? (
+          <div className="rounded-md border border-accent-100 bg-accent-50 p-4 text-sm text-accent-700">
+            <b>Próximamente.</b> Todavía no hay provincias cargadas para {paisSeleccionado.nombre}.
+            Solo Argentina tiene catálogo completo en esta versión.
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {provincias.map(p => {
+              const selected = state.provincia?.id === p.id
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => set({ provincia: p })}
+                  className={
+                    'flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ' +
+                    (selected
+                      ? 'border-accent bg-primary-50 shadow-card'
+                      : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30')
+                  }
+                >
+                  <ArgentinaIcon className={'h-7 w-7 ' + (selected ? 'text-accent' : 'text-primary-400')} />
+                  <div className="font-sora text-base font-bold text-primary">{p.nombre}</div>
+                  {p.ley_marco && (
+                    <div className="text-xs text-primary-500">
+                      <span className="text-primary-400">Ley marco: </span>
+                      {p.ley_marco}
+                    </div>
+                  )}
+                  {p.organo_control && (
+                    <div className="text-xs text-primary-500">
+                      <span className="text-primary-400">Control: </span>
+                      {p.organo_control}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Paso 3 — Módulos contratados
+// ─────────────────────────────────────────────────────────────────
+
+function Paso3Modulos({ state, set }) {
+  function toggle(id) {
+    const next = new Set(state.modulos)
+    if (next.has(id)) next.delete(id)
+    else                next.add(id)
+    set({ modulos: next })
+  }
+
+  // Agrupamos por categoría manteniendo orden estable.
+  const grupos = CATEGORIA_ORDEN.map(cat => ({
+    categoria: cat,
+    label: CATEGORIA_LABEL[cat] ?? cat,
+    items: MODULOS_DISPONIBLES.filter(m => m.categoria === cat),
+  })).filter(g => g.items.length > 0)
+
+  return (
+    <div className="space-y-5">
       <div>
-        <h3 className="font-sora text-lg font-bold text-primary">¿En qué provincia está?</h3>
+        <h3 className="font-sora text-lg font-bold text-primary">
+          Configurá los módulos de tu municipio
+        </h3>
         <p className="text-sm text-primary-400">
-          Esto define el marco legal y el órgano de control que se aplicará al municipio.
+          Podés cambiarlos después desde <b>Config. General</b>. Seleccioná solo lo
+          que el municipio va a usar — el sidebar se adapta automáticamente.
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {provincias.map(p => {
-          const selected = state.provincia?.id === p.id
-          return (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => set({ provincia: p })}
-              className={
-                'flex flex-col gap-2 rounded-xl border-2 p-4 text-left transition-all ' +
-                (selected
-                  ? 'border-accent bg-primary-50 shadow-card'
-                  : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30')
-              }
-            >
-              <ArgentinaIcon className={'h-7 w-7 ' + (selected ? 'text-accent' : 'text-primary-400')} />
-              <div className="font-sora text-base font-bold text-primary">{p.nombre}</div>
-              {p.ley_marco && (
-                <div className="text-xs text-primary-500">
-                  <span className="text-primary-400">Ley marco: </span>
-                  {p.ley_marco}
-                </div>
-              )}
-              {p.organo_control && (
-                <div className="text-xs text-primary-500">
-                  <span className="text-primary-400">Control: </span>
-                  {p.organo_control}
-                </div>
-              )}
-            </button>
-          )
-        })}
+      <div className="space-y-5">
+        {grupos.map(g => (
+          <section key={g.categoria}>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-primary-500">
+              {g.label}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {g.items.map(m => {
+                const sel = state.modulos.has(m.id)
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggle(m.id)}
+                    aria-pressed={sel}
+                    className={
+                      'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition-all ' +
+                      (sel
+                        ? 'border-accent bg-primary-50 shadow-card'
+                        : 'border-border bg-white hover:border-primary-200 hover:bg-primary-50/30')
+                    }
+                  >
+                    <span className="text-2xl leading-none" aria-hidden="true">{m.icono}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-sora text-sm font-bold text-primary">{m.label}</span>
+                        <span
+                          className={
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 ' +
+                            (sel ? 'border-accent bg-accent text-white' : 'border-border bg-white')
+                          }
+                          aria-hidden="true"
+                        >
+                          {sel && (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" className="h-3 w-3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                      </div>
+                      {MODULOS_DESC[m.id] && (
+                        <p className="mt-1 text-xs leading-snug text-primary-500">{MODULOS_DESC[m.id]}</p>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+        ))}
       </div>
+
+      <p className="text-xs text-primary-400">
+        {state.modulos.size} de {MODULOS_DISPONIBLES.length} módulos seleccionados.
+      </p>
     </div>
   )
 }
@@ -495,9 +705,10 @@ const PASOS_LABEL = {
   c: 'Aplicar normativa provincial',
   d: 'Guardar datos institucionales',
   e: 'Inicializar partidas presupuestarias',
+  f: 'Activar módulos contratados',
 }
 
-function Paso3Confirmacion({ state, dependenciasDefault }) {
+function Paso4Confirmacion({ state, dependenciasDefault }) {
   const tipoLabel = state.tipo_gobierno === 'municipio'
     ? 'Municipio / Municipalidad'
     : 'Comisión Municipal'
@@ -527,6 +738,20 @@ function Paso3Confirmacion({ state, dependenciasDefault }) {
             <li key={n} className="flex items-center gap-2 text-sm text-primary-700">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
               {n}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="rounded-lg border border-border bg-primary-50/40 p-4">
+        <h4 className="font-sora text-sm font-bold text-primary">
+          Módulos que se van a activar ({state.modulos.size})
+        </h4>
+        <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+          {MODULOS_DISPONIBLES.filter(m => state.modulos.has(m.id)).map(m => (
+            <li key={m.id} className="flex items-center gap-2 text-sm text-primary-700">
+              <span className="text-base leading-none" aria-hidden="true">{m.icono}</span>
+              {m.label}
             </li>
           ))}
         </ul>
