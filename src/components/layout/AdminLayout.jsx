@@ -36,11 +36,6 @@ const LABEL_BY_TIPO = {
   social:         'Ayuda Social',
 }
 
-// Tipos que se agrupan bajo el acordeón "Educación" en lugar de
-// listarse en el flat. Los demás tipos siguen apareciendo
-// individualmente como antes.
-const EDU_TIPOS = new Set(['jardin', 'primaria', 'secundaria', 'educacion'])
-
 const NAV = [
   {
     to: '/admin',
@@ -145,6 +140,13 @@ const NAV = [
       { to: '/admin/config',   label: 'Configuración RSS' },
     ],
   },
+]
+
+// Sección "pie" del sidebar — va después de las dependencias y la
+// sección Recursos, separada por una línea fina. Concentra las
+// operaciones cross-municipales (Administración consolidada y
+// configuración global) que NO son específicas de una dependencia.
+const NAV_FOOTER = [
   {
     // Carpeta "Administración" con subitems: el módulo financiero
     // base (gastos/ingresos/presupuesto/partidas) y el módulo de
@@ -161,8 +163,6 @@ const NAV = [
     ),
     subitems: [
       { to: '/admin/administracion', label: 'Gastos e ingresos' },
-      // Tag `modulo` por subitem: si rendición está apagada pero el
-      // grupo Administración encendido, ocultamos solo el subitem.
       { to: '/admin/rendicion',      label: 'Rendición de cuentas', modulo: 'rendicion' },
     ],
   },
@@ -200,23 +200,18 @@ function SidebarDepLink({ tipo, label, indent = false }) {
   )
 }
 
-// Sección colapsable que lista las dependencias activas del
-// municipio que NO tienen un módulo propio. Cada entrada navega
-// a /admin/dependencia/<tipo>. Los tipos educativos (jardin /
-// primaria / secundaria / educacion) se agrupan bajo un acordeón
-// "Educación" anidado para que el sidebar no se llene con varias
-// líneas para una sola "área" del municipio.
-function OtrasDependenciasSection() {
+// Lista plana de dependencias activas del municipio que NO tienen
+// un módulo propio. Sin header, sin separador previo y sin grupos
+// anidados — todas las dependencias aparecen como NavLinks
+// consecutivos en el nav principal, al mismo nivel que el resto.
+function DependenciasFlat() {
   const { data: deps = [], isLoading } = useDependencias()
-  const [open, setOpen] = useState(true)
-  const location = useLocation()
 
-  // Dedupe por TIPO + bucketing en dos grupos: educativos vs el
-  // resto. Los educativos van al acordeón anidado.
-  const { eduSubItems, otrosItems } = useMemo(() => {
+  // Dedupe por TIPO + orden alfabético. Mantenemos la exclusión de
+  // los tipos que ya tienen módulo top-level (Sala/Juez/SUM/etc).
+  const items = useMemo(() => {
     const seenTipo = new Set()
-    const edu = []
-    const otros = []
+    const out = []
     for (const d of (deps ?? [])) {
       if (d.activa === false) continue
       const t = (d.tipo ?? '').toLowerCase().trim()
@@ -224,84 +219,19 @@ function OtrasDependenciasSection() {
       if (TIPOS_CON_MODULO_PROPIO.has(t)) continue
       if (seenTipo.has(t)) continue
       seenTipo.add(t)
-      const item = { tipo: t, label: LABEL_BY_TIPO[t] ?? d.nombre }
-      if (EDU_TIPOS.has(t)) edu.push(item)
-      else                  otros.push(item)
+      out.push({ tipo: t, label: LABEL_BY_TIPO[t] ?? d.nombre })
     }
-    edu.sort((a, b) => a.label.localeCompare(b.label))
-    otros.sort((a, b) => a.label.localeCompare(b.label))
-    return { eduSubItems: edu, otrosItems: otros }
+    out.sort((a, b) => a.label.localeCompare(b.label))
+    return out
   }, [deps])
 
-  // Si la URL actual es /admin/dependencia/<tipo-edu>, el acordeón
-  // de Educación arranca expandido para mostrar el sub-item activo
-  // sin que el usuario tenga que abrirlo manualmente.
-  const eduPathActive = useMemo(() => {
-    const m = location.pathname.match(/^\/admin\/dependencia\/([^/]+)/)
-    return !!(m && EDU_TIPOS.has(m[1].toLowerCase()))
-  }, [location.pathname])
-  const [eduOpen, setEduOpen] = useState(eduPathActive || true)
-
-  if (isLoading) return null
-  if (eduSubItems.length === 0 && otrosItems.length === 0) return null
+  if (isLoading || items.length === 0) return null
 
   return (
-    <div className="mt-1 border-t border-border pt-2">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-bold uppercase tracking-wider text-primary-500 transition-colors hover:bg-primary-50"
-      >
-        <span>Otras dependencias</span>
-        <svg
-          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-          className={'h-3 w-3 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')}
-          aria-hidden="true"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="mt-1 flex flex-col gap-0.5">
-          {/* Items planos (un tipo = un link) */}
-          {otrosItems.map(d => (
-            <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} />
-          ))}
-
-          {/* Acordeón "Educación" si hay al menos un tipo educativo */}
-          {eduSubItems.length > 0 && (
-            <div className="mt-0.5">
-              <button
-                type="button"
-                onClick={() => setEduOpen(v => !v)}
-                aria-expanded={eduOpen}
-                className="flex w-full items-center justify-between gap-2.5 rounded-md px-3 py-1.5 text-sm font-medium text-primary-500 transition-colors hover:bg-primary-50 hover:text-primary"
-              >
-                <span className="flex items-center gap-2.5">
-                  <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current opacity-50" />
-                  <span>Educación</span>
-                </span>
-                <svg
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-                  className={'h-3 w-3 shrink-0 transition-transform ' + (eduOpen ? 'rotate-180' : '')}
-                  aria-hidden="true"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-              {eduOpen && (
-                <div className="mt-0.5 flex flex-col gap-0.5">
-                  {eduSubItems.map(d => (
-                    <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} indent />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+    <div className="flex flex-col gap-0.5">
+      {items.map(d => (
+        <SidebarDepLink key={d.tipo} tipo={d.tipo} label={d.label} />
+      ))}
     </div>
   )
 }
@@ -491,15 +421,22 @@ export default function AdminLayout() {
   // Filtramos el NAV nivel-1 y, para los grupos con subitems, los
   // subitems que también tienen `modulo`. Un grupo se oculta si su
   // módulo principal está apagado o si quedó sin subitems visibles.
-  const navFiltrado = useMemo(() => {
-    return NAV.map(item => {
-      if (!tieneModulo(item.modulo)) return null
-      if (!item.subitems) return item
-      const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
-      if (subs.length === 0) return null
-      return { ...item, subitems: subs }
-    }).filter(Boolean)
-  }, [tieneModulo])
+  // Mismo filtro aplica al NAV_FOOTER (Administración + Config General).
+  const navFiltrado = useMemo(() => NAV.map(item => {
+    if (!tieneModulo(item.modulo)) return null
+    if (!item.subitems) return item
+    const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
+    if (subs.length === 0) return null
+    return { ...item, subitems: subs }
+  }).filter(Boolean), [tieneModulo])
+
+  const navFiltradoFooter = useMemo(() => NAV_FOOTER.map(item => {
+    if (!tieneModulo(item.modulo)) return null
+    if (!item.subitems) return item
+    const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
+    if (subs.length === 0) return null
+    return { ...item, subitems: subs }
+  }).filter(Boolean), [tieneModulo])
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
@@ -533,14 +470,43 @@ export default function AdminLayout() {
                 </NavLink>
               )
           ))}
-          {/* En desktop la sección colapsable se ve naturalmente al pie
-              del nav vertical. En mobile (overflow-x scroll) puede
-              quedar mezclada con los íconos top-level — aceptamos esa
-              degradación para no duplicar nav layout. */}
+          {/* En desktop:
+              1) dependencias dinámicas como lista plana (sin header
+                 "Otras dependencias") siguiendo el NAV.
+              2) Sección RECURSOS (Inventario / Flota).
+              3) Separador fino.
+              4) NAV_FOOTER (Administración + Config. General).
+              En mobile aceptamos la degradación (el overflow-x mezcla
+              los chips) — el sidebar pasa a horizontal igual. */}
           <div className="hidden lg:block">
-            <OtrasDependenciasSection />
+            <DependenciasFlat />
             <RecursosSection tieneModulo={tieneModulo} />
           </div>
+          {navFiltradoFooter.length > 0 && (
+            <div className="mt-1 hidden border-t border-border pt-2 lg:block">
+              {navFiltradoFooter.map(item => (
+                item.subitems
+                  ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
+                  : (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `flex shrink-0 items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-primary-500 hover:bg-primary-50 hover:text-primary'
+                        }`
+                      }
+                    >
+                      <span aria-hidden="true">{item.icon}</span>
+                      <span>{item.label}</span>
+                    </NavLink>
+                  )
+              ))}
+            </div>
+          )}
         </nav>
       </aside>
 

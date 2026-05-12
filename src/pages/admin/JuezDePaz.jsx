@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTurnos, useDependenciaByTipo } from '../../hooks/useTurnos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useAuth } from '../../context/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
 import { todayArgYMD, shortDateOf, timeOf } from '../../lib/datetime'
 import Tabs from '../../components/ui/Tabs'
@@ -7,6 +9,7 @@ import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import CalendarioSemanal from '../../components/turnos/CalendarioSemanal'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
+import AdministracionTab from '../../components/admin/AdministracionTab'
 
 // =============================================================
 // Juez de Paz — gestión de turnos del juzgado.
@@ -14,9 +17,10 @@ import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
 // =============================================================
 
 const TABS = [
-  { value: 'dia',       label: 'Turnos del día' },
-  { value: 'semana',    label: 'Agenda semanal' },
-  { value: 'consultas', label: 'Consultas frecuentes' },
+  { value: 'dia',            label: 'Turnos del día' },
+  { value: 'semana',         label: 'Agenda semanal' },
+  { value: 'consultas',      label: 'Consultas frecuentes' },
+  { value: 'administracion', label: 'Administración' },
 ]
 
 const ESTADO_LABEL = {
@@ -317,6 +321,10 @@ function ConsultasTab({ depJuez }) {
 
 export default function JuezDePaz() {
   const qc = useQueryClient()
+  const { hasRole } = useAuth()
+  const municipioId = useEffectiveMunicipioId()
+  const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
   const [tab, setTab] = useState('semana')
   const [modalOpen, setModalOpen] = useState(false)
 
@@ -351,9 +359,18 @@ export default function JuezDePaz() {
 
       {!depsLoading && depJuez && (
         <>
-          {tab === 'dia'       && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
-          {tab === 'semana'    && <AgendaSemanalTab depJuez={depJuez} />}
-          {tab === 'consultas' && <ConsultasTab depJuez={depJuez} />}
+          {tab === 'dia'            && <TurnosDiaTab depJuez={depJuez} onOpenNuevo={() => setModalOpen(true)} />}
+          {tab === 'semana'         && <AgendaSemanalTab depJuez={depJuez} />}
+          {tab === 'consultas'      && <ConsultasTab depJuez={depJuez} />}
+          {tab === 'administracion' && (
+            <AdministracionTab
+              dependenciaId={depJuez.id}
+              dependenciaNombre={depJuez.nombre}
+              municipioId={municipioId}
+              canApprove={canApprove}
+              canCreate={canCreate}
+            />
+          )}
         </>
       )}
 
