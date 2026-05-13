@@ -39,7 +39,7 @@ const CATEGORIAS = [
     ),
     videos: [
       { id: 'aaqZZcTPxPg', titulo: 'Huerta pequeña en casa paso a paso' },
-      { id: '_W2XRbzAzc',  titulo: 'Iniciar un Huerto Casero' },
+      { id: '-ehlyezOtxg', titulo: 'Curso de huerta orgánica — Canal Encuentro' },
       { id: 'vVhenNTMvHM', titulo: 'Recomendaciones para huerta casera' },
       { id: 'SsDA_9BV19Y', titulo: 'Huerta orgánica con poco espacio' },
     ],
