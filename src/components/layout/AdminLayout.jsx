@@ -239,6 +239,7 @@ const NAV_GESTION = [
       { to: '/admin/rendicion',                      label: 'Rendición',  modulo: 'rendicion' },
       { to: '/admin/inventario',                     label: 'Inventario', modulo: 'inventario' },
       { to: '/admin/flota',                          label: 'Flota',      modulo: 'flota' },
+      { to: '/admin/patrimonio',                     label: 'Patrimonio', modulo: 'patrimonio' },
     ],
   },
   {
@@ -634,8 +635,9 @@ export default function AdminLayout() {
     const info = []
     // tipos que NO se muestran como dependencia en el sidebar
     // porque ya tienen su propio módulo en "Gestión Municipal"
-    // (Administración Municipal vive bajo /admin/administracion).
-    const TIPOS_EXCLUIDOS = new Set(['admin', 'administracion', 'intendencia', 'comuna'])
+    // (Administración Municipal vive bajo /admin/administracion, y
+    // Bienes Municipales ahora se administra desde /admin/patrimonio).
+    const TIPOS_EXCLUIDOS = new Set(['admin', 'administracion', 'intendencia', 'comuna', 'bienes'])
     for (const d of (deps ?? [])) {
       if (d.activa === false) continue
       const t = (d.tipo ?? '').toLowerCase().trim()

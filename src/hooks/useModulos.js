@@ -62,6 +62,7 @@ export const MODULOS_DISPONIBLES = [
   { id: 'rendicion',      label: 'Rendición de Cuentas',          icono: '📊', categoria: 'ADMIN' },
   { id: 'inventario',     label: 'Inventario',                    icono: '📦', categoria: 'RECURSOS' },
   { id: 'flota',          label: 'Flota vehicular',               icono: '🚗', categoria: 'RECURSOS' },
+  { id: 'patrimonio',     label: 'Patrimonio municipal',          icono: '🏢', categoria: 'RECURSOS' },
   { id: 'usuarios',       label: 'Usuarios y roles',              icono: '👤', categoria: 'ADMIN' },
 ]
 
@@ -82,6 +83,7 @@ export const MODULOS_DESC = {
   rendicion:      'Reportes mensuales y anuales compatibles SARC.',
   inventario:     'Stock por dependencia, movimientos y órdenes de compra.',
   flota:          'Vehículos, combustible, service y alertas de vencimientos.',
+  patrimonio:     'Inmuebles, muebles de capital, seguros y valuación para Tribunal de Cuentas.',
   usuarios:       'Alta y permisos de operadores municipales.',
 }
 
