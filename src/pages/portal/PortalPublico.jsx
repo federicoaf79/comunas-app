@@ -26,6 +26,8 @@ const NAV_LINKS = [
   { href: '#servicios',       label: 'Servicios' },
   { href: '#recursos',        label: 'Recursos' },
   { to:   '/portal/turno',    label: 'Turnos' },
+  { href: '#autoridades',     label: 'Autoridades' },
+  { href: '#historia',        label: 'Historia' },
   { href: '#contacto',        label: 'Contacto' },
 ]
 
@@ -117,7 +119,7 @@ function iconForTipo(tipo) {
   // CAPS / Salud — cruz
   if (/caps|salud|sala/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <circle cx="12" cy="12" r="9" />
         <path strokeLinecap="round" d="M12 8v8M8 12h8" />
       </svg>
@@ -126,7 +128,7 @@ function iconForTipo(tipo) {
   // Juzgado — balanza
   if (/juzgado|paz|justicia/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" d="M12 3v18M5 8l7-3 7 3M4 14h6M14 14h6M5 14l-2 6h6l-2-6M17 14l-2 6h6l-2-6" />
       </svg>
     )
@@ -134,7 +136,7 @@ function iconForTipo(tipo) {
   // SUM / cultural — salón
   if (/sum|sal[oó]n|cultural/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6" />
       </svg>
     )
@@ -142,7 +144,7 @@ function iconForTipo(tipo) {
   // Intendencia / admin — edificio
   if (/intendencia|admin|gobierno|comuna|gesti/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <rect x="4" y="4" width="16" height="16" rx="2" />
         <path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" />
       </svg>
@@ -151,7 +153,7 @@ function iconForTipo(tipo) {
   // Obras — casco de construcción
   if (/obra|construc|infra|catastro/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 18h18M5 18v-3a7 7 0 0 1 14 0v3M9 7v4M15 7v4M9 11h6" />
       </svg>
     )
@@ -159,7 +161,7 @@ function iconForTipo(tipo) {
   // Deporte — pelota
   if (/deport|recreaci/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <circle cx="12" cy="12" r="9" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l3 5-3 4-3-4 3-5zM3 12l5 3 4-3-4-3-5 3zM21 12l-5 3-4-3 4-3 5 3zM12 21l-3-5 3-4 3 4-3 5z" />
       </svg>
@@ -168,7 +170,7 @@ function iconForTipo(tipo) {
   // Cementerio — flor / memorial
   if (/cementerio|necr/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <circle cx="12" cy="9" r="2.5" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.5V3M12 11.5V21M9.5 9c-2 0-3 1-3 2s1 2 3 2M14.5 9c2 0 3 1 3 2s-1 2-3 2M5 21h14" />
       </svg>
@@ -177,7 +179,7 @@ function iconForTipo(tipo) {
   // Velatorio — corazón / paz
   if (/velatorio|despedida|f[uú]nebre/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
       </svg>
     )
@@ -185,7 +187,7 @@ function iconForTipo(tipo) {
   // Policía — escudo
   if (/polic|seguridad|defensa/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-3z" />
       </svg>
     )
@@ -193,7 +195,7 @@ function iconForTipo(tipo) {
   // Educación — birrete + libro
   if (/educ|escuel|biblioteca/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M2 9l10-4 10 4-10 4-10-4zM6 11v5c0 1 3 3 6 3s6-2 6-3v-5M21 10v6" />
       </svg>
     )
@@ -201,7 +203,7 @@ function iconForTipo(tipo) {
   // Bienes / catastro — llaves
   if (/bienes|inmueble|patrim|llaves/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <circle cx="8" cy="14" r="3.5" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M11 14h10v3M18 14v3" />
       </svg>
@@ -210,14 +212,14 @@ function iconForTipo(tipo) {
   // Social / familia — manos
   if (/social|familia|comunidad|asisten/.test(t)) {
     return (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 11.5V8a2 2 0 1 1 4 0v6l3-1 2 1v3a2 2 0 0 1-2 2h-6l-4-4-2 1V8a2 2 0 1 1 4 0v3.5" />
       </svg>
     )
   }
   // Default — edificio genérico
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-7 w-7">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-5 w-5">
       <rect x="4" y="4" width="16" height="16" rx="2" />
       <path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" />
     </svg>
@@ -802,7 +804,13 @@ function ServiciosSection() {
   // para que la sección nunca quede pelada.
   const dbActivas = (data ?? []).filter(d => d.activa !== false)
   const useFallback = !isLoading && (data === null || dbActivas.length === 0)
-  const items = useFallback ? FALLBACK_SERVICIOS : dbActivas
+  // "Bienes Municipales" se gestiona desde el panel admin (Patrimonio).
+  // Lo escondemos del grid de la home, pero la fila sigue en la DB.
+  const items = (useFallback ? FALLBACK_SERVICIOS : dbActivas).filter(d => {
+    const t = (d.tipo ?? '').toLowerCase()
+    const n = (d.nombre ?? '').toLowerCase()
+    return t !== 'bienes' && !n.includes('bienes municipales')
+  })
 
   return (
     <section id="servicios" aria-labelledby="servicios-h2" className="scroll-mt-20 bg-background">
@@ -832,15 +840,15 @@ function ServiciosSection() {
               // Si la dependencia tiene `tipo` la card se transforma
               // en un Link a la página de detalle pública. Sin tipo
               // (fallback raro), queda como bloque inerte.
-              const cardClasses = 'group flex flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg sm:p-6'
+              const cardClasses = 'group flex flex-col gap-2 rounded-xl border border-border bg-white py-3 px-3 shadow-card transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg'
               const inner = (
                 <>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
                     {iconForTipo(d.tipo)}
                   </div>
-                  <p className="text-base font-semibold text-primary">{d.nombre}</p>
+                  <p className="text-sm font-semibold text-primary">{d.nombre}</p>
                   {detalle && (
-                    <p className="text-xs text-primary-500 sm:text-sm">{detalle}</p>
+                    <p className="text-xs text-primary-500">{detalle}</p>
                   )}
                   {horario && (
                     <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700">
@@ -1255,16 +1263,18 @@ export default function PortalPublico() {
 
       <main>
         <AccesosRapidos />
+        <ServiciosSection />
+        <RecursosSection />
         <NoticiasSection
           noticias={noticias}
           loading={loadingNoticias}
           error={errNoticias}
         />
         <NoticiasProvinciales />
-        <ServiciosSection />
+        {/* Autoridades e Historia quedan al final — accesibles vía
+            anclas #autoridades / #historia del nav del header. */}
         <AutoridadesSection municipioId={municipioId} />
         <HistoriaSection municipioId={municipioId} municipioNombre={municipioNombre} />
-        <RecursosSection />
       </main>
 
       <FooterSection />
