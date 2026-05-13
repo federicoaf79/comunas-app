@@ -242,9 +242,11 @@ const NAV_GESTION = [
     ],
   },
   {
+    // Sin `modulo`: Auditoría siempre disponible para admin_comuna /
+    // superadmin. La página interna ya muestra AccessDenied a otros
+    // roles, así que no hace falta gating extra desde modulos_config.
     to: '/admin/auditoria',
     label: 'Auditoría',
-    modulo: 'auditoria',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M9 8h6M5 21V5a2 2 0 0 1 2-2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" />

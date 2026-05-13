@@ -342,18 +342,38 @@ function TopDependenciasGasto({ gastosMes }) {
 function TopInsumos({ municipioId }) {
   const today = new Date()
   const ymd   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  // movimientos_inventario NO tiene municipio_id propio — el filtro
+  // por municipio se hace en dos pasos: primero traemos los ids de
+  // inventario del municipio, luego filtramos los movimientos con
+  // `.in('inventario_id', ids)`. Mismo patrón que useMovimientos.
   const insumosQ = useQuery({
     queryKey: ['top-insumos-mes', municipioId ?? '__ALL__', ymd],
     queryFn: async () => {
+      let invIds = null
+      if (municipioId) {
+        const { data: invs, error: invErr } = await supabase
+          .from('inventario')
+          .select('id')
+          .eq('municipio_id', municipioId)
+        if (invErr) {
+          console.error('[TopInsumos] inventario lookup:', invErr.message)
+          throw invErr
+        }
+        invIds = (invs ?? []).map(r => r.id)
+        if (invIds.length === 0) return []
+      }
+
       let q = supabase
         .from('movimientos_inventario')
-        .select('cantidad, inventario:inventario_id ( id, nombre, unidad ), municipio_id')
+        .select('cantidad, inventario:inventario_id ( id, nombre, unidad )')
         .eq('tipo', 'salida')
-        .gte('created_at', `${ymd}T00:00:00-03:00`)
+        .gte('fecha', ymd)
         .limit(500)
-      if (municipioId) q = q.eq('municipio_id', municipioId)
+      if (invIds) q = q.in('inventario_id', invIds)
+
       const { data, error } = await q
       if (error) {
+        console.error('[TopInsumos] movimientos query:', error.message)
         // Tolerancia: si la tabla no existe todavía, devolvemos vacío.
         if (/does not exist|42P01/.test(error.message ?? '')) return []
         throw error

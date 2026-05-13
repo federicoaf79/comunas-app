@@ -101,7 +101,13 @@ export async function fetchGastos({
     const { data, error } = await q
     clear()
     if (error) {
-      console.error('[useAdministracion] fetchGastos error:', error)
+      console.error('[useAdministracion] fetchGastos error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, mes, categoria, dependenciaId, estado, fechaFrom, fechaTo },
+      })
       throw error
     }
     return data ?? []
@@ -180,7 +186,13 @@ export async function fetchIngresos({
     const { data, error } = await q
     clear()
     if (error) {
-      console.error('[useAdministracion] fetchIngresos error:', error)
+      console.error('[useAdministracion] fetchIngresos error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, mes, fechaFrom, fechaTo },
+      })
       throw error
     }
     return data ?? []

@@ -75,7 +75,16 @@ async function fetchInventario({ municipioId, dependenciaId, categoria } = {}) {
     if (categoria)     q = q.eq('categoria',      categoria)
     const { data, error } = await q
     clear()
-    if (error) throw error
+    if (error) {
+      console.error('[useInventario] fetchInventario error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, dependenciaId, categoria },
+      })
+      throw error
+    }
     return data ?? []
   } catch (e) {
     clear()
@@ -133,7 +142,16 @@ async function fetchMovimientos({
 
     const { data, error } = await q
     clear()
-    if (error) throw error
+    if (error) {
+      console.error('[useInventario] fetchMovimientos error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, dependenciaId, tipo, fechaDesde, fechaHasta },
+      })
+      throw error
+    }
     return data ?? []
   } catch (e) {
     clear()
@@ -159,18 +177,43 @@ export function useMovimientos(filters = {}, { municipioIdOverride } = {}) {
 // Órdenes de compra
 // ─────────────────────────────────────────────────────────────────
 
+// Subset mínimo para retry si alguna columna extra no existe en la
+// DB del cliente. Postgres devuelve 42703 ("column does not exist")
+// y la query entera falla con 400 — caemos a esta whitelist.
+const OC_COLS_BASE = `
+  id, municipio_id, dependencia_id, monto_total, estado, fecha,
+  dependencia:dependencia_id ( id, nombre )
+`
+
 async function fetchOrdenes({ municipioId, dependenciaId, estado } = {}) {
   const { signal, clear } = withTimeout()
   try {
-    let q = supabase.from('ordenes_compra').select(OC_COLS)
-      .order('fecha', { ascending: false })
-      .abortSignal(signal)
-    if (municipioId)   q = q.eq('municipio_id',   municipioId)
-    if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
-    if (estado)        q = q.eq('estado',         estado)
-    const { data, error } = await q
+    const buildQuery = (cols) => {
+      let q = supabase.from('ordenes_compra').select(cols)
+        .order('fecha', { ascending: false })
+        .abortSignal(signal)
+      if (municipioId)   q = q.eq('municipio_id',   municipioId)
+      if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
+      if (estado)        q = q.eq('estado',         estado)
+      return q
+    }
+
+    let { data, error } = await buildQuery(OC_COLS)
+    if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
+      console.warn('[useInventario] fetchOrdenes — schema extra columns missing, reintento con OC_COLS_BASE:', error.message)
+      ;({ data, error } = await buildQuery(OC_COLS_BASE))
+    }
     clear()
-    if (error) throw error
+    if (error) {
+      console.error('[useInventario] fetchOrdenes error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, dependenciaId, estado },
+      })
+      throw error
+    }
     return data ?? []
   } catch (e) {
     clear()
