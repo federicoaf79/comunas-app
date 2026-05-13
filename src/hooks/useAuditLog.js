@@ -7,7 +7,7 @@ import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 // useAuditLog — lectura y registro del log de auditoría.
 //
 // Schema: ver migration 20260514_audit_log.sql
-//   audit_log (id, municipio_id, actor_id, actor_email, accion,
+//   audit_log (id, municipio_id, usuario_id, actor_email, accion,
 //     entidad, entidad_id, descripcion, metadata, ip, user_agent,
 //     created_at)
 //
@@ -18,9 +18,9 @@ import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 // =============================================================
 
 const COLS = `
-  id, municipio_id, actor_id, actor_email, accion, entidad,
+  id, municipio_id, usuario_id, actor_email, accion, entidad,
   entidad_id, descripcion, metadata, ip, user_agent, created_at,
-  actor:actor_id ( id, nombre, email )
+  usuario:usuario_id ( id, nombre, email )
 `
 
 const LIMIT_DEFAULT = 100
@@ -35,7 +35,7 @@ export async function fetchAuditLog({
     .order('created_at', { ascending: false })
     .limit(limit)
   if (municipioId) q = q.eq('municipio_id', municipioId)
-  if (actorId)     q = q.eq('actor_id', actorId)
+  if (actorId)     q = q.eq('usuario_id', actorId)
   if (accion)      q = q.eq('accion', accion)
   if (entidad)     q = q.eq('entidad', entidad)
   if (fechaDesde)  q = q.gte('created_at', `${fechaDesde}T00:00:00-03:00`)
@@ -82,7 +82,7 @@ export function useAuditLog(filtros = {}) {
 }
 
 // Hook auxiliar para KPI de "Usuarios activos hoy" (cantidad de
-// actor_id distintos con login hoy). Usa la misma RLS que el log.
+// usuario_id distintos con login hoy). Usa la misma RLS que el log.
 export function useAccesosHoy() {
   const { perfil } = useAuth()
   const municipioId = useEffectiveMunicipioId()
@@ -93,7 +93,7 @@ export function useAccesosHoy() {
       const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       let q = supabase
         .from('audit_log')
-        .select('actor_id, created_at')
+        .select('usuario_id, created_at')
         .eq('accion', 'login')
         .gte('created_at', `${ymd}T00:00:00-03:00`)
         .lte('created_at', `${ymd}T23:59:59.999-03:00`)
@@ -106,7 +106,7 @@ export function useAccesosHoy() {
         throw error
       }
       const rows = data ?? []
-      const distinct = new Set(rows.map(r => r.actor_id).filter(Boolean))
+      const distinct = new Set(rows.map(r => r.usuario_id).filter(Boolean))
       return {
         usuariosActivos: distinct.size,
         totalAccesos:    rows.length,
@@ -167,7 +167,7 @@ export async function createAuditLog({
     .from('audit_log')
     .insert({
       municipio_id,
-      actor_id:    user.id,
+      usuario_id:  user.id,
       actor_email,
       accion,
       entidad:     entidad ?? null,
