@@ -39,7 +39,7 @@ const CATEGORIAS = [
     ),
     videos: [
       { id: 'aaqZZcTPxPg', titulo: 'Huerta pequeña en casa paso a paso' },
-      { id: '-ehlyezOtxg', titulo: 'Curso de huerta orgánica — Canal Encuentro' },
+      { id: '-ehlyezOtxg', titulo: 'Curso de huerta orgánica — Canal Encuentro', desc: 'Planificación, siembra y cuidado paso a paso. Canal educativo oficial Argentina.', duration: '26 min' },
       { id: 'vVhenNTMvHM', titulo: 'Recomendaciones para huerta casera' },
       { id: 'SsDA_9BV19Y', titulo: 'Huerta orgánica con poco espacio' },
     ],
@@ -69,7 +69,7 @@ const CATEGORIAS = [
       </svg>
     ),
     videos: [
-      { id: 'EQgfe3BzbjK', titulo: 'Ganadería Vacuna en 2 minutos' },
+      { id: 'qR0EItZZBjY', titulo: 'Manejo del rodeo de cría — Ganadería Extensiva', desc: 'Manejo ante la sequía: claves para el rodeo de cría. Ing. Agr. Graciela Quintans, 2023.', duration: '45 min' },
       { id: 'VEyUrVPAYJ4', titulo: 'Ganadería — Cría y alimentación' },
       { id: 'HurJG_yglPs', titulo: 'Vacunas para Ganado' },
       { id: 'xTEdGw-fulE', titulo: 'Ganadería Bovina Programa 2' },

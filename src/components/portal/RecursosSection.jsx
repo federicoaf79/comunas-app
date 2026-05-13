@@ -51,27 +51,27 @@ const CATEGORIAS = [
     items: [
       {
         titulo: '3 planos de vivienda modelo',
-        desc:   'Planos oficiales para construcción de vivienda económica. Aptos para gestión de permisos municipales.',
+        desc:   'Modelos Bicentenaria, Criolla, Milagro y más — planos oficiales ProCreAr en PDF, descarga directa.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://www.planosdecasasdedospisos.com/tag/procrear/',
       },
       {
         titulo: 'Guía: cómo aislar tu casa del calor',
-        desc:   'Tips prácticos para reducir la temperatura interior con materiales accesibles.',
+        desc:   'Manual de Vivienda Sustentable — Ministerio de Ambiente. Tips para reducir la temperatura interior.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://www.argentina.gob.ar/ambiente/desarrollo-sostenible/vivienda/manual',
       },
       {
         titulo: 'Guía: calefacción eficiente y bajo costo',
-        desc:   'Opciones de calefacción para el invierno con menor consumo y gasto.',
+        desc:   'Guía INTI para estructuras y aislación — construcción eficiente con menor gasto energético.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://www.inti.gob.ar/assets/uploads/files/cirsoc/aprobados%20en%202016/guia-CIRSOCMADERA-24ABRIL_compressed.pdf',
       },
       {
         titulo: 'Recomendaciones de iluminación LED',
-        desc:   'Cómo reemplazar las luces de tu hogar y bajar la factura eléctrica.',
+        desc:   'Cómo reemplazar las luces del hogar y bajar la factura eléctrica con tecnología LED.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://www.argentina.gob.ar/ambiente/desarrollo-sostenible/vivienda/manual',
       },
     ],
   },
@@ -87,21 +87,21 @@ const CATEGORIAS = [
     items: [
       {
         titulo: 'Planilla de administración de negocio',
-        desc:   'Controlá ingresos, gastos y stock de tu negocio. Fácil de usar.',
+        desc:   'Planilla Excel gratuita para controlar ingresos, egresos y stock de tu negocio. Lista para usar.',
         tipo:   'xlsx',
-        url:    '#',
+        url:    'https://siempreexcel.com/plantilla-ingresos-y-egresos-excel-gratis/',
       },
       {
         titulo: 'Formulario de habilitación comercial',
-        desc:   'Documento oficial para iniciar el trámite de habilitación de un comercio.',
+        desc:   'Portal oficial Argentina.gob.ar — pasos para habilitar tu comercio: CUIT, monotributo y municipio.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://www.argentina.gob.ar/tema/emprender/soy-emprendedor',
       },
       {
         titulo: 'Guía para emprendedores: primeros pasos',
-        desc:   'Información práctica para arrancar un emprendimiento en la comuna.',
+        desc:   'Manual del Emprendedor 2023 — Aprender a Emprender Argentina. PDF descarga directa, gratuito.',
         tipo:   'pdf',
-        url:    '#',
+        url:    'https://aprenderaemprender.org.ar/wp-content/uploads/2023/03/Manual-del-emprendedor-2023-BAJA-Con-hipervinculos.pdf',
       },
     ],
   },
@@ -117,27 +117,27 @@ const CATEGORIAS = [
     items: [
       {
         titulo: 'Solicitud de permiso de construcción',
-        desc:   'Formulario para iniciar el trámite de permiso ante la Comisión.',
+        desc:   'Formulario para iniciar el trámite de permiso ante la Comisión. Retirá en Administración.',
         tipo:   'pdf',
-        url:    '#',
+        url:    '#tramite-presencial',
       },
       {
         titulo: 'Formulario de ayuda social',
-        desc:   'Documento para solicitar asistencia del área social del municipio.',
+        desc:   'Documento para solicitar asistencia del área social del municipio. Retirá en Administración.',
         tipo:   'pdf',
-        url:    '#',
+        url:    '#tramite-presencial',
       },
       {
         titulo: 'Solicitud de turno Juez de Paz',
-        desc:   'Formulario para gestionar turno presencial en el Juzgado de Paz.',
+        desc:   'Formulario para gestionar turno presencial en el Juzgado de Paz. Retirá en Administración.',
         tipo:   'pdf',
-        url:    '#',
+        url:    '#tramite-presencial',
       },
       {
         titulo: 'Declaración jurada de domicilio',
-        desc:   'Modelo oficial de DDJJ para acreditar residencia en la comuna.',
+        desc:   'Modelo oficial de DDJJ para acreditar residencia en la comuna. Retirá en Administración.',
         tipo:   'pdf',
-        url:    '#',
+        url:    '#tramite-presencial',
       },
     ],
   },
@@ -164,6 +164,23 @@ function CategoriaTab({ tab, active, onClick }) {
 }
 
 function RecursoCard({ recurso }) {
+  const presencial = recurso.url === '#tramite-presencial'
+  const [showHint, setShowHint] = useState(false)
+
+  const handleClick = e => {
+    if (presencial) {
+      e.preventDefault()
+      setShowHint(true)
+      window.clearTimeout(handleClick._t)
+      handleClick._t = window.setTimeout(() => setShowHint(false), 4000)
+      return
+    }
+    if (!recurso.url || recurso.url === '#') e.preventDefault()
+  }
+
+  const isExternal =
+    recurso.url && recurso.url !== '#' && !recurso.url.startsWith('#')
+
   return (
     <article className="flex h-full flex-col gap-3 rounded-xl border border-border bg-white p-5 shadow-card transition-shadow hover:shadow-lg">
       <div className="flex items-start gap-3">
@@ -179,17 +196,35 @@ function RecursoCard({ recurso }) {
           {recurso.desc}
         </p>
       )}
-      <a
-        href={recurso.url ?? '#'}
-        onClick={e => { if (!recurso.url || recurso.url === '#') e.preventDefault() }}
-        className="mt-auto inline-flex items-center justify-center gap-2 self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-accent-600 hover:text-white"
-        download={recurso.url && recurso.url !== '#' ? '' : undefined}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4 4-4M5 21h14" />
-        </svg>
-        Descargar
-      </a>
+      <div className="mt-auto flex flex-col gap-2">
+        <a
+          href={recurso.url ?? '#'}
+          onClick={handleClick}
+          target={isExternal ? '_blank' : undefined}
+          rel={isExternal ? 'noopener noreferrer' : undefined}
+          className="inline-flex items-center justify-center gap-2 self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-primary-900 shadow-sm transition-colors hover:bg-accent-600 hover:text-white"
+          title={presencial ? 'Este formulario se retira de forma presencial en la Comisión Municipal.' : undefined}
+        >
+          {presencial ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4 4-4M5 21h14" />
+            </svg>
+          )}
+          {presencial ? 'Solicitar en Administración' : 'Descargar'}
+        </a>
+        {presencial && showHint && (
+          <p
+            role="status"
+            className="rounded-md border border-accent-200 bg-accent-50 px-3 py-2 text-xs leading-snug text-primary-700"
+          >
+            Este formulario se retira de forma presencial en la Comisión Municipal.
+          </p>
+        )}
+      </div>
     </article>
   )
 }
