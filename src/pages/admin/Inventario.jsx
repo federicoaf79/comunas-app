@@ -841,7 +841,7 @@ function OrdenesTab({ municipioId, dependencias, canApprove }) {
                   <Td className="font-mono text-xs">{o.partida_codigo ?? '—'}</Td>
                   <Td className="text-xs">{o.tipo === 'cotizacion' ? 'Cotización' : 'Directa'}</Td>
                   <Td><span className={badge.cls}>{badge.label}</span></Td>
-                  <Td className="whitespace-nowrap">{o.fecha ? dateOf(o.fecha) : '—'}</Td>
+                  <Td className="whitespace-nowrap">{o.created_at ? dateOf(o.created_at) : '—'}</Td>
                   <Td className="whitespace-nowrap text-right text-xs">
                     {puedeEnviar && (
                       <button
@@ -894,7 +894,6 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
     dependencia_id: '', proveedor: '', descripcion: '',
     partida_codigo: '', monto_total: '',
     tipo: 'directa', comprobante_url: '', numero: '',
-    fecha: todayArgYMD(),
     crearGastoPendiente: false,
   })
   const [error, setError] = useState('')
@@ -933,7 +932,6 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
         tipo:            tipoEfectivo,
         estado,
         comprobante_url: form.comprobante_url.trim() || null,
-        fecha:           form.fecha,
         created_by:      perfil?.id ?? null,
         crearGastoPendiente: form.crearGastoPendiente && estado !== 'borrador',
       })
@@ -963,7 +961,6 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="N° de orden (opcional)" value={form.numero} onChange={e => set('numero', e.target.value)} />
-        <Input label="Fecha" type="date" value={form.fecha} onChange={e => set('fecha', e.target.value)} required />
         <Select
           label="Dependencia" value={form.dependencia_id} onChange={v => set('dependencia_id', v)}
           placeholder="Seleccionar..."

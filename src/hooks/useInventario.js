@@ -16,8 +16,10 @@ import { useAuth } from '../context/AuthContext'
 //                           proveedor, descripcion, monto_total,
 //                           partida_codigo, tipo directa|cotizacion,
 //                           estado borrador|pendiente|aprobada|rechazada,
-//                           comprobante_url, fecha, created_by,
+//                           comprobante_url, created_at, created_by,
 //                           fecha_aprobacion, gasto_id)
+//   Nota: la tabla NO tiene columna `fecha`; el timestamp de creación
+//   está en `created_at` (autopoblado por Postgres).
 //   partidas_tipo          (codigo, nombre, descripcion)
 //
 // Las mutaciones que tocan stock (entrada/salida) lo hacen en dos
@@ -43,7 +45,7 @@ const MOV_COLS = `
 `
 const OC_COLS = `
   id, municipio_id, dependencia_id, numero, proveedor, descripcion,
-  monto_total, partida_codigo, tipo, estado, comprobante_url, fecha,
+  monto_total, partida_codigo, tipo, estado, comprobante_url, created_at,
   created_by, fecha_aprobacion, gasto_id,
   dependencia:dependencia_id ( id, nombre )
 `
@@ -246,7 +248,7 @@ export function useMovimientos(filters = {}, { municipioIdOverride } = {}) {
 // DB del cliente. Postgres devuelve 42703 ("column does not exist")
 // y la query entera falla con 400 — caemos a esta whitelist.
 const OC_COLS_BASE = `
-  id, municipio_id, dependencia_id, monto_total, estado, fecha,
+  id, municipio_id, dependencia_id, monto_total, estado, created_at,
   dependencia:dependencia_id ( id, nombre )
 `
 
@@ -255,7 +257,7 @@ async function fetchOrdenes({ municipioId, dependenciaId, estado } = {}) {
   try {
     const buildQuery = (cols) => {
       let q = supabase.from('ordenes_compra').select(cols)
-        .order('fecha', { ascending: false })
+        .order('created_at', { ascending: false })
         .abortSignal(signal)
       if (municipioId)   q = q.eq('municipio_id',   municipioId)
       if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)

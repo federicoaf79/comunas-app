@@ -1331,7 +1331,7 @@ function SolicitudesTab({ municipioId, dependencias, canApprove }) {
                   <Td className="font-mono text-xs">{o.partida_codigo ?? '—'}</Td>
                   <Td className="text-xs">{o.tipo === 'cotizacion' ? 'Cotización' : 'Directa'}</Td>
                   <Td><span className={badge.cls}>{badge.label}</span></Td>
-                  <Td className="whitespace-nowrap">{o.fecha ? dateOf(o.fecha) : '—'}</Td>
+                  <Td className="whitespace-nowrap">{o.created_at ? dateOf(o.created_at) : '—'}</Td>
                   {canApprove && (
                     <Td className="whitespace-nowrap text-right text-xs">
                       {o.estado === 'pendiente' && (

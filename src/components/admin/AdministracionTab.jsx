@@ -362,7 +362,6 @@ function SolicitudInsumosSection({ dep, municipioId, canApprove, canCreate }) {
       monto_total:     0,
       tipo:            'directa',
       estado:          'borrador',
-      fecha:           todayArgYMD(),
       created_by:      perfil?.id ?? null,
     })
     setModalNew(false)
@@ -394,7 +393,7 @@ function SolicitudInsumosSection({ dep, municipioId, canApprove, canCreate }) {
         <ul className="space-y-2">
           {ordenes.map(o => {
             const urgencia = urgenciaFromDesc(o.descripcion)
-            const fechaTxt = o.fecha ? dateOf(o.fecha) : '—'
+            const fechaTxt = o.created_at ? dateOf(o.created_at) : '—'
             return (
               <li key={o.id} className="rounded-lg border border-border bg-white p-3 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
