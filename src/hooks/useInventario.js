@@ -198,8 +198,12 @@ async function fetchMovimientos({
       .abortSignal(signal)
     if (inventarioIds)  q = q.in('inventario_id', inventarioIds)
     if (tipo)           q = q.eq('tipo', tipo)
-    if (fechaDesde)     q = q.gte('fecha', fechaDesde)
-    if (fechaHasta)     q = q.lt('fecha', fechaHasta)
+    // El timestamp confiable es `created_at` — la columna `fecha`
+    // existe en algunas instancias pero queda nullable y devuelve
+    // 400 al filtrar por rango en otras. Mismo criterio que usa
+    // TopInsumos en Administracion.jsx.
+    if (fechaDesde)     q = q.gte('created_at', fechaDesde)
+    if (fechaHasta)     q = q.lt('created_at',  fechaHasta)
 
     const { data, error } = await q
     clear()

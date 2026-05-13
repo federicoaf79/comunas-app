@@ -226,7 +226,7 @@ function InmueblesTab({ municipioId, dependencias }) {
 function MueblesTab({ municipioId, dependencias }) {
   const [depFiltro, setDepFiltro] = useState('')
   const { data: bienes = [], isLoading } = useBienesPatrimonio(
-    { tipo: 'mueble', dependenciaId: depFiltro || undefined },
+    { tipo: 'equipamiento', dependenciaId: depFiltro || undefined },
     { municipioIdOverride: municipioId },
   )
   const [modalNew, setModalNew] = useState(false)
@@ -236,7 +236,7 @@ function MueblesTab({ municipioId, dependencias }) {
   // tipo — el resumen ya viene desglosado por tipo así que no hace
   // falta otra query.
   const { data: resumen, isLoading: lr } = useResumenPatrimonio(municipioId)
-  const totalMuebles = resumen?.porTipo?.mueble ?? 0
+  const totalMuebles = resumen?.porTipo?.equipamiento ?? 0
 
   return (
     <div className="space-y-5">
@@ -295,7 +295,7 @@ function MueblesTab({ municipioId, dependencias }) {
 
       {modalNew && (
         <BienFormModal
-          defaultTipo="mueble"
+          defaultTipo="equipamiento"
           defaultDependenciaId={depFiltro}
           municipioId={municipioId}
           dependencias={dependencias}

@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext'
 //     id uuid PK default gen_random_uuid(),
 //     municipio_id uuid FK municipios(id),
 //     dependencia_id uuid FK dependencias(id),
-//     tipo text not null,           -- 'inmueble' | 'mueble'
+//     tipo text not null,           -- 'inmueble' | 'equipamiento' | 'vehiculo'
 //     numero_inventario text,
 //     nombre text not null,
 //     descripcion text,
@@ -51,9 +51,14 @@ const MANT_COLS = `
   id, bien_id, fecha, tipo, descripcion, costo, responsable, created_at
 `
 
+// Los valores deben coincidir con la columna `tipo` de
+// bienes_patrimonio. La DB del cliente carga seeds con
+// 'equipamiento' (no 'mueble') y 'vehiculo' como bienes
+// patrimoniales aunque la operación de la flota viva en /admin/flota.
 export const TIPOS_BIEN = [
-  { value: 'inmueble', label: 'Inmueble' },
-  { value: 'mueble',   label: 'Mueble de capital' },
+  { value: 'inmueble',     label: 'Inmueble' },
+  { value: 'equipamiento', label: 'Equipamiento' },
+  { value: 'vehiculo',     label: 'Vehículo' },
 ]
 
 export const ESTADOS_BIEN = [
