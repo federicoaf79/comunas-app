@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 // =============================================================
 // Recursos para la comunidad — biblioteca de descargas pública.
@@ -237,6 +238,41 @@ export default function RecursosSection() {
             <RecursoCard key={item.titulo} recurso={item} />
           ))}
         </div>
+
+        {/* Card destacada — biblioteca de videos educativos */}
+        <Link
+          to="/portal/videos"
+          className="mt-8 flex flex-col gap-3 rounded-2xl border-2 border-[#C9A84C]/40 bg-white p-5 shadow-card transition-all hover:border-[#C9A84C] hover:shadow-lg sm:flex-row sm:items-center sm:gap-5 sm:p-6"
+        >
+          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#0F1C35] text-[#C9A84C] shadow-md">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="h-7 w-7">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
+                Nuevo
+              </p>
+              <span className="inline-flex items-center rounded-full bg-[#C9A84C] px-2.5 py-0.5 text-[11px] font-bold text-primary-900">
+                15 videos
+              </span>
+            </div>
+            <h3 className="mt-1 font-sora text-lg font-bold text-primary sm:text-xl">
+              Videos educativos
+            </h3>
+            <p className="mt-1 text-sm text-primary-500">
+              Salud, huerta, jardinería y ganadería — material gratuito para vecinos
+              y productores.
+            </p>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white sm:self-center">
+            Ver biblioteca
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </span>
+        </Link>
 
         <p className="mt-6 text-xs text-primary-400 sm:mt-8">
           Los archivos están en preparación — pronto vas a poder descargar

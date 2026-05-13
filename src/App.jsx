@@ -41,6 +41,7 @@ import DependenciaPublica  from './pages/portal/DependenciaPublica'
 import SacarTurno          from './pages/portal/SacarTurno'
 import MiTurno             from './pages/portal/MiTurno'
 import MiSalud             from './pages/portal/MiSalud'
+import VideosPage          from './pages/portal/VideosPage'
 import VecinoAcceso        from './pages/portal/VecinoAcceso'
 import VecinoDashboard     from './pages/portal/VecinoDashboard'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
@@ -84,6 +85,7 @@ const router = createBrowserRouter([
   { path: '/portal/turno',          element: <SacarTurno /> },
   { path: '/portal/mi-turno',       element: <MiTurno /> },
   { path: '/portal/mi-salud',       element: <MiSalud /> },
+  { path: '/portal/videos',         element: <VideosPage /> },
 
   // Portal del Vecino — área personal con sesión propia (DNI + tel)
   // independiente del auth de Supabase. La sesión vive en sessionStorage.
