@@ -34,11 +34,27 @@ import { dateTimeOf } from '../../lib/datetime'
 // =============================================================
 
 const TURNO_SELECT = `
-  id, fecha_hora, motivo, estado, vecino_id, dependencia_id,
+  id, fecha_hora, motivo, especialidad, estado, vecino_id, dependencia_id,
   municipio_id, canal, numero_turno, metadata,
   vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, fecha_nac, telefono ),
   dependencia:dependencia_id ( id, nombre, tipo )
 `
+
+// Paleta y labels de especialidades — alineadas con SalaPrimerosAuxilios
+// para que el badge del sidebar coincida con el color del bloque en el
+// calendario semanal.
+const ESPECIALIDAD_LABEL = {
+  general:     'Medicina General',
+  obstetra:    'Obstetra',
+  ecografia:   'Ecografía',
+  posta_rural: 'Posta Sanitaria Rural',
+}
+const COLOR_POR_ESPECIALIDAD = {
+  general:     '#1D4ED8',
+  obstetra:    '#7C3AED',
+  ecografia:   '#0891B2',
+  posta_rural: '#B45309',
+}
 
 const ESTADO_TURNO_BADGE = {
   pendiente:  'bg-primary-50 text-primary-700 ring-primary-200',
@@ -147,6 +163,19 @@ export default function AtencionDetalle() {
             <SidebarRow label="Teléfono"      value={vecino?.telefono} />
             <SidebarRow label="Turno"         value={dateTimeOf(turno.fecha_hora)} />
             <SidebarRow label="Motivo"        value={turno.motivo || '—'} />
+            {turno.especialidad && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
+                  Especialidad
+                </p>
+                <span
+                  className="mt-1 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white"
+                  style={{ backgroundColor: COLOR_POR_ESPECIALIDAD[turno.especialidad] ?? '#475A7C' }}
+                >
+                  {ESPECIALIDAD_LABEL[turno.especialidad] ?? turno.especialidad}
+                </span>
+              </div>
+            )}
             <SidebarRow label="Dependencia"   value={turno.dependencia?.nombre || '—'} />
             {atencion?.estado && (
               <div>

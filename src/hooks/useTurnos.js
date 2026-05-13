@@ -13,7 +13,7 @@ const TIMEOUT_MS = 8000
 const TURNO_SELECT = `
   id, municipio_id, dependencia_id, vecino_id, profesional_id,
   fecha_hora, estado, canal, numero_turno, calendar_event_id,
-  recordatorio_enviado, motivo, metadata, created_at,
+  recordatorio_enviado, motivo, especialidad, metadata, created_at,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre, telefono ),
   profesional:profesional_id ( id, nombre ),
   dependencia:dependencia_id ( id, nombre )

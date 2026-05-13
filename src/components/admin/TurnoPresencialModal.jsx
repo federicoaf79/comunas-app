@@ -33,13 +33,23 @@ const HORA_AHORA = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+// Especialidades soportadas en Sala PA. El valor se persiste tal
+// cual en turnos.especialidad y se usa para colorear los bloques
+// del calendario semanal.
+const ESPECIALIDAD_OPTS = [
+  { value: 'general',     label: 'Medicina General' },
+  { value: 'obstetra',    label: 'Obstetra' },
+  { value: 'ecografia',   label: 'Ecografía' },
+  { value: 'posta_rural', label: 'Posta Sanitaria Rural' },
+]
+
 const ZONA_OPTS = [
   { value: 'urbano', label: 'Urbano' },
   { value: 'rural',  label: 'Rural' },
 ]
 
 function emptyTurnoForm() {
-  return { query: '', motivo: '', hora: HORA_AHORA() }
+  return { query: '', motivo: '', hora: HORA_AHORA(), especialidad: 'general' }
 }
 
 function emptyAltaForm() {
@@ -229,6 +239,7 @@ export default function TurnoPresencialModal({
         fecha_hora,
         estado:         'confirmado',
         canal:          'presencial',
+        especialidad:   form.especialidad || 'general',
         motivo:         form.motivo.trim() || null,
       }
       const { data: row, error: tErr } = await supabase
@@ -416,7 +427,14 @@ export default function TurnoPresencialModal({
           </div>
         )}
 
-        {/* ── Paso 3 · Hora y motivo (siempre visibles) ───────────────── */}
+        {/* ── Paso 3 · Especialidad, hora y motivo (siempre visibles) ── */}
+        <Select
+          label="Especialidad"
+          value={form.especialidad}
+          onChange={v => set('especialidad', v || 'general')}
+          options={ESPECIALIDAD_OPTS}
+        />
+
         <Input
           label="Hora del turno"
           type="time"

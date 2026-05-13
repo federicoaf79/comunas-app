@@ -16,10 +16,23 @@ import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
 import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 
-// Color estándar de los turnos clínicos en Sala PA — azul ok
-// (#1D4ED8). Centralizado acá para que la leyenda y los bloques del
-// calendario compartan la misma fuente de verdad.
-const COLOR_TURNO_SALA = '#1D4ED8'
+// Paleta de turnos clínicos por especialidad. Cada valor mapea al
+// color hex que pinta el bloque en CalendarioSemanal vía el campo
+// `evento.color`. Se mantiene como source-of-truth para que la
+// leyenda y los bloques compartan los mismos hexes.
+const COLOR_POR_ESPECIALIDAD = {
+  general:     '#1D4ED8',  // azul ok — Medicina General
+  obstetra:    '#7C3AED',  // violeta — Obstetra
+  ecografia:   '#0891B2',  // celeste — Ecografía
+  posta_rural: '#B45309',  // tierra — Posta Sanitaria Rural
+}
+const ESPECIALIDAD_LABEL = {
+  general:     'Medicina General',
+  obstetra:    'Obstetra',
+  ecografia:   'Ecografía',
+  posta_rural: 'Posta Sanitaria Rural',
+}
+const COLOR_TURNO_SALA = COLOR_POR_ESPECIALIDAD.general  // fallback histórico
 
 // Etiqueta de sección activa para el breadcrumb del header.
 // No se renderiza una barra de tabs: el usuario navega entre
@@ -385,18 +398,32 @@ export default function SalaPrimerosAuxilios() {
             onNext={nextWeek}
             weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
             colorPorTipo={{ turno_sala: COLOR_TURNO_SALA }}
-            leyenda={[{ label: 'Turno clínico', color: COLOR_TURNO_SALA }]}
+            leyenda={[
+              { label: ESPECIALIDAD_LABEL.general,     color: COLOR_POR_ESPECIALIDAD.general },
+              { label: ESPECIALIDAD_LABEL.obstetra,    color: COLOR_POR_ESPECIALIDAD.obstetra },
+              { label: ESPECIALIDAD_LABEL.ecografia,   color: COLOR_POR_ESPECIALIDAD.ecografia },
+              { label: ESPECIALIDAD_LABEL.posta_rural, color: COLOR_POR_ESPECIALIDAD.posta_rural },
+            ]}
             onEventoClick={(e) => navigate(`/admin/sala/atencion/${e.id}`)}
-            eventos={(turnosSemana ?? []).map(t => ({
-              id:          t.id,
-              tipo:        'turno_sala',
-              fecha_hora:  t.fecha_hora,
-              titulo:      vecinoLabel(t),
-              subtitulo:   t.profesional?.nombre || t.motivo || 'Sala PA',
-              estado:      t.estado,
-              numero:      t.numero_turno,
-              duracion_min: 30,
-            }))}
+            eventos={(turnosSemana ?? []).map(t => {
+              const esp = (t.especialidad ?? 'general').toLowerCase()
+              const color = COLOR_POR_ESPECIALIDAD[esp] ?? COLOR_TURNO_SALA
+              const espLabel = ESPECIALIDAD_LABEL[esp] ?? esp
+              return {
+                id:          t.id,
+                tipo:        'turno_sala',
+                fecha_hora:  t.fecha_hora,
+                titulo:      vecinoLabel(t),
+                subtitulo:   `${espLabel}${t.profesional?.nombre ? ' · ' + t.profesional.nombre : (t.motivo ? ' · ' + t.motivo : '')}`,
+                estado:      t.estado,
+                numero:      t.numero_turno,
+                duracion_min: 30,
+                // Override directo por especialidad: el calendario usa
+                // `evento.color` antes que `colorPorTipo[tipo]`, así que
+                // cada bloque adopta el tono correcto.
+                color,
+              }
+            })}
           />
         </>
       )}
