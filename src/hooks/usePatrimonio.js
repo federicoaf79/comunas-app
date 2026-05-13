@@ -80,22 +80,43 @@ function withTimeout() {
 // Bienes
 // ─────────────────────────────────────────────────────────────────
 
+// Schema tolerante:
+// - El filtro `.eq('tipo', tipo)` puede chocar contra distintos
+//   tipos enum en instancias viejas y devolver 400. Lo aplicamos
+//   client-side sobre el resultado completo.
+// - El campo `activo` puede no existir todavía; si la query falla
+//   con 42703 reintentamos sin el filtro.
 async function fetchBienes({ municipioId, tipo, dependenciaId } = {}) {
   const { signal, clear } = withTimeout()
   try {
-    let q = supabase.from('bienes_patrimonio').select(BIEN_COLS)
-      .order('numero_inventario', { ascending: true, nullsFirst: false })
-      .abortSignal(signal)
-    if (municipioId)   q = q.eq('municipio_id',   municipioId)
-    if (tipo)          q = q.eq('tipo',           tipo)
-    if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
-    const { data, error } = await q
+    const run = (withActivo) => {
+      let q = supabase.from('bienes_patrimonio').select(BIEN_COLS)
+        .order('numero_inventario', { ascending: true, nullsFirst: false })
+        .abortSignal(signal)
+      if (municipioId)   q = q.eq('municipio_id',   municipioId)
+      if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
+      if (withActivo)    q = q.eq('activo',         true)
+      return q
+    }
+
+    let { data, error } = await run(true)
+    if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
+      console.warn('[usePatrimonio] fetchBienes — sin columna `activo`, reintento sin filtro:', error.message)
+      ;({ data, error } = await run(false))
+    }
     clear()
     if (error) {
-      console.warn('[usePatrimonio] fetchBienes:', error.message)
+      console.error('[usePatrimonio] fetchBienes error:', {
+        message: error.message,
+        details: error.details,
+        hint:    error.hint,
+        code:    error.code,
+        filters: { municipioId, tipo, dependenciaId },
+      })
       throw error
     }
-    return data ?? []
+    const rows = data ?? []
+    return tipo ? rows.filter(b => b?.tipo === tipo) : rows
   } catch (e) { clear(); throw e }
 }
 

@@ -363,11 +363,14 @@ function TopInsumos({ municipioId }) {
         if (invIds.length === 0) return []
       }
 
+      // La columna de timestamp en movimientos_inventario es
+      // `created_at` (timestamptz). Pegarle a `fecha` daba 400 en
+      // instancias donde esa columna no existe.
       let q = supabase
         .from('movimientos_inventario')
         .select('cantidad, inventario:inventario_id ( id, nombre, unidad )')
         .eq('tipo', 'salida')
-        .gte('fecha', ymd)
+        .gte('created_at', ymd)
         .limit(500)
       if (invIds) q = q.in('inventario_id', invIds)
 
@@ -477,12 +480,17 @@ function DashboardTab({ municipioId }) {
   const opts = { municipioIdOverride: municipioId }
   const gastosQ   = useGastos({   fechaFrom: yearStart, fechaTo: yearEnd }, opts)
   const ingresosQ = useIngresos({ fechaFrom: yearStart, fechaTo: yearEnd }, opts)
-  const presQ     = usePresupuesto(anio, opts)
+  // El presupuesto anual real vive en `presupuesto_partidas`
+  // (granularidad dependencia + partida + fuente). La tabla legacy
+  // `presupuesto` quedó desactualizada y mostraba un total fantasma
+  // (~$2.050.000) que descalibraba el % de ejecución. Sumamos
+  // monto_asignado del año corriente desde partidas.
+  const partidasQ = usePresupuestoPartidas(anio, opts)
 
-  const gastos      = gastosQ.data   ?? []
-  const ingresos    = ingresosQ.data ?? []
-  const presupuesto = presQ.data     ?? []
-  const isLoading   = gastosQ.isLoading || ingresosQ.isLoading || presQ.isLoading
+  const gastos      = gastosQ.data    ?? []
+  const ingresos    = ingresosQ.data  ?? []
+  const partidas    = partidasQ.data  ?? []
+  const isLoading   = gastosQ.isLoading || ingresosQ.isLoading || partidasQ.isLoading
 
   // KPIs del mes actual.
   const { first: monthStart, next: monthEnd } = monthRange(mes)
@@ -493,8 +501,9 @@ function DashboardTab({ municipioId }) {
   const totalGasMes = sum(gastosMes)
   const saldoMes    = totalIngMes - totalGasMes
 
-  // % ejecución presupuestaria YTD (gastos aprobados / presupuesto anual).
-  const presupuestoTotal = sum(presupuesto, 'monto_asignado')
+  // % ejecución presupuestaria YTD = gastos aprobados / SUM
+  // (monto_asignado) de las partidas del año.
+  const presupuestoTotal = sum(partidas, 'monto_asignado')
   const gastadoYTD       = sum(gastos.filter(g => g.estado === 'aprobado'))
   const pctEjecucion     = presupuestoTotal > 0
     ? Math.round((gastadoYTD / presupuestoTotal) * 100)
