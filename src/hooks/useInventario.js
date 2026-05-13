@@ -106,6 +106,67 @@ export function useInventario(filters = {}, { municipioIdOverride } = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Stock crítico — items con stock_actual <= stock_minimo, ordenados
+// por proporción consumida (más críticos primero), top 5.
+//
+// Nota: PostgREST no soporta comparar dos columnas en el WHERE
+// (stock_actual <= stock_minimo), así que pedimos las filas con
+// stock_minimo > 0 del municipio y aplicamos el filtro y el sort
+// client-side. El catálogo de inventario por municipio queda en el
+// orden de cientos de filas, así que el costo es trivial.
+//
+// Defensa: la columna `activo` puede no existir en instancias
+// viejas; si la query falla por column-not-exists reintentamos sin
+// el filtro (mismo patrón que fetchOrdenes con OC_COLS_BASE).
+// ─────────────────────────────────────────────────────────────────
+
+const STOCK_CRITICO_COLS = `
+  id, nombre, stock_actual, stock_minimo, unidad, unidad_consumo,
+  dependencia:dependencia_id ( id, nombre, tipo )
+`
+
+async function fetchStockCritico(municipioId) {
+  if (!municipioId) return []
+  const run = (filterActivo) => {
+    let q = supabase
+      .from('inventario')
+      .select(STOCK_CRITICO_COLS)
+      .eq('municipio_id', municipioId)
+      .gt('stock_minimo', 0)
+    if (filterActivo) q = q.eq('activo', true)
+    return q
+  }
+
+  let { data, error } = await run(true)
+  if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
+    console.warn('[useInventario] fetchStockCritico — sin columna `activo`, reintento sin filtro:', error.message)
+    ;({ data, error } = await run(false))
+  }
+  if (error) {
+    console.warn('[useInventario] fetchStockCritico error:', error.message)
+    return []
+  }
+  return (data ?? [])
+    .filter(r => Number(r.stock_actual) <= Number(r.stock_minimo))
+    .sort((a, b) => {
+      const ra = Number(a.stock_actual) / Number(a.stock_minimo)
+      const rb = Number(b.stock_actual) / Number(b.stock_minimo)
+      return ra - rb
+    })
+    .slice(0, 5)
+}
+
+export function useStockCritico(municipioId) {
+  const { perfil } = useAuth()
+  return useQuery({
+    queryKey: ['inventario-stock-critico', municipioId ?? '__NONE__'],
+    queryFn:  () => fetchStockCritico(municipioId),
+    enabled:  !!perfil && !!municipioId,
+    staleTime: 60 * 1000,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Movimientos
 // ─────────────────────────────────────────────────────────────────
 

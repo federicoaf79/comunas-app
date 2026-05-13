@@ -9,6 +9,7 @@ import {
   useGastos, useIngresos, usePresupuesto,
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
+import { useStockCritico } from '../../hooks/useInventario'
 import { dateTimeOf, timeOf } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
@@ -273,6 +274,71 @@ function depBadgeClass(tipo) {
   if (/social|familia|asisten/.test(t))            return 'bg-primary-50 text-primary-700 ring-primary-200'
   if (/polic|seguridad/.test(t))                   return 'bg-primary-100 text-primary-700 ring-primary-200'
   return 'bg-primary-50 text-primary-700 ring-primary-200'
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Stock crítico — alerta inline con items por debajo del mínimo
+// ─────────────────────────────────────────────────────────────────
+
+// Emoji por tipo de dependencia. Cae a 📋 si no matchea ninguna
+// familia conocida — espejo de la lógica de depBadgeClass.
+function depEmojiPorTipo(tipo) {
+  const t = (tipo ?? '').toLowerCase()
+  if (/caps|salud|sala/.test(t))                   return '🏥'
+  if (/obra|construc|infra|catastro/.test(t))      return '🔨'
+  if (/juzgado|paz|justicia/.test(t))              return '⚖️'
+  if (/sum|sal[oó]n|cultural/.test(t))             return '🎭'
+  if (/intendencia|admin|gobierno|comuna/.test(t)) return '🏛️'
+  if (/deport|recreaci|polideport/.test(t))        return '⚽'
+  if (/educ|escuel|biblioteca/.test(t))            return '📚'
+  if (/social|familia|asisten/.test(t))            return '🤝'
+  if (/polic|seguridad/.test(t))                   return '🚓'
+  return '📋'
+}
+
+function StockCriticoCard({ items }) {
+  // Si no hay críticos no rendereamos nada — la sección entera
+  // desaparece y el dashboard recupera la altura.
+  if (!items || items.length === 0) return null
+  return (
+    <section className="card overflow-hidden border-l-4 border-l-danger p-0">
+      <header className="flex items-center justify-between gap-3 border-b border-border bg-red-50 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-sora text-sm font-semibold text-primary">
+            <span aria-hidden="true" className="mr-1.5">⚠️</span>
+            Stock crítico
+          </h3>
+          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-danger px-1.5 text-[10px] font-bold text-white">
+            {items.length}
+          </span>
+        </div>
+        <Link to="/admin/inventario" className="shrink-0 text-xs font-medium text-primary hover:underline">
+          Ver inventario →
+        </Link>
+      </header>
+      <ul className="divide-y divide-border">
+        {items.map(it => {
+          const unidad    = it.unidad_consumo || it.unidad || 'unidades'
+          const icono     = depEmojiPorTipo(it.dependencia?.tipo)
+          const depNombre = it.dependencia?.nombre ?? '—'
+          return (
+            <li key={it.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-2.5 text-sm">
+              <span className="text-base leading-none" aria-hidden="true">{icono}</span>
+              <span className="font-medium text-primary-700">{depNombre}</span>
+              <span className="text-primary-300">—</span>
+              <span className="font-sora font-semibold text-primary">{it.nombre}</span>
+              <span className="ml-auto whitespace-nowrap text-xs text-primary-500">
+                Stock:{' '}
+                <span className="font-bold text-danger">{it.stock_actual}</span>{' '}
+                {unidad}
+                <span className="text-primary-300"> (mín: {it.stock_minimo})</span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1303,6 +1369,11 @@ export default function AdminDashboard() {
     enabled:  !!perfil,
   })
 
+  // Stock crítico — items del municipio con stock_actual <= mínimo.
+  // Se rendea como sección colapsable entre los KPIs y los turnos;
+  // si no hay items críticos, el componente devuelve null.
+  const stockCriticoQ = useStockCritico(municipioId)
+
   // Resumen financiero del mes
   const ingresosMesQ = useIngresos({ mes })
   const gastosMesQ   = useGastos({ mes })
@@ -1401,6 +1472,9 @@ export default function AdminDashboard() {
           progressColor={denunciasAb > 0 ? 'danger' : 'primary'}
         />
       </div>
+
+      {/* Alertas del sistema — stock crítico (se oculta si no hay items) */}
+      <StockCriticoCard items={stockCriticoQ.data ?? []} />
 
       {/* Fila 2: Turnos del día (tabla) + Médico de guardia */}
       <div className="grid gap-4 lg:grid-cols-2">
