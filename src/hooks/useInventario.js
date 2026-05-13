@@ -244,11 +244,15 @@ export function useMovimientos(filters = {}, { municipioIdOverride } = {}) {
 // Órdenes de compra
 // ─────────────────────────────────────────────────────────────────
 
-// Subset mínimo para retry si alguna columna extra no existe en la
-// DB del cliente. Postgres devuelve 42703 ("column does not exist")
-// y la query entera falla con 400 — caemos a esta whitelist.
+// Subset seguro para retry si alguna columna extra (created_by,
+// fecha_aprobacion, gasto_id, partida_codigo, comprobante_url) no
+// existe en la DB del cliente. Postgres devuelve 42703 ("column
+// does not exist") y la query entera falla con 400 — caemos acá.
+// Incluye todo lo que la cola de solicitudes necesita renderizar:
+// número, proveedor, descripción, tipo, estado y dependencia.
 const OC_COLS_BASE = `
-  id, municipio_id, dependencia_id, monto_total, estado, created_at,
+  id, municipio_id, dependencia_id, numero, proveedor, descripcion,
+  monto_total, tipo, estado, created_at,
   dependencia:dependencia_id ( id, nombre )
 `
 
@@ -265,9 +269,10 @@ async function fetchOrdenes({ municipioId, dependenciaId, estado } = {}) {
       return q
     }
 
+    // Retry silencioso: si la DB no tiene alguna columna extra,
+    // reintentamos con el subset seguro sin loggear nada.
     let { data, error } = await buildQuery(OC_COLS)
     if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
-      console.warn('[useInventario] fetchOrdenes — schema extra columns missing, reintento con OC_COLS_BASE:', error.message)
       ;({ data, error } = await buildQuery(OC_COLS_BASE))
     }
     clear()

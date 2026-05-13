@@ -1321,7 +1321,7 @@ function SolicitudesTab({ municipioId, dependencias, canApprove }) {
               const badge = OC_ESTADO_BADGE_ADMIN[o.estado] ?? { label: o.estado, cls: 'estado-pendiente' }
               return (
                 <Tr key={o.id}>
-                  <Td className="font-mono text-xs">{o.numero ?? `OC-${o.id.slice(0, 6)}`}</Td>
+                  <Td className="font-mono text-xs">{o.numero ?? o.id.slice(0, 8)}</Td>
                   <Td>{o.dependencia?.nombre ?? '—'}</Td>
                   <Td className="font-medium text-primary">{o.proveedor ?? '—'}</Td>
                   <Td className="max-w-[260px] truncate" title={o.descripcion ?? ''}>{o.descripcion ?? '—'}</Td>
