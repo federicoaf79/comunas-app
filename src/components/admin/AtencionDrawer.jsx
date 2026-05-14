@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useAtencionPorTurno, useAtencionInsumos, useAtencionesVecino,
   useInsumosDisponibles,
@@ -8,12 +8,28 @@ import {
   edadDesdeFechaNac,
 } from '../../hooks/useAtenciones'
 import { useUpdateTurnoEstado } from '../../hooks/useTurnos'
+import { updateVecino } from '../../hooks/useVecinos'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
+import { camposHCFaltantes, hcCompleta } from '../../lib/historiaClinica'
+import HistoriaClinicaForm from '../hc/HistoriaClinicaForm'
+import Modal from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import { dateOf, dateTimeOf } from '../../lib/datetime'
+
+// Columnas necesarias para evaluar hcCompleta(). El embed que viene
+// con el turno trae solo lo básico — hacemos un fetch dedicado del
+// vecino para chequear los campos clínicos cuando arranca la atención.
+const VECINO_HC_COLS = `
+  id, municipio_id, dni, nombre, apellido, nombre_completo, telefono,
+  fecha_nac, sexo, barrio, localidad,
+  grupo_sanguineo, alergias, sin_alergias_conocidas,
+  contacto_emergencia_nombre, contacto_emergencia_telefono
+`
+const VECINO_BASIC_COLS = 'id, dni, nombre, apellido, nombre_completo, telefono, fecha_nac, sexo, barrio, localidad'
 
 // =============================================================
 // AtencionDrawer — panel lateral que abre cuando el operador
@@ -198,6 +214,31 @@ export function AtencionForm({ turno, atencion, municipioId, profesionalId, extr
   )
 }
 
+// Trae los campos clínicos del vecino para evaluar hcCompleta(). Si
+// la migration HC no se aplicó (42703), cae a las columnas básicas y
+// el banner desaparece — hcCompleta() devolverá false sobre datos
+// parciales y bloqueará la consulta, que es el comportamiento esperado.
+function useVecinoHCStatus(vecinoId) {
+  return useQuery({
+    queryKey: ['vecino-hc-status', vecinoId ?? '__NONE__'],
+    enabled:  !!vecinoId,
+    queryFn:  async () => {
+      const tryFetch = async (cols) => {
+        return supabase.from('vecinos').select(cols).eq('id', vecinoId).maybeSingle()
+      }
+      let { data, error } = await tryFetch(VECINO_HC_COLS)
+      if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
+        ;({ data, error } = await tryFetch(VECINO_BASIC_COLS))
+      }
+      if (error) {
+        console.warn('[AtencionDrawer] useVecinoHCStatus error:', error.message)
+        return null
+      }
+      return data
+    },
+  })
+}
+
 function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraSlot }) {
   const [form, setForm] = useState(() => atencion ? {
     motivo:             atencion.motivo             ?? '',
@@ -212,14 +253,42 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  const [hcModalOpen, setHcModalOpen] = useState(false)
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
+  const qc           = useQueryClient()
   const createMut    = useCreateAtencion()
   const updateMut    = useUpdateAtencion()
   const closeMut     = useCloseAtencion()
   const updateTurnoM = useUpdateTurnoEstado()
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
+
+  // HC del vecino — bloqueamos la atención si está incompleta.
+  // Una atención existente (yaCerrada o ya guardada) deja pasar la
+  // restricción: la HC pudo no exigirse al momento de crear ese
+  // registro y queremos seguir mostrándolo en read-mode sin trabar.
+  const vecinoId = turno.vecino_id ?? turno.vecino?.id ?? null
+  const hcStatusQ = useVecinoHCStatus(vecinoId)
+  const vecinoCompleto = hcStatusQ.data ?? null
+  const faltantes = useMemo(
+    () => vecinoCompleto ? camposHCFaltantes(vecinoCompleto) : [],
+    [vecinoCompleto],
+  )
+  const hcOK = !!vecinoCompleto && hcCompleta(vecinoCompleto)
+  // Solo bloquea cuando es atención NUEVA (no hay registro guardado
+  // todavía). Una atención en borrador o cerrada se sigue mostrando
+  // aunque la HC quede sin completar — el bloqueo entra el día que
+  // alguien quiera abrir la consulta.
+  const bloquearPorHC = !atencion && !hcOK && !hcStatusQ.isLoading
+
+  async function handleCompletarHC(payload) {
+    if (!vecinoId) return
+    await updateVecino(vecinoId, payload)
+    qc.invalidateQueries({ queryKey: ['vecino-hc-status', vecinoId] })
+    qc.invalidateQueries({ queryKey: ['vecinos'] })
+    setHcModalOpen(false)
+  }
 
   // Toast de éxito autoclearea a los 2.5s — feedback no intrusivo
   // que confirma cada acción sin pisar la pantalla.
@@ -297,6 +366,8 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
   const saving = createMut.isPending || updateMut.isPending ||
                  closeMut.isPending  || updateTurnoM.isPending
 
+  const inputsDisabled = yaCerrada || bloquearPorHC
+
   return (
     <div className="space-y-4 p-5">
       {yaCerrada && (
@@ -305,41 +376,66 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         </div>
       )}
 
+      {/* HC incompleta — banner amarillo gold + bloqueo de la consulta.
+          Solo se muestra para atenciones NUEVAS (no hay borrador
+          previo): si el médico ya empezó, no le cerramos el form. */}
+      {bloquearPorHC && (
+        <div className="rounded-md border border-accent-200 bg-accent-50 p-4 text-sm">
+          <div className="flex items-start gap-2">
+            <span aria-hidden="true" className="text-base">⚠️</span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-accent-700">
+                Esta HC está incompleta.
+              </p>
+              <p className="mt-1 text-xs text-primary-700">
+                Completá los campos requeridos antes de continuar. Faltan:{' '}
+                <strong>{faltantes.join(', ')}</strong>.
+              </p>
+              <div className="mt-3">
+                <Button size="sm" onClick={() => setHcModalOpen(true)}>
+                  Completar HC ahora →
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Textarea
         label="Motivo de consulta"
         value={form.motivo}
         onChange={v => set('motivo', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
       <Textarea
         label="Anamnesis / síntomas referidos"
         value={form.anamnesis}
         onChange={v => set('anamnesis', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
       <Textarea
         label="Examen físico"
         value={form.examen_fisico}
         onChange={v => set('examen_fisico', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
       <Textarea
         label="Diagnóstico"
         value={form.diagnostico}
         onChange={v => set('diagnostico', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
       <Textarea
         label="Tratamiento indicado"
         value={form.tratamiento}
         onChange={v => set('tratamiento', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
       <Textarea
         label="Indicaciones al paciente"
         value={form.indicaciones}
         onChange={v => set('indicaciones', v)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
 
       {/* Slot opcional — el page-version pasa <DocumentosAtencion />
@@ -351,7 +447,7 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         type="date"
         value={form.proxima_consulta}
         onChange={e => set('proxima_consulta', e.target.value)}
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
 
       {/* Derivar a — textarea siempre visible. Si tiene contenido,
@@ -363,7 +459,7 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         value={form.derivacion_destino}
         onChange={e => set('derivacion_destino', e.target.value)}
         placeholder="Hospital, especialista, etc."
-        disabled={yaCerrada}
+        disabled={inputsDisabled}
       />
 
       {error && (
@@ -377,20 +473,21 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
 
       {/* Tres acciones simples — sin selector de estado intermedio.
           Cada botón hace exactamente una cosa: guardar borrador,
-          marcar ausente, o cerrar (con confirmación). */}
+          marcar ausente, o cerrar (con confirmación).
+          Bloqueadas si la HC del vecino está incompleta. */}
       <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
         <Button
           variant="secondary"
           onClick={handleGuardar}
           loading={saving}
-          disabled={yaCerrada}
+          disabled={yaCerrada || bloquearPorHC}
         >
           Guardar
         </Button>
         <button
           type="button"
           onClick={handleNoSePresento}
-          disabled={saving || turno?.estado === 'ausente'}
+          disabled={saving || turno?.estado === 'ausente' || bloquearPorHC}
           className="inline-flex items-center justify-center gap-2 rounded-lg border-2 border-accent bg-white px-4 py-2.5 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           No se presentó
@@ -430,6 +527,32 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
               ? '¿Cerrar esta atención y derivarla? Se descontarán los insumos del stock y el turno quedará marcado como atendido.'
               : '¿Cerrar esta atención? Se descontarán los insumos del stock y el turno quedará marcado como atendido.'}
           </p>
+        </Modal>
+      )}
+
+      {/* Modal de completar HC — abre HistoriaClinicaForm pre-cargado
+          con los datos parciales del vecino. Al guardar invalida
+          la query de status y el banner desaparece. */}
+      {hcModalOpen && (
+        <Modal
+          open
+          onClose={() => setHcModalOpen(false)}
+          title="Completar historia clínica"
+          size="xl"
+        >
+          <HistoriaClinicaForm
+            initial={vecinoCompleto ?? {}}
+            onSubmit={handleCompletarHC}
+            onCancel={() => setHcModalOpen(false)}
+            submitLabel="Guardar HC"
+            intro={
+              <div className="rounded-md border border-accent-100 bg-accent-50/60 p-3 text-xs text-primary-700">
+                <strong className="text-accent-700">HC incompleta:</strong>{' '}
+                faltan {faltantes.length} {faltantes.length === 1 ? 'campo' : 'campos'}{' '}
+                obligatorios. Completalos para habilitar la atención.
+              </div>
+            }
+          />
         </Modal>
       )}
     </div>

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { createVecino } from '../../hooks/useVecinos'
+import { createVecino, updateVecino } from '../../hooks/useVecinos'
 import { useQueryClient } from '@tanstack/react-query'
-import { barrios } from '../../lib/mockData'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import Spinner from '../ui/Spinner'
 import Avatar from '../ui/Avatar'
+import HistoriaClinicaForm from '../hc/HistoriaClinicaForm'
+import { camposHCFaltantes, hcCompleta } from '../../lib/historiaClinica'
 import { todayArgYMD, ARG_OFFSET } from '../../lib/datetime'
 
 // =============================================================
@@ -17,14 +18,22 @@ import { todayArgYMD, ARG_OFFSET } from '../../lib/datetime'
 //
 // Flujo:
 //   1) Buscador (DNI o nombre) con resultados live.
-//   2) Si encuentra vecinos → cards seleccionables.
-//   3) Si NO encuentra → empty state con CTA "Dar de alta como
-//      vecino nuevo" → formulario inline de creación. Al guardar
-//      el vecino queda preseleccionado para el turno (no hay
-//      flujo "sin registro" — todo turno presencial deja vecino
-//      en CRM Vecinal).
-//   4) Hora + motivo + crear turno (estado='confirmado',
-//      canal='presencial').
+//   2a) Vecino encontrado con HC completa → pasa al paso 3.
+//   2b) Vecino encontrado con HC INCOMPLETA → banner amarillo
+//        "Esta HC está incompleta. Completá los campos requeridos
+//         antes de continuar." con CTA que abre HistoriaClinicaForm
+//         pre-cargado con los datos existentes.
+//   2c) Vecino NO encontrado → CTA "Dar de alta + cargar HC" →
+//        abre HistoriaClinicaForm vacío (pre-seedea DNI o nombre
+//        con lo que el usuario tipeó). El submit crea el vecino
+//        con TODOS los campos obligatorios de la HC en una sola
+//        operación atómica desde el punto de vista del usuario.
+//   3) Especialidad, hora, motivo → crear turno (estado
+//       'confirmado', canal 'presencial').
+//
+// El botón "Crear turno" queda DESHABILITADO mientras el vecino
+// seleccionado no tenga la HC completa — la validación se hace
+// en client con hcCompleta() de lib/historiaClinica.
 // =============================================================
 
 const HORA_AHORA = () => {
@@ -33,9 +42,6 @@ const HORA_AHORA = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-// Especialidades soportadas en Sala PA. El valor se persiste tal
-// cual en turnos.especialidad y se usa para colorear los bloques
-// del calendario semanal.
 const ESPECIALIDAD_OPTS = [
   { value: 'general',     label: 'Medicina General' },
   { value: 'obstetra',    label: 'Obstetra' },
@@ -43,24 +49,18 @@ const ESPECIALIDAD_OPTS = [
   { value: 'posta_rural', label: 'Posta Sanitaria Rural' },
 ]
 
-const ZONA_OPTS = [
-  { value: 'urbano', label: 'Urbano' },
-  { value: 'rural',  label: 'Rural' },
-]
-
-function emptyTurnoForm() {
-  return { query: '', motivo: '', hora: HORA_AHORA(), especialidad: 'general' }
-}
-
-function emptyAltaForm() {
-  return {
-    apellidoNombre: '',
-    dni:            '',
-    telefono:       '',
-    zona:           'urbano',
-    barrio:         '',
-  }
-}
+// Columnas necesarias para evaluar hcCompleta() — agregamos todos
+// los campos clínicos al SELECT del buscador. Si la migration
+// 20260514_vecinos_hc_obligatorios no se aplicó, Postgres devuelve
+// 42703 y caemos al SELECT mínimo del fallback.
+const VECINO_HC_COLS = `
+  id, municipio_id, dni, nombre, apellido, nombre_completo, telefono,
+  fecha_nac, sexo, barrio, localidad, zona,
+  grupo_sanguineo, alergias, sin_alergias_conocidas,
+  contacto_emergencia_nombre, contacto_emergencia_telefono
+`
+const VECINO_BASIC_COLS =
+  'id, municipio_id, dni, nombre, apellido, nombre_completo, telefono, barrio, zona'
 
 function vecinoLabel(v) {
   if (!v) return ''
@@ -68,19 +68,8 @@ function vecinoLabel(v) {
   return v.nombre_completo || v.apellido || v.nombre || 'Vecino'
 }
 
-// "Pérez, Juan" → { apellido: 'Pérez', nombre: 'Juan' }
-// "Pérez Juan"  → { apellido: 'Pérez', nombre: 'Juan' }
-// "Juan"        → { apellido: '',      nombre: 'Juan' }
-function splitApellidoNombre(s) {
-  const t = (s ?? '').trim()
-  if (!t) return { apellido: '', nombre: '' }
-  if (t.includes(',')) {
-    const [ap, ...resto] = t.split(',')
-    return { apellido: ap.trim(), nombre: resto.join(',').trim() }
-  }
-  const parts = t.split(/\s+/)
-  if (parts.length === 1) return { apellido: '', nombre: parts[0] }
-  return { apellido: parts[0], nombre: parts.slice(1).join(' ') }
+function emptyTurnoForm() {
+  return { query: '', motivo: '', hora: HORA_AHORA(), especialidad: 'general' }
 }
 
 export default function TurnoPresencialModal({
@@ -99,14 +88,11 @@ export default function TurnoPresencialModal({
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
 
-  // Form de alta de vecino — colapsado por default. Se monta cuando
-  // el usuario apreta "Dar de alta como vecino nuevo".
-  const [altaOpen, setAltaOpen] = useState(false)
-  const [alta, setAlta]         = useState(emptyAltaForm)
-  const [creandoVecino, setCreandoVecino] = useState(false)
+  // HC mode: 'closed' | 'alta' (vecino nuevo) | 'completar' (existente con HC incompleta).
+  const [hcMode, setHcMode] = useState('closed')
+  const [hcSeed, setHcSeed] = useState({})
 
-  const set     = (k, v) => setForm(s => ({ ...s, [k]: v }))
-  const setA    = (k, v) => setAlta(s => ({ ...s, [k]: v }))
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
   // Reset al abrir/cerrar para que cada alta arranque limpia.
   useEffect(() => {
@@ -115,16 +101,15 @@ export default function TurnoPresencialModal({
     setVec(null)
     setCandidatos([])
     setSearched(false)
-    setAltaOpen(false)
-    setAlta(emptyAltaForm())
+    setHcMode('closed')
+    setHcSeed({})
     setError('')
   }, [open])
 
-  // Búsqueda con debounce — se dispara cuando hay 2+ chars y no se
-  // está mostrando el form de alta. Al elegir un vecino o abrir el
-  // alta, dejamos de buscar para no pisar el estado.
+  // Búsqueda con debounce — se dispara cuando hay 2+ chars y no
+  // estamos en pantalla de HC. Al elegir un vecino dejamos de buscar.
   useEffect(() => {
-    if (!open || altaOpen || vecino) { return }
+    if (!open || hcMode !== 'closed' || vecino) return
     const term = form.query.trim()
     if (term.length < 2) { setCandidatos([]); setSearched(false); return }
     let cancel = false
@@ -134,17 +119,24 @@ export default function TurnoPresencialModal({
       try {
         const esNumerico = /^\d{6,}$/.test(term)
         const pattern = `%${term.replace(/[%_]/g, '\\$&')}%`
-        let q = supabase
-          .from('vecinos')
-          .select('id, dni, nombre, apellido, nombre_completo, telefono, municipio_id, zona, barrio')
-          .limit(8)
-        if (esNumerico) {
-          q = q.or(`dni.eq.${term},dni.ilike.${pattern}`)
-        } else {
-          q = q.or(`apellido.ilike.${pattern},nombre.ilike.${pattern},nombre_completo.ilike.${pattern},dni.ilike.${pattern}`)
+
+        // Retry pattern FULL → BASIC si las columnas HC nuevas no
+        // están aplicadas en la DB.
+        const buildQuery = (cols) => {
+          let q = supabase.from('vecinos').select(cols).limit(8)
+          if (esNumerico) {
+            q = q.or(`dni.eq.${term},dni.ilike.${pattern}`)
+          } else {
+            q = q.or(`apellido.ilike.${pattern},nombre.ilike.${pattern},nombre_completo.ilike.${pattern},dni.ilike.${pattern}`)
+          }
+          if (municipioId) q = q.eq('municipio_id', municipioId)
+          return q
         }
-        if (municipioId) q = q.eq('municipio_id', municipioId)
-        const { data, error: err } = await q
+
+        let { data, error: err } = await buildQuery(VECINO_HC_COLS)
+        if (err && /column .* does not exist|42703/i.test(err.message ?? '')) {
+          ;({ data, error: err } = await buildQuery(VECINO_BASIC_COLS))
+        }
         if (cancel) return
         if (err) throw err
         setCandidatos(data ?? [])
@@ -156,64 +148,63 @@ export default function TurnoPresencialModal({
       }
     }, 250)
     return () => { cancel = true; clearTimeout(id) }
-  }, [form.query, open, altaOpen, vecino, municipioId])
+  }, [form.query, open, hcMode, vecino, municipioId])
 
-  const canSubmit = useMemo(() => !!vecino?.id && !!form.hora, [vecino, form.hora])
+  const hcFaltantes = useMemo(
+    () => vecino ? camposHCFaltantes(vecino) : [],
+    [vecino],
+  )
+  const hcOK = !!vecino && hcCompleta(vecino)
+  const canSubmit = !!vecino?.id && !!form.hora && hcOK
 
-  // Al apretar "Dar de alta", precargamos el form con lo que el
-  // usuario ya tipeó: si parece DNI lo seteamos en dni; si parece
-  // nombre lo dividimos en apellido + nombre.
-  function abrirAlta() {
+  // Al pedir "Dar de alta" pre-cargamos el form con lo que el
+  // usuario ya tipeó: DNI si es numérico, apellido/nombre si no.
+  function abrirAltaHC() {
     const term = form.query.trim()
-    const base = emptyAltaForm()
+    const seed = {}
     if (/^\d{6,}$/.test(term)) {
-      base.dni = term
+      seed.dni = term
     } else if (term) {
-      base.apellidoNombre = term
+      seed.apellidoNombre = term
     }
-    setAlta(base)
-    setAltaOpen(true)
+    setHcSeed(seed)
+    setHcMode('alta')
     setError('')
   }
 
-  function cancelarAlta() {
-    setAltaOpen(false)
-    setAlta(emptyAltaForm())
+  function abrirCompletarHC() {
+    if (!vecino) return
+    setHcSeed(vecino)
+    setHcMode('completar')
+    setError('')
   }
 
-  async function handleCrearVecino() {
-    setError('')
-    const { apellido, nombre } = splitApellidoNombre(alta.apellidoNombre)
-    if (!apellido && !nombre) {
-      setError('Cargá al menos el nombre y apellido del vecino.')
-      return
-    }
-    if (!alta.dni.trim()) {
-      setError('El DNI es obligatorio para dar de alta al vecino.')
-      return
-    }
-    setCreandoVecino(true)
-    try {
+  function cancelarHC() {
+    setHcMode('closed')
+    setHcSeed({})
+  }
+
+  // El payload viene normalizado desde HistoriaClinicaForm (telefono
+  // en E.164, dni solo dígitos, alergias array, etc.). Acá solo
+  // agregamos el municipio_id y persistimos.
+  async function handleSubmitHC(payload) {
+    if (hcMode === 'alta') {
       const nuevo = await createVecino({
         ...(municipioId ? { municipio_id: municipioId } : {}),
-        apellido:         apellido || null,
-        nombre:           nombre   || apellido,
-        nombre_completo:  [nombre, apellido].filter(Boolean).join(' ') || apellido,
-        dni:              alta.dni.trim(),
-        telefono:         alta.telefono.trim() || null,
-        zona:             alta.zona || 'urbano',
-        barrio:           alta.barrio || null,
+        zona: hcSeed.zona ?? 'urbano',
+        ...payload,
       })
-      // Pre-selecciono el recién creado y colapso el form de alta.
       setVec(nuevo)
-      setAltaOpen(false)
-      setAlta(emptyAltaForm())
-      // El listado del CRM también se recarga.
+      setHcMode('closed')
+      setHcSeed({})
       qc.invalidateQueries({ queryKey: ['vecinos'] })
-    } catch (e) {
-      setError(e?.message ?? 'No pudimos dar de alta al vecino.')
-    } finally {
-      setCreandoVecino(false)
+    } else if (hcMode === 'completar') {
+      if (!vecino?.id) return
+      const actualizado = await updateVecino(vecino.id, payload)
+      setVec({ ...vecino, ...actualizado })
+      setHcMode('closed')
+      setHcSeed({})
+      qc.invalidateQueries({ queryKey: ['vecinos'] })
     }
   }
 
@@ -225,6 +216,10 @@ export default function TurnoPresencialModal({
     }
     if (!vecino?.id) {
       setError('Seleccioná o creá el vecino antes de guardar el turno.')
+      return
+    }
+    if (!hcOK) {
+      setError('La HC del vecino está incompleta. Completala antes de crear el turno.')
       return
     }
     setSaving(true)
@@ -257,6 +252,44 @@ export default function TurnoPresencialModal({
     }
   }
 
+  // Cuando estamos en el form de HC, escondemos el resto del modal
+  // para no confundir al médico. El submit del form lleva de vuelta
+  // a la vista principal con el vecino seleccionado.
+  if (hcMode !== 'closed') {
+    return (
+      <Modal
+        open={open}
+        onClose={onClose}
+        title={hcMode === 'alta' ? 'Nueva historia clínica' : `Completar HC · ${vecinoLabel(vecino)}`}
+        size="xl"
+      >
+        <HistoriaClinicaForm
+          initial={hcSeed}
+          onSubmit={handleSubmitHC}
+          onCancel={cancelarHC}
+          submitLabel={hcMode === 'alta' ? 'Crear vecino con HC' : 'Guardar HC'}
+          intro={
+            <div className="rounded-md border border-accent-100 bg-accent-50/60 p-3 text-xs text-primary-700">
+              {hcMode === 'alta' ? (
+                <>
+                  <strong className="text-accent-700">Primera consulta:</strong>{' '}
+                  cargá los datos clínicos obligatorios. Una vez guardado, el vecino queda
+                  registrado en CRM Vecinal y volvés al turno presencial.
+                </>
+              ) : (
+                <>
+                  <strong className="text-accent-700">HC incompleta:</strong>{' '}
+                  faltan {hcFaltantes.length} {hcFaltantes.length === 1 ? 'campo' : 'campos'}{' '}
+                  obligatorios. No vas a poder crear el turno hasta completarlos.
+                </>
+              )}
+            </div>
+          }
+        />
+      </Modal>
+    )
+  }
+
   return (
     <Modal
       open={open}
@@ -270,8 +303,8 @@ export default function TurnoPresencialModal({
         </>
       }
     >
-      {/* min-h-[600px] mantiene el modal estable cuando alterna entre
-          la búsqueda, el empty state y el form de alta. */}
+      {/* min-h-[600px] mantiene el modal estable durante la búsqueda
+          y al alternar empty state / vecino seleccionado. */}
       <div className="flex min-h-[600px] flex-col gap-4">
         {dependencia?.nombre && (
           <p className="rounded-md border border-primary-100 bg-primary-50 px-3 py-2 text-xs text-primary-700">
@@ -280,151 +313,116 @@ export default function TurnoPresencialModal({
         )}
 
         {/* ── Paso 1 · Buscador de vecino ───────────────────────────── */}
-        {!altaOpen && (
-          <>
-            <Input
-              label="Buscar vecino"
-              value={form.query}
-              onChange={e => { set('query', e.target.value); setVec(null) }}
-              placeholder="DNI o nombre…"
-              autoComplete="off"
-            />
+        <Input
+          label="Buscar vecino"
+          value={form.query}
+          onChange={e => { set('query', e.target.value); setVec(null) }}
+          placeholder="DNI o nombre…"
+          autoComplete="off"
+        />
 
-            {vecino && (
-              <div className="flex items-center gap-3 rounded-md border border-ok-100 bg-ok-50 p-3 text-sm">
-                <Avatar name={vecinoLabel(vecino)} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ok-700">
-                    ✓ Vecino seleccionado: {vecinoLabel(vecino)}
-                  </p>
-                  <p className="text-xs text-ok-700/80">
-                    DNI {vecino.dni}{vecino.telefono ? ` · ${vecino.telefono}` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setVec(null); set('query', '') }}
-                  className="text-xs font-medium text-primary-500 hover:text-primary"
-                >
-                  Cambiar
-                </button>
-              </div>
-            )}
-
-            {!vecino && form.query.trim().length >= 2 && (
-              searching ? (
-                <div className="flex items-center justify-center rounded-md border border-border bg-white py-6">
-                  <Spinner size="sm" />
-                </div>
-              ) : candidatos.length > 0 ? (
-                <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border bg-white">
-                  {candidatos.map(v => (
-                    <li key={v.id}>
-                      <button
-                        type="button"
-                        onClick={() => { setVec(v); set('query', '') }}
-                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-primary-50"
-                      >
-                        <Avatar name={vecinoLabel(v)} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-primary">{vecinoLabel(v)}</p>
-                          <p className="truncate text-xs text-primary-400">
-                            DNI {v.dni || '—'}{v.telefono ? ` · ${v.telefono}` : ''}
-                            {v.barrio ? ` · ${v.barrio}` : ''}
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : searched ? (
-                <div className="rounded-md border border-dashed border-accent-200 bg-accent-50/50 p-5 text-center">
-                  <p className="text-sm font-medium text-primary">
-                    No se encontró ningún vecino con ese dato.
-                  </p>
-                  <p className="mt-1 text-xs text-primary-500">
-                    Podés darlo de alta en CRM Vecinal y continuar el turno.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={abrirAlta}
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
-                  >
-                    Dar de alta como vecino nuevo →
-                  </button>
-                </div>
-              ) : null
-            )}
-          </>
+        {vecino && hcOK && (
+          <div className="flex items-center gap-3 rounded-md border border-ok-100 bg-ok-50 p-3 text-sm">
+            <Avatar name={vecinoLabel(vecino)} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-ok-700">
+                ✓ Vecino seleccionado · HC completa
+              </p>
+              <p className="text-xs text-ok-700/80">
+                {vecinoLabel(vecino)} · DNI {vecino.dni}
+                {vecino.telefono ? ` · ${vecino.telefono}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setVec(null); set('query', '') }}
+              className="text-xs font-medium text-primary-500 hover:text-primary"
+            >
+              Cambiar
+            </button>
+          </div>
         )}
 
-        {/* ── Paso 2 (alternativo) · Alta inline de vecino ───────────── */}
-        {altaOpen && (
-          <div className="rounded-lg border border-accent-200 bg-primary-50/40 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
-                Nuevo vecino
+        {vecino && !hcOK && (
+          <div className="rounded-md border border-accent-200 bg-accent-50 p-4 text-sm">
+            <div className="flex items-start gap-2">
+              <span aria-hidden="true" className="text-base">⚠️</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-accent-700">
+                  Esta HC está incompleta.
+                </p>
+                <p className="mt-1 text-xs text-primary-700">
+                  Completá los campos requeridos antes de continuar. Faltan:{' '}
+                  <strong>{hcFaltantes.join(', ')}</strong>.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={abrirCompletarHC}>
+                    Completar HC ahora →
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => { setVec(null); set('query', '') }}
+                    className="text-xs font-medium text-primary-500 hover:text-primary"
+                  >
+                    Cambiar vecino
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!vecino && form.query.trim().length >= 2 && (
+          searching ? (
+            <div className="flex items-center justify-center rounded-md border border-border bg-white py-6">
+              <Spinner size="sm" />
+            </div>
+          ) : candidatos.length > 0 ? (
+            <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-md border border-border bg-white">
+              {candidatos.map(v => {
+                const completa = hcCompleta(v)
+                return (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      onClick={() => { setVec(v); set('query', '') }}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-primary-50"
+                    >
+                      <Avatar name={vecinoLabel(v)} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-primary">{vecinoLabel(v)}</p>
+                        <p className="truncate text-xs text-primary-400">
+                          DNI {v.dni || '—'}{v.telefono ? ` · ${v.telefono}` : ''}
+                          {v.barrio ? ` · ${v.barrio}` : ''}
+                        </p>
+                      </div>
+                      {!completa && (
+                        <span className="ml-2 inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-100">
+                          HC incompleta
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : searched ? (
+            <div className="rounded-md border border-dashed border-accent-200 bg-accent-50/50 p-5 text-center">
+              <p className="text-sm font-medium text-primary">
+                No se encontró ningún vecino con ese dato.
+              </p>
+              <p className="mt-1 text-xs text-primary-500">
+                Dalo de alta cargando la historia clínica. Es obligatoria para la primera consulta.
               </p>
               <button
                 type="button"
-                onClick={cancelarAlta}
-                className="text-xs font-medium text-primary-500 hover:text-primary"
-                disabled={creandoVecino}
+                onClick={abrirAltaHC}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
               >
-                Cancelar
+                Dar de alta + cargar HC →
               </button>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Input
-                  label="Apellido y nombre"
-                  value={alta.apellidoNombre}
-                  onChange={e => setA('apellidoNombre', e.target.value)}
-                  placeholder="Pérez, Juan"
-                  required
-                  autoComplete="off"
-                />
-              </div>
-              <Input
-                label="DNI"
-                value={alta.dni}
-                onChange={e => setA('dni', e.target.value)}
-                inputMode="numeric"
-                required
-                autoComplete="off"
-              />
-              <Input
-                label="Teléfono"
-                value={alta.telefono}
-                onChange={e => setA('telefono', e.target.value)}
-                placeholder="+54 9…"
-                autoComplete="off"
-              />
-              <Select
-                label="Zona"
-                value={alta.zona}
-                onChange={v => setA('zona', v || 'urbano')}
-                options={ZONA_OPTS}
-              />
-              <Select
-                label="Barrio"
-                value={alta.barrio}
-                onChange={v => setA('barrio', v)}
-                placeholder="Seleccionar…"
-                options={barrios.map(b => ({ value: b, label: b }))}
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={cancelarAlta} disabled={creandoVecino}>
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={handleCrearVecino} loading={creandoVecino}>
-                Registrar y continuar
-              </Button>
-            </div>
-          </div>
+          ) : null
         )}
 
         {/* ── Paso 3 · Especialidad, hora y motivo (siempre visibles) ── */}
