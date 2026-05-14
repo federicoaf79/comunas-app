@@ -158,13 +158,13 @@ function ParaQuienSelector({ value, onChange }) {
               />
               <span
                 className={
-                  'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ' +
+                  'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ' +
                   (active ? 'border-primary bg-primary' : 'border-primary-300 bg-white')
                 }
                 aria-hidden="true"
               >
                 {active && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="h-3.5 w-3.5">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="h-3 w-3">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -173,8 +173,8 @@ function ParaQuienSelector({ value, onChange }) {
                 {o.icon}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-base font-semibold">{o.label}</span>
-                <span className="mt-0.5 block text-xs text-primary-500 sm:text-sm">{o.desc}</span>
+                <span className="block text-sm font-semibold">{o.label}</span>
+                <span className="mt-0.5 block text-xs text-primary-500">{o.desc}</span>
               </span>
             </label>
           )
@@ -387,7 +387,7 @@ export default function SacarTurnoFormPortal() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card flex flex-col gap-5 p-5">
+    <form onSubmit={handleSubmit} className="card flex flex-col gap-4 p-5">
       {/* ¿Para quién es? */}
       <ParaQuienSelector value={form.paraQuien} onChange={v => set('paraQuien', v)} />
 

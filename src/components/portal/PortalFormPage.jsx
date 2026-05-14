@@ -27,13 +27,25 @@ function Escudo({ className = 'h-9 w-9' }) {
 
 // Layout compartido por las páginas de formulario del portal.
 // Header con logo + botón "Volver al portal", y el formulario
-// centrado en una columna ancha. La clase `portal-form-page`
-// aplica los overrides senior-friendly definidos en index.css.
-export default function PortalFormPage({ titulo, descripcion, children }) {
+// centrado en una columna.
+//
+// Por default usa la clase `portal-form-page` que aplica los
+// overrides senior-friendly de index.css (inputs ≥52px, labels
+// grandes, etc.). Si `compact={true}`, se omite ese wrapper, se
+// estrecha la columna a max-w-lg y se baja el peso del header —
+// pensado para formularios que tienen muchos campos y necesitan
+// caber en pantalla sin scroll horizontal a 100% de zoom.
+export default function PortalFormPage({ titulo, descripcion, children, compact = false }) {
+  const mainWidth   = compact ? 'max-w-lg' : 'max-w-3xl'
+  const mainPad     = compact ? 'py-6 sm:py-8' : 'py-8 sm:py-12'
+  const headerSpace = compact ? 'mb-5 sm:mb-6' : 'mb-8 sm:mb-10'
+  const tituloSize  = compact ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'
+  const descSize    = compact ? 'mt-2 text-sm sm:text-base' : 'mt-3 text-base sm:text-lg'
+
   return (
     <div className="min-h-svh bg-background">
       <header className="sticky top-0 z-30 border-b border-primary-900 bg-primary text-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className={`mx-auto flex ${mainWidth} items-center justify-between gap-4 px-4 py-3 sm:px-6`}>
           <Link to="/portal" className="flex items-center gap-3 text-white">
             <Escudo className="h-9 w-9 shrink-0" />
             <div className="leading-tight">
@@ -56,20 +68,21 @@ export default function PortalFormPage({ titulo, descripcion, children }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
-        <header className="mb-8 sm:mb-10">
-          <h1 className="font-sora text-3xl font-bold leading-tight text-primary sm:text-4xl">
+      <main className={`mx-auto ${mainWidth} px-4 ${mainPad} sm:px-6`}>
+        <header className={headerSpace}>
+          <h1 className={`font-sora ${tituloSize} font-bold leading-tight text-primary`}>
             {titulo}
           </h1>
           {descripcion && (
-            <p className="mt-3 text-base leading-relaxed text-primary-500 sm:text-lg">
+            <p className={`${descSize} leading-relaxed text-primary-500`}>
               {descripcion}
             </p>
           )}
         </header>
-        <div className="portal-form-page">
-          {children}
-        </div>
+        {/* En modo compact NO aplicamos la clase portal-form-page —
+            los inputs caen al .input-field default (px-3 py-2.5 text-sm)
+            en vez del bloque senior-friendly de ≥52px. */}
+        {compact ? children : <div className="portal-form-page">{children}</div>}
       </main>
     </div>
   )
