@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
-import { useDatosMunicipio, usePortalMunicipioId } from '../../hooks/useConfigPortal'
+import { useDatosMunicipio, usePortalMunicipioId, useConfigClavePublica } from '../../hooks/useConfigPortal'
 import { useAutoridades } from '../../hooks/useAutoridades'
 import { useHistoriaMunicipio } from '../../hooks/useHistoriaMunicipio'
 import { useVecino } from '../../context/VecinoContext'
@@ -51,7 +51,7 @@ const ACCESOS_RAPIDOS = [
     label: 'Sacar turno',
     desc:  'Sala PA, Juez de Paz, SUM, Administración',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <rect x="3" y="5" width="18" height="16" rx="2" />
         <path strokeLinecap="round" d="M3 9h18M8 3v4M16 3v4" />
         <path strokeLinecap="round" d="M12 13v5M9.5 15.5h5" />
@@ -63,7 +63,7 @@ const ACCESOS_RAPIDOS = [
     label: 'Consultar turno',
     desc:  'Verificá el estado de tu solicitud',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <circle cx="11" cy="11" r="7" />
         <path strokeLinecap="round" d="M21 21l-4.3-4.3" />
       </svg>
@@ -74,7 +74,7 @@ const ACCESOS_RAPIDOS = [
     label: 'Mi Salud',
     desc:  'Resumen de tus atenciones en la Sala PA',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
       </svg>
     ),
@@ -84,7 +84,7 @@ const ACCESOS_RAPIDOS = [
     label: 'Mi cuenta',
     desc:  'Turnos, salud y datos personales',
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-9 w-9">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <circle cx="12" cy="8" r="4" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
       </svg>
@@ -476,6 +476,106 @@ function Header() {
   )
 }
 
+// ─────────────────────────────────────────────────────────────────
+// HeroCarousel — strip horizontal con las últimas 10 noticias con
+// imagen, scroll continuo configurable desde Portal Web (clave
+// `hero_carousel` de configuracion_portal). Pausa en hover.
+// ─────────────────────────────────────────────────────────────────
+
+const HERO_CAROUSEL_DEFAULT = {
+  activo:             true,
+  velocidad_segundos: 30,
+  mostrar_titulo:     true,
+  mostrar_categoria:  true,
+}
+
+async function fetchHeroCarouselNoticias(municipioId) {
+  if (!municipioId) return []
+  // El user spec menciona `.order('fecha', ...)` pero la columna real
+  // de noticias es `publicado_at` (ver useNoticiasPublicas) — usamos
+  // esa para mantener compatibilidad con el resto del portal.
+  const { data, error } = await supabaseAnon
+    .from('noticias')
+    .select('id, titulo, imagen_url, categoria, publicado_at')
+    .eq('municipio_id', municipioId)
+    .eq('estado', 'publicada')
+    .not('imagen_url', 'is', null)
+    .order('publicado_at', { ascending: false })
+    .limit(10)
+  if (error) {
+    console.warn('[HeroCarousel] fetchHeroCarouselNoticias error:', error.message)
+    return []
+  }
+  return data ?? []
+}
+
+function HeroCarousel() {
+  const { data: municipioId } = usePortalMunicipioId()
+  // Config con defaults locales — si el admin no la cargó todavía
+  // o la clave no está en el whitelist anon, caemos a HERO_CAROUSEL_DEFAULT.
+  const { data: cfg } = useConfigClavePublica('hero_carousel', HERO_CAROUSEL_DEFAULT)
+  const config = { ...HERO_CAROUSEL_DEFAULT, ...(cfg ?? {}) }
+
+  const { data: noticias = [] } = useQuery({
+    queryKey: ['hero-carousel-noticias', municipioId ?? '__NONE__'],
+    queryFn:  () => fetchHeroCarouselNoticias(municipioId),
+    enabled:  !!municipioId,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  if (!config.activo || noticias.length === 0) return null
+
+  // Duplicamos el array — el track corre de translateX(0) a
+  // translateX(-50%), que visualmente cae al inicio del segundo
+  // bloque (idéntico al primero), generando el loop sin saltos.
+  const doble = [...noticias, ...noticias]
+
+  return (
+    <div className="relative w-full overflow-hidden pb-8 sm:pb-10">
+      <div
+        className="hero-carousel-track flex w-max gap-3"
+        style={{ animationDuration: `${config.velocidad_segundos}s` }}
+        aria-label="Carrusel de noticias recientes"
+      >
+        {doble.map((n, i) => (
+          <Link
+            key={`${n.id}-${i}`}
+            to={`/portal/noticias/${n.id}`}
+            className="group relative block h-28 w-48 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10 shadow-md transition-transform hover:scale-[1.02]"
+            aria-hidden={i >= noticias.length ? 'true' : undefined}
+            tabIndex={i >= noticias.length ? -1 : undefined}
+          >
+            <img
+              src={n.imagen_url}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+            {/* Gradiente bottom-up para legibilidad del título. */}
+            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-primary-900/85 via-primary-900/40 to-transparent" aria-hidden="true" />
+            {config.mostrar_categoria && n.categoria && (
+              <span
+                className="absolute left-2 top-2 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-inset ring-accent/30"
+                style={{ backgroundColor: 'rgba(15, 28, 53, 0.80)' }}
+              >
+                {n.categoria}
+              </span>
+            )}
+            {config.mostrar_titulo && (
+              <p
+                className="absolute inset-x-0 bottom-0 line-clamp-2 px-2 pb-2 text-xs font-semibold leading-snug text-white"
+                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
+              >
+                {n.titulo}
+              </p>
+            )}
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function Hero() {
   return (
     <section
@@ -487,10 +587,7 @@ function Hero() {
       <div aria-hidden="true" className="pointer-events-none absolute -right-20 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
       <div aria-hidden="true" className="pointer-events-none absolute -left-16 -bottom-24 h-80 w-80 rounded-full bg-ok/15 blur-3xl" />
 
-      <div
-        className="relative mx-auto flex max-w-6xl flex-col items-start justify-center gap-5 px-4 py-16 sm:px-6 sm:py-20 lg:py-28"
-        style={{ minHeight: '70vh' }}
-      >
+      <div className="relative mx-auto flex max-w-6xl flex-col items-start justify-center gap-5 px-4 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10 lg:pt-24 lg:pb-12">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur-sm">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />
           Portal Ciudadano oficial
@@ -526,6 +623,9 @@ function Hero() {
           </Link>
         </div>
       </div>
+
+      {/* Carrusel — strip horizontal infinite-scroll debajo del texto. */}
+      <HeroCarousel />
     </section>
   )
 }
@@ -533,31 +633,31 @@ function Hero() {
 function AccesosRapidos() {
   return (
     <section aria-labelledby="accesos-h2" className="border-b border-border bg-white">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <h2 id="accesos-h2" className="sr-only">Accesos rápidos</h2>
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {ACCESOS_RAPIDOS.map(a => {
             const inner = (
               <>
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-accent transition-colors group-hover:bg-primary-900">
                   {a.icon}
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-primary sm:text-lg">{a.label}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-primary-500 sm:text-[13px]">
+                  <p className="text-sm font-bold text-primary">{a.label}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-primary-500">
                     {a.desc}
                   </p>
                 </div>
                 <div className="mt-auto inline-flex items-center gap-1 text-xs font-semibold text-accent-700 group-hover:text-accent-800">
                   Acceder
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                   </svg>
                 </div>
               </>
             )
             const cardClasses =
-              'group flex h-full flex-col gap-3 rounded-xl border border-border bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg sm:p-6'
+              'group flex h-full flex-col gap-2 rounded-xl border border-border bg-white p-3 text-left transition-all hover:-translate-y-0.5 hover:border-accent hover:shadow-lg'
             return a.to ? (
               <Link key={a.to} to={a.to} className={cardClasses}>
                 {inner}

@@ -145,3 +145,29 @@
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
+
+/* =====================================================================
+   Hero carousel — infinite scroll horizontal. El track contiene el
+   array de cards duplicado (2x); animación lineal de translateX 0 →
+   -50% para volver al inicio del segundo bloque, que visualmente
+   coincide con el del primero. Duration se setea inline desde JS
+   para que el admin pueda configurarla en `hero_carousel`.
+   ===================================================================== */
+@keyframes hero-carousel-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.hero-carousel-track {
+  animation-name: hero-carousel-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.hero-carousel-track:hover {
+  animation-play-state: paused;
+}
+/* Si el usuario tiene `prefers-reduced-motion`, no animamos —
+   accesibilidad / motion sickness. El carrusel queda estático
+   mostrando los primeros cards visibles. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-carousel-track { animation: none; }
+}
