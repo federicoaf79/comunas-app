@@ -50,10 +50,28 @@ const CATEGORIAS = [
     ),
     items: [
       {
-        titulo: '3 planos de vivienda modelo',
-        desc:   'Modelos Bicentenaria, Criolla, Milagro y más — planos oficiales ProCreAr en PDF, descarga directa.',
+        titulo: 'Plano Casa Modelo 1 — 8×15m, 2 dormitorios',
+        desc:   'Planta baja, fachada, isométrico, instalaciones hidro/eléctrica y estructural. Terreno 8×15m.',
         tipo:   'pdf',
-        url:    'https://www.planosdecasasdedospisos.com/tag/procrear/',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/construccion/plano-casa-1-8x15m-2rec.pdf',
+      },
+      {
+        titulo: 'Plano Casa Modelo 2 — 7×16m, 2 dormitorios',
+        desc:   'Estilo tradicional en planta baja. Planos completos de arquitectura e instalaciones.',
+        tipo:   'pdf',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/construccion/plano-casa-2-7x16m-2rec.pdf',
+      },
+      {
+        titulo: 'Plano Casa Modelo 3 — 5×11m, 3 dormitorios, 2 pisos',
+        desc:   'Vivienda progresiva en 3 etapas. Planta baja y alta, instalaciones y estructura.',
+        tipo:   'pdf',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/construccion/plano-casa-3-5x11m-3rec-2pisos.pdf',
+      },
+      {
+        titulo: 'Plano Casa Modelo 4 — 9×17m, 2 dormitorios (70–100m²)',
+        desc:   'Vivienda de mayor superficie con garage, jardín y patio de servicio.',
+        tipo:   'pdf',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/construccion/plano-casa-4-9x17m-2rec-70-100m2.pdf',
       },
       {
         titulo: 'Guía: cómo aislar tu casa del calor',
@@ -63,9 +81,9 @@ const CATEGORIAS = [
       },
       {
         titulo: 'Guía: calefacción eficiente y bajo costo',
-        desc:   'Guía INTI para estructuras y aislación — construcción eficiente con menor gasto energético.',
+        desc:   'Opciones de calefacción, aislación y consejos para bajar la factura energética en el hogar.',
         tipo:   'pdf',
-        url:    'https://www.inti.gob.ar/assets/uploads/files/cirsoc/aprobados%20en%202016/guia-CIRSOCMADERA-24ABRIL_compressed.pdf',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/construccion/guia_calefaccion_eficiente.pdf',
       },
       {
         titulo: 'Recomendaciones de iluminación LED',
@@ -99,9 +117,9 @@ const CATEGORIAS = [
       },
       {
         titulo: 'Guía para emprendedores: primeros pasos',
-        desc:   'Manual del Emprendedor 2023 — Aprender a Emprender Argentina. PDF descarga directa, gratuito.',
+        desc:   'Guía completa para emprendimientos urbanos, digitales y rurales. Trámites, herramientas y recursos gratuitos.',
         tipo:   'pdf',
-        url:    'https://aprenderaemprender.org.ar/wp-content/uploads/2023/03/Manual-del-emprendedor-2023-BAJA-Con-hipervinculos.pdf',
+        url:    'https://tuvfrnjnupfurzkepsod.supabase.co/storage/v1/object/public/recursos/gestion/guia_emprendedores_comunas.pdf',
       },
     ],
   },
@@ -310,8 +328,8 @@ export default function RecursosSection() {
         </Link>
 
         <p className="mt-6 text-xs text-primary-400 sm:mt-8">
-          Los archivos están en preparación — pronto vas a poder descargar
-          cada recurso. Si necesitás alguno con urgencia, acercate a Administración.
+          Los planos son orientativos. Consultá con un profesional para adaptar
+          el diseño a tu terreno y normativa local.
         </p>
       </div>
     </section>
