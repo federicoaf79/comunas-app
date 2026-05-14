@@ -33,12 +33,18 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
 })
 
+// Map único de estado → colores. `bar` para las barras de avance
+// (clases Tailwind), `cls` para el badge de pill, `border` para el
+// borde izquierdo de 4px de la fila — usamos hex directos porque
+// son los acordados con la dirección y no quiero acoplarlos a
+// tokens que puedan cambiar de mano (ej: cancelada usa gray-500
+// que no tiene shortcut en la paleta COMUNAS).
 const ESTADO_BADGE = {
-  planificacion: { label: 'En planificación', cls: 'bg-ok-50 text-ok-700 ring-ok-100',                 bar: 'bg-ok' },
-  en_ejecucion:  { label: 'En ejecución',     cls: 'bg-accent-50 text-accent-700 ring-accent-100',    bar: 'bg-accent' },
-  demorada:      { label: 'Demorada',         cls: 'bg-red-50 text-red-700 ring-red-200',            bar: 'bg-red-600' },
-  finalizada:    { label: 'Finalizada',       cls: 'bg-primary-50 text-primary-700 ring-primary-200', bar: 'bg-primary' },
-  cancelada:     { label: 'Cancelada',        cls: 'bg-gray-100 text-gray-600 ring-gray-200',         bar: 'bg-gray-400' },
+  planificacion: { label: 'En planificación', cls: 'bg-ok-50 text-ok-700 ring-ok-100',                 bar: 'bg-ok',       border: '#1D4ED8' },
+  en_ejecucion:  { label: 'En ejecución',     cls: 'bg-accent-50 text-accent-700 ring-accent-100',    bar: 'bg-accent',   border: '#C9A84C' },
+  demorada:      { label: 'Demorada',         cls: 'bg-red-50 text-red-700 ring-red-200',            bar: 'bg-red-600',  border: '#DC2626' },
+  finalizada:    { label: 'Finalizada',       cls: 'bg-primary-50 text-primary-700 ring-primary-200', bar: 'bg-primary',  border: '#0F1C35' },
+  cancelada:     { label: 'Cancelada',        cls: 'bg-gray-100 text-gray-600 ring-gray-200',         bar: 'bg-gray-400', border: '#6B7280' },
 }
 
 function EstadoBadge({ estado }) {
@@ -158,7 +164,7 @@ export default function ObrasPublicas() {
           )}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-2">
           {obras.map(o => (
             <ObraCard
               key={o.id}
@@ -207,78 +213,68 @@ export default function ObrasPublicas() {
 // Card de obra
 // ─────────────────────────────────────────────────────────────────
 
+// Fila horizontal de obra. ~90px de alto, 100% ancho, borde
+// izquierdo de 4px coloreado por estado, 5 columnas con anchos
+// fraccionales (30 / 15 / 25 / 20 / 10). En mobile el row colapsa
+// a un layout apilado para no comprimir el contenido.
 function ObraCard({ obra, puedeEditar, onVerDetalle, onEditar }) {
-  const avance = Math.max(0, Math.min(100, obra.porcentaje_avance ?? 0))
-  const bar    = (ESTADO_BADGE[obra.estado] ?? ESTADO_BADGE.planificacion).bar
+  const badge       = ESTADO_BADGE[obra.estado] ?? ESTADO_BADGE.planificacion
+  const avance      = Math.max(0, Math.min(100, obra.porcentaje_avance ?? 0))
   const presupuesto = Number(obra.presupuesto_total ?? 0)
   const gasto       = Number(obra.gasto_acumulado ?? 0)
-  // Porcentaje gastado contra presupuesto — saturado a 100 para que
-  // las obras sobre-ejecutadas no rompan la barra. Se muestra el
-  // valor crudo igual.
-  const pctGastado = presupuesto > 0
-    ? Math.min(100, Math.round((gasto / presupuesto) * 100))
-    : 0
   const sobreEjecutado = presupuesto > 0 && gasto > presupuesto
 
   return (
-    <article className="card flex h-full flex-col gap-3 p-5">
-      <header className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="font-sora text-base font-semibold text-primary">
-            {obra.nombre}
-          </h3>
-          <p className="mt-0.5 text-xs text-primary-500">
-            {obra.dependencia?.nombre ?? 'Sin dependencia'}
-          </p>
-        </div>
+    <article
+      className="card flex min-h-[90px] flex-col gap-3 overflow-hidden border-l-4 px-4 py-3 lg:flex-row lg:items-center lg:gap-4 lg:px-5"
+      style={{ borderLeftColor: badge.border }}
+    >
+      {/* COLUMNA 1 · Nombre + dependencia (30%) */}
+      <div className="min-w-0 lg:w-[30%]">
+        <h3 className="truncate font-sora text-sm font-bold text-primary" title={obra.nombre}>
+          {obra.nombre}
+        </h3>
+        <p className="mt-0.5 truncate text-xs text-primary-400" title={obra.dependencia?.nombre ?? 'Sin dependencia'}>
+          {obra.dependencia?.nombre ?? 'Sin dependencia'}
+        </p>
+      </div>
+
+      {/* COLUMNA 2 · Estado + fecha inicio (15%) */}
+      <div className="flex flex-col gap-0.5 lg:w-[15%]">
         <EstadoBadge estado={obra.estado} />
-      </header>
-
-      <div>
-        <div className="flex items-center justify-between text-[11px] font-semibold text-primary-500">
-          <span>Avance</span>
-          <span className="font-mono tabular-nums text-primary-700">{avance}%</span>
-        </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-primary-50">
-          <div className={`h-full ${bar}`} style={{ width: `${avance}%` }} />
-        </div>
+        <p className="text-[11px] text-primary-400">
+          Inicio: <span className="font-medium text-primary-700">{fechaCorta(obra.fecha_inicio)}</span>
+        </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <p className="text-primary-400">Presupuesto</p>
-          <p className="font-mono font-semibold tabular-nums text-primary">
+      {/* COLUMNA 3 · Barra de avance + % (25%) */}
+      <div className="flex items-center gap-3 lg:w-[25%]">
+        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary-50">
+          <div className={`h-full ${badge.bar}`} style={{ width: `${avance}%` }} />
+        </div>
+        <span className="w-10 shrink-0 text-right font-mono text-xs font-semibold tabular-nums text-primary-700">
+          {avance}%
+        </span>
+      </div>
+
+      {/* COLUMNA 4 · Presupuesto vs gastado (20%) */}
+      <div className="flex flex-col text-[11px] lg:w-[20%]">
+        <p className="leading-tight text-primary-400">
+          Presup.{' '}
+          <span className="font-mono font-semibold tabular-nums text-primary-700">
             {fmtMoney.format(presupuesto)}
-          </p>
-        </div>
-        <div>
-          <p className="text-primary-400">Gastado</p>
-          <p className={`font-mono font-semibold tabular-nums ${sobreEjecutado ? 'text-danger' : 'text-primary'}`}>
-            {fmtMoney.format(gasto)}
-          </p>
-        </div>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between text-[11px] font-semibold text-primary-500">
-          <span>Ejecución presupuestaria</span>
-          <span className={`font-mono tabular-nums ${sobreEjecutado ? 'text-danger' : 'text-primary-700'}`}>
-            {pctGastado}%
           </span>
-        </div>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-primary-50">
-          <div
-            className={sobreEjecutado ? 'h-full bg-danger' : 'h-full bg-primary'}
-            style={{ width: `${pctGastado}%` }}
-          />
-        </div>
+        </p>
+        <p className="leading-tight text-primary-400">
+          Gastado{' '}
+          <span className={`font-mono font-semibold tabular-nums ${sobreEjecutado ? 'text-danger' : 'text-primary-700'}`}>
+            {fmtMoney.format(gasto)}
+          </span>
+        </p>
       </div>
 
-      <p className="text-[11px] text-primary-400">
-        Fin estimado: <span className="font-medium text-primary-700">{fechaCorta(obra.fecha_fin_estimada)}</span>
-      </p>
-
-      <div className="mt-auto flex justify-end gap-2 pt-2">
+      {/* COLUMNA 5 · Acciones (10%) */}
+      <div className="flex flex-col gap-1 lg:w-[10%] lg:items-end">
         {puedeEditar && (
           <Button variant="ghost" size="sm" onClick={onEditar}>
             Editar
