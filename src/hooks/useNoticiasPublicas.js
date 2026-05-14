@@ -1,7 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabaseAnon } from '../lib/supabaseAnon'
 
-const TIMEOUT_MS = 8000
+// El portal corre sobre redes hogareñas con latencia alta (Real
+// Sayana, datos celulares). 8s era apretado: medimos timeouts en
+// el lanzamiento del Sprint 3 cuando el query degradaba sin el
+// índice (municipio_id, publicado_at). Subimos a 20s para
+// absorber el spike hasta que la nueva index entre en producción.
+const TIMEOUT_MS = 20000
 
 // Columnas reales de la tabla `noticias` en producción.
 // El "resumen" se deriva en el frontend desde `cuerpo` (substring)
