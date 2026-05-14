@@ -676,9 +676,13 @@ function AccesosRapidos() {
 //
 //   ZONA A · noticia destacada (ancho completo)
 //   ZONA B · grid 4 columnas × 2 filas (siguientes 8)
-//   ZONA C · noticias restantes (2/3) + banners institucionales (1/3)
+//   ZONA C · noticias restantes full-width
 //
 // Adaptativo: <4 = grid simple, 4-8 = A+B, 9+ = A+B+C completo.
+// Antes Zona C tenía una columna lateral de banners
+// institucionales (Trámites online / Alertas SMS) — esos banners
+// se movieron a una fila horizontal debajo de ServiciosSection
+// (dependencias) para liberar el ancho de la sección de noticias.
 // ─────────────────────────────────────────────────────────────────
 
 // ZONA A · Noticia destacada de ancho completo
@@ -739,37 +743,6 @@ function NoticiaFeatured({ noticia }) {
         </span>
       </div>
     </article>
-    </Link>
-  )
-}
-
-// ZONA C · Banner institucional navy/gold con ícono, título, copy y CTA.
-// Navega a una ruta del portal — los CTAs apuntan a /portal/turno · /portal/mi-turno.
-function BannerInstitucional({ icon, titulo, copy, cta, to }) {
-  return (
-    <Link
-      to={to}
-      className="group relative flex h-full overflow-hidden rounded-xl border border-primary-700 bg-gradient-to-br from-primary via-primary-700 to-primary-900 text-white shadow-card transition-shadow hover:shadow-lg"
-    >
-      <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
-      <div className="absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
-      <div className="relative flex h-full flex-col gap-2 p-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-xl">
-          <span aria-hidden="true">{icon}</span>
-        </div>
-        <h3 className="font-sora text-sm font-bold leading-tight text-white">
-          {titulo}
-        </h3>
-        <p className="text-xs leading-relaxed text-white/75">
-          {copy}
-        </p>
-        <span className="mt-auto inline-flex items-center gap-1.5 self-start rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-primary-900 transition-colors group-hover:bg-accent-600 group-hover:text-white">
-          {cta}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
-          </svg>
-        </span>
-      </div>
     </Link>
   )
 }
@@ -844,30 +817,12 @@ function NoticiasSection({ noticias, loading, error }) {
                   </div>
                 )}
 
-                {/* ZONA C · Restantes (2/3) + Banners institucionales (1/3) */}
-                {showZonaC && (
-                  <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
-                    {restC.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:col-span-2">
-                        {restC.map(n => <NoticiaCardSmall key={n.id} noticia={n} />)}
-                      </div>
-                    ) : null}
-                    <div className={`flex flex-col gap-4 ${restC.length === 0 ? 'lg:col-span-3 lg:grid lg:grid-cols-2' : ''}`}>
-                      <BannerInstitucional
-                        icon="📋"
-                        titulo="Trámites online"
-                        copy="Gestioná desde tu celular sin moverte de tu casa."
-                        cta="Ir a trámites"
-                        to="/portal/tramites"
-                      />
-                      <BannerInstitucional
-                        icon="📱"
-                        titulo="Alertas por SMS"
-                        copy="Recibí novedades de la comuna directo en tu celular."
-                        cta="Suscribirme"
-                        to="/portal/mi-turno"
-                      />
-                    </div>
+                {/* ZONA C · Noticias restantes full-width (los banners
+                    institucionales se movieron a la fila horizontal
+                    debajo de ServiciosSection en PortalPublico). */}
+                {showZonaC && restC.length > 0 && (
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    {restC.map(n => <NoticiaCardSmall key={n.id} noticia={n} />)}
                   </div>
                 )}
               </div>
@@ -974,6 +929,60 @@ function ServiciosSection() {
             })}
           </div>
         )}
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Banners horizontales debajo de Dependencias — antes vivían como
+// columna lateral en la sección de noticias (BannerInstitucional).
+// Migrados acá como dos botones ~56px de alto, flex-1, paleta
+// COMUNAS (navy + gold).
+// ─────────────────────────────────────────────────────────────────
+
+function BannersServicios() {
+  return (
+    <section aria-label="Accesos a servicios online" className="bg-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 pb-8 sm:flex-row sm:px-6 lg:px-12">
+        {/* Trámites online — navy + texto blanco */}
+        <Link
+          to="/portal/tramites"
+          className="group flex h-14 flex-1 items-center gap-3 rounded-xl bg-primary px-4 text-white shadow-card transition-all hover:bg-primary-700 hover:shadow-lg"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-accent">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5zM14 3v5h5M9 13h6M9 17h6" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-sora text-sm font-bold leading-tight">Trámites online</p>
+            <p className="text-xs leading-tight text-white/70">Gestioná desde tu celular</p>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </Link>
+
+        {/* Alertas por SMS — gold + texto navy */}
+        <Link
+          to="/portal/mi-turno"
+          className="group flex h-14 flex-1 items-center gap-3 rounded-xl bg-accent px-4 text-primary-900 shadow-card transition-all hover:bg-accent-600 hover:shadow-lg"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-900/10 text-primary-900">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+              <rect x="6" y="2" width="12" height="20" rx="2" />
+              <path strokeLinecap="round" d="M11 18h2" />
+            </svg>
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-sora text-sm font-bold leading-tight">Alertas por SMS</p>
+            <p className="text-xs leading-tight text-primary-900/70">Recibí novedades en tu celular</p>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
+          </svg>
+        </Link>
       </div>
     </section>
   )
@@ -1238,6 +1247,7 @@ export default function PortalPublico() {
       <main>
         <AccesosRapidos />
         <ServiciosSection />
+        <BannersServicios />
         <RecursosSection />
         <NoticiasSection
           noticias={noticias}
