@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
-import { supabaseAnon } from '../lib/supabaseAnon'
+import { supabase, supabasePublic } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 // =============================================================
@@ -24,7 +23,7 @@ import { useAuth } from '../context/AuthContext'
 
 // Lee `valor` de configuracion_portal para una clave dada.
 // `client` es el cliente Supabase a usar — supabase (auth) en el
-// admin, supabaseAnon en el portal público. Devuelve null si no
+// admin, supabasePublic en el portal público. Devuelve null si no
 // hay fila (caller decide el fallback).
 async function fetchClave({ client, municipioId, clave }) {
   let q = client
@@ -90,7 +89,7 @@ const PORTAL_BUNDLE_CLAVES = [
 ]
 
 async function fetchPortalConfigBundle() {
-  const { data, error } = await supabaseAnon
+  const { data, error } = await supabasePublic
     .from('configuracion_portal')
     .select('clave, valor, municipio_id')
     .in('clave', PORTAL_BUNDLE_CLAVES)

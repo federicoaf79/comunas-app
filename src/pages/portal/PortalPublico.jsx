@@ -7,7 +7,7 @@ import { useAutoridades } from '../../hooks/useAutoridades'
 import { useHistoriaMunicipio } from '../../hooks/useHistoriaMunicipio'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
-import { supabaseAnon } from '../../lib/supabaseAnon'
+import { supabasePublic } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 import NoticiaCardSmall      from '../../components/portal/NoticiaCardSmall'
 import CategoriaPlaceholder  from '../../components/portal/CategoriaPlaceholder'
@@ -241,7 +241,7 @@ const FALLBACK_SERVICIOS = [
 // Hook anon — la migration 20250507000002_portal_publico habilita
 // SELECT a anon en `dependencias`, así que el portal lee sin login.
 async function fetchDependenciasPublicas() {
-  const { data, error } = await supabaseAnon
+  const { data, error } = await supabasePublic
     .from('dependencias')
     .select('id, nombre, tipo, activa')
     .order('nombre', { ascending: true })
@@ -491,7 +491,7 @@ async function fetchHeroCarouselNoticias(municipioId) {
   // El user spec menciona `.order('fecha', ...)` pero la columna real
   // de noticias es `publicado_at` (ver useNoticiasPublicas) — usamos
   // esa para mantener compatibilidad con el resto del portal.
-  const { data, error } = await supabaseAnon
+  const { data, error } = await supabasePublic
     .from('noticias')
     .select('id, titulo, imagen_url, categoria, publicado_at')
     .eq('municipio_id', municipioId)

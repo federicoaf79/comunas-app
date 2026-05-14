@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabaseAnon } from '../lib/supabaseAnon'
+import { supabasePublic } from '../lib/supabase'
 
 // El portal corre sobre redes hogareñas con latencia alta (Real
 // Sayana, datos celulares). 8s era apretado: medimos timeouts en
@@ -20,14 +20,14 @@ const NOTICIA_SELECT =
 
 // fetchNoticiasPublicas: lista pública de noticias en estado
 // 'publicada', orden DESC por publicado_at. Usa el cliente
-// supabaseAnon (que hoy re-exporta el cliente principal — la
+// supabasePublic (que hoy re-exporta el cliente principal — la
 // distinción anon/auth la hace Supabase según la sesión).
 export async function fetchNoticiasPublicas({ limit = 20 } = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
   try {
-    const { data, error } = await supabaseAnon
+    const { data, error } = await supabasePublic
       .from('noticias')
       .select(NOTICIA_SELECT)
       .eq('estado', 'publicada')

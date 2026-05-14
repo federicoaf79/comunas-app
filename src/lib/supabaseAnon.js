@@ -1,15 +1,23 @@
-// Re-exporta el cliente principal de Supabase como `supabaseAnon`.
+// Re-exporta `supabasePublic` bajo el nombre histórico `supabaseAnon`.
 //
-// Anteriormente este archivo creaba un segundo `createClient`
-// dedicado para flujos públicos del Portal Ciudadano. El problema:
-// Supabase v2 usa una instancia singleton de GoTrueClient por
-// localStorage key, así que crear dos clientes contra el mismo
-// proyecto dispara el warning "Multiple GoTrueClient instances
-// detected in the same browser context".
+// Históricamente este archivo creó su propio `createClient`, pero
+// el warning "Multiple GoTrueClient instances detected" nos hizo
+// re-apuntar al cliente principal. El problema fue que el cliente
+// principal mantiene un lock interno ('Lock:comunas-auth') que
+// peleaba con las queries paralelas del portal:
+//   "Lock:comunas-auth was released because another request stole it"
+// — por eso supabase.js ahora exporta `supabasePublic`, un cliente
+// SIN persistencia ni auth lock (persistSession/autoRefreshToken/
+// detectSessionInUrl en false). Al no compartir storageKey con el
+// cliente principal tampoco re-dispara el warning de multiple
+// GoTrueClient instances.
 //
-// La distinción anon vs autenticado la maneja el cliente principal
-// según haya o no sesión activa. Las policies RLS de tipo `to anon`
-// aplican cuando el JWT está ausente o cuando se está usando
-// directamente la anon key. Con un único cliente alcanza para
-// cubrir tanto el flujo público como el autenticado.
-export { supabase as supabaseAnon } from './supabase'
+// Esta indirección mantiene los imports antiguos funcionando
+// (hooks/useAutoridades, useDependenciaPublica, useVecinoData,
+// pages/portal/NoticiaDetalle, etc.) — todos se enchufan
+// transparentemente al cliente público sin tocar el código.
+//
+// Imports nuevos en archivos del portal: preferir
+// `import { supabasePublic } from '../lib/supabase'` para que el
+// uso del cliente sin auth quede explícito en el call site.
+export { supabasePublic as supabaseAnon } from './supabase'
