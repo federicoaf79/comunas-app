@@ -244,6 +244,45 @@ async function fetchProximasGuardias(municipioId, today, limit = 3) {
   return withUsuarios
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Obras en curso — top 10 (excluye finalizadas), ordenadas por
+// fecha_inicio DESC. La tabla `obras` la crea la migration
+// 20260514_obras.sql; si todavía no se aplicó, el query devuelve
+// 400 y el widget muestra "No hay obras en curso registradas".
+// ─────────────────────────────────────────────────────────────────
+async function fetchObrasEnCurso(municipioId) {
+  if (!municipioId) return { obras: [], totalEnCurso: 0 }
+
+  // Conteo total de obras en curso (mismo filtro que el listado),
+  // para el badge junto al título.
+  const { count, error: countErr } = await supabase
+    .from('obras')
+    .select('id', { count: 'exact', head: true })
+    .eq('municipio_id', municipioId)
+    .neq('estado', 'finalizada')
+  if (countErr) {
+    console.warn('[Dashboard] fetchObrasEnCurso count:', countErr.message)
+    return { obras: [], totalEnCurso: 0 }
+  }
+
+  const { data, error } = await supabase
+    .from('obras')
+    .select(`
+      id, nombre, estado, porcentaje_avance,
+      gasto_acumulado, fecha_inicio, fecha_fin_estimada,
+      dependencia:dependencia_id ( id, nombre )
+    `)
+    .eq('municipio_id', municipioId)
+    .neq('estado', 'finalizada')
+    .order('fecha_inicio', { ascending: false, nullsFirst: false })
+    .limit(10)
+  if (error) {
+    console.warn('[Dashboard] fetchObrasEnCurso:', error.message)
+    return { obras: [], totalEnCurso: count ?? 0 }
+  }
+  return { obras: data ?? [], totalEnCurso: count ?? 0 }
+}
+
 // Últimos mensajes salientes/entrantes desde la tabla sms_log.
 async function fetchUltimosMensajes(municipioId) {
   let q = supabase
@@ -337,6 +376,116 @@ function StockCriticoCard({ items }) {
           )
         })}
       </ul>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Obras en curso — listado top 10 con barra de avance, gasto y
+// fecha estimada de fin. Estados con colores fijos:
+//   planificacion → ok (#1D4ED8)
+//   en_ejecucion  → accent (#C9A84C)
+//   demorada      → red-600 (#DC2626)
+//   finalizada    → primary (#0F1C35)  ← solo aparece si el filtro cambia
+// ─────────────────────────────────────────────────────────────────
+
+const OBRAS_ESTADO_BADGE = {
+  planificacion: { label: 'En planificación', cls: 'bg-ok-50 text-ok-700 ring-ok-100',                bar: 'bg-ok' },
+  en_ejecucion:  { label: 'En ejecución',     cls: 'bg-accent-50 text-accent-700 ring-accent-100',   bar: 'bg-accent' },
+  demorada:      { label: 'Demorada',         cls: 'bg-red-50 text-red-700 ring-red-200',           bar: 'bg-red-600' },
+  finalizada:    { label: 'Finalizada',       cls: 'bg-primary-50 text-primary-700 ring-primary-200', bar: 'bg-primary' },
+  cancelada:     { label: 'Cancelada',        cls: 'bg-gray-100 text-gray-600 ring-gray-200',        bar: 'bg-gray-400' },
+}
+
+// Formato corto para fechas — DD/MM/YY sin parsear a Date (la
+// columna llega como 'YYYY-MM-DD' sin hora, no queremos timezone
+// shifts).
+function fechaCortaIso(iso) {
+  if (!iso) return '—'
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y.slice(2)}`
+}
+
+function ObrasEnCursoCard({ data, isLoading }) {
+  const obras        = data?.obras ?? []
+  const totalEnCurso = data?.totalEnCurso ?? 0
+  return (
+    <section className="card overflow-hidden p-0">
+      <header className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <h3 className="font-sora text-sm font-semibold text-primary">
+            <span aria-hidden="true" className="mr-1.5">🚧</span>
+            Obras en curso
+          </h3>
+          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+            {totalEnCurso}
+          </span>
+        </div>
+        <Link
+          to="/admin/obras-publicas"
+          className="shrink-0 text-xs font-medium text-primary hover:underline"
+        >
+          Ver todas las obras →
+        </Link>
+      </header>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center p-10">
+          <Spinner size="md" />
+        </div>
+      ) : obras.length === 0 ? (
+        <div className="p-8 text-center text-sm text-primary-400">
+          No hay obras en curso registradas.
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {obras.map(o => {
+            const badge  = OBRAS_ESTADO_BADGE[o.estado] ?? OBRAS_ESTADO_BADGE.planificacion
+            const avance = Math.max(0, Math.min(100, o.porcentaje_avance ?? 0))
+            return (
+              <li
+                key={o.id}
+                className="grid gap-x-4 gap-y-2 px-5 py-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-sora text-sm font-semibold text-primary">
+                    {o.nombre}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-primary-500">
+                    {o.dependencia?.nombre ?? '—'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 sm:justify-end">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${badge.cls}`}
+                  >
+                    {badge.label}
+                  </span>
+                  <span className="whitespace-nowrap font-mono text-xs text-primary-700">
+                    {fmtMoney.format(o.gasto_acumulado ?? 0)}
+                  </span>
+                  <span className="whitespace-nowrap text-[11px] text-primary-400">
+                    Estim. {fechaCortaIso(o.fecha_fin_estimada)}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-primary-50">
+                    <div
+                      className={`h-full ${badge.bar}`}
+                      style={{ width: `${avance}%` }}
+                    />
+                  </div>
+                  <span className="w-10 text-right font-mono text-[11px] font-semibold tabular-nums text-primary-700">
+                    {avance}%
+                  </span>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
     </section>
   )
 }
@@ -1374,6 +1523,15 @@ export default function AdminDashboard() {
   // si no hay items críticos, el componente devuelve null.
   const stockCriticoQ = useStockCritico(municipioId)
 
+  // Obras en curso — top 10 ordenadas por fecha_inicio DESC.
+  // Si la tabla `obras` todavía no se aplicó en la DB, el fetcher
+  // captura el error y el widget muestra estado vacío.
+  const obrasEnCursoQ = useQuery({
+    queryKey: ['dashboard', 'obras-en-curso', municipioId ?? '__NONE__'],
+    queryFn:  () => fetchObrasEnCurso(municipioId),
+    enabled:  !!perfil && !!municipioId,
+  })
+
   // Resumen financiero del mes
   const ingresosMesQ = useIngresos({ mes })
   const gastosMesQ   = useGastos({ mes })
@@ -1475,6 +1633,12 @@ export default function AdminDashboard() {
 
       {/* Alertas del sistema — stock crítico (se oculta si no hay items) */}
       <StockCriticoCard items={stockCriticoQ.data ?? []} />
+
+      {/* Obras en curso — full width, top 10 con barra de avance */}
+      <ObrasEnCursoCard
+        data={obrasEnCursoQ.data}
+        isLoading={obrasEnCursoQ.isLoading}
+      />
 
       {/* Fila 2: Turnos del día (tabla) + Médico de guardia */}
       <div className="grid gap-4 lg:grid-cols-2">
