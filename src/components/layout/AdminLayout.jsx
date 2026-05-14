@@ -240,6 +240,7 @@ const NAV_GESTION = [
       { to: '/admin/inventario',                     label: 'Inventario', modulo: 'inventario' },
       { to: '/admin/flota',                          label: 'Flota',      modulo: 'flota' },
       { to: '/admin/patrimonio',                     label: 'Patrimonio', modulo: 'patrimonio' },
+      { to: '/admin/obras-publicas',                 label: 'Obras públicas' },
     ],
   },
   {
