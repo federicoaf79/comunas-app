@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import { useDatosMunicipio, usePortalMunicipioId, useConfigClavePublica } from '../../hooks/useConfigPortal'
 import { useAutoridades } from '../../hooks/useAutoridades'
-import { useHistoriaMunicipio } from '../../hooks/useHistoriaMunicipio'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { supabasePublic } from '../../lib/supabase'
@@ -15,7 +14,7 @@ import NoticiasProvinciales  from '../../components/portal/NoticiasProvinciales'
 import RecursosSection       from '../../components/portal/RecursosSection'
 import { getResumen } from '../../lib/noticiasCategoria'
 import { dateOf } from '../../lib/datetime'
-import { HERO_CAROUSEL_DEFAULT } from '../../lib/portalDefaults'
+import { HERO_SLIDES_INTERVAL_MS } from '../../lib/portalDefaults'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 const PROVINCIA        = 'Santiago del Estero'
@@ -29,7 +28,7 @@ const NAV_LINKS = [
   { href: '#recursos',        label: 'Recursos' },
   { to:   '/portal/turno',    label: 'Turnos' },
   { href: '#autoridades',     label: 'Autoridades' },
-  { href: '#historia',        label: 'Historia' },
+  { to:   '/portal/historia', label: 'Historia' },
   { href: '#contacto',        label: 'Contacto' },
 ]
 
@@ -479,110 +478,113 @@ function Header() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HeroCarousel — strip horizontal con las últimas 10 noticias con
-// imagen, scroll continuo configurable desde Portal Web (clave
-// `hero_carousel` de configuracion_portal). Pausa en hover.
-// Los defaults viven en src/lib/portalDefaults.js (compartido con
-// el tab admin de ConfigPortal para que no se desincronicen).
+// HeroSlidesBackground — fondo del Hero con imágenes que rotan en
+// crossfade cada HERO_SLIDES_INTERVAL_MS. Reemplaza el strip
+// horizontal viejo (`hero_carousel`) — ahora las imágenes son el
+// FONDO completo del hero. Sin slides activos, el hero cae al
+// fondo navy del HeroDiagonalPattern.
+//
+// Las imágenes se gestionan desde /admin/config?tab=hero, se suben
+// al bucket público `recursos/hero/` y se persisten como array en
+// configuracion_portal clave `hero_slides`.
 // ─────────────────────────────────────────────────────────────────
 
-async function fetchHeroCarouselNoticias(municipioId) {
-  if (!municipioId) return []
-  // El user spec menciona `.order('fecha', ...)` pero la columna real
-  // de noticias es `publicado_at` (ver useNoticiasPublicas) — usamos
-  // esa para mantener compatibilidad con el resto del portal.
-  const { data, error } = await supabasePublic
-    .from('noticias')
-    .select('id, titulo, imagen_url, categoria, publicado_at')
-    .eq('municipio_id', municipioId)
-    .eq('estado', 'publicada')
-    .not('imagen_url', 'is', null)
-    .order('publicado_at', { ascending: false })
-    .limit(10)
-  if (error) {
-    console.warn('[HeroCarousel] fetchHeroCarouselNoticias error:', error.message)
-    return []
-  }
-  return data ?? []
-}
-
-function HeroCarousel() {
-  const { data: municipioId } = usePortalMunicipioId()
-  // Config con defaults locales — si el admin no la cargó todavía
-  // o la clave no está en el whitelist anon, caemos a HERO_CAROUSEL_DEFAULT.
-  const { data: cfg } = useConfigClavePublica('hero_carousel', HERO_CAROUSEL_DEFAULT)
-  const config = { ...HERO_CAROUSEL_DEFAULT, ...(cfg ?? {}) }
-
-  const { data: noticias = [] } = useQuery({
-    queryKey: ['hero-carousel-noticias', municipioId ?? '__NONE__'],
-    queryFn:  () => fetchHeroCarouselNoticias(municipioId),
-    enabled:  !!municipioId,
-    staleTime: 5 * 60 * 1000,
-  })
-
-  if (!config.activo || noticias.length === 0) return null
-
-  // Duplicamos el array — el track corre de translateX(0) a
-  // translateX(-50%), que visualmente cae al inicio del segundo
-  // bloque (idéntico al primero), generando el loop sin saltos.
-  const doble = [...noticias, ...noticias]
-
+function HeroSlidesBackground({ slides, current, onJump }) {
+  if (!slides || slides.length === 0) return null
   return (
-    <div className="relative w-full overflow-hidden pb-8 sm:pb-10">
+    <>
+      {slides.map((s, i) => (
+        <div
+          key={s.imagen_url + i}
+          className="pointer-events-none absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
+          style={{
+            backgroundImage: `url("${s.imagen_url}")`,
+            opacity: i === current ? 1 : 0,
+          }}
+          aria-hidden="true"
+        />
+      ))}
+      {/* Overlay navy 70% para que el texto blanco quede legible
+          sobre cualquier imagen, sin importar su contraste. */}
       <div
-        className="hero-carousel-track flex w-max gap-3"
-        style={{ animationDuration: `${config.velocidad_segundos}s` }}
-        aria-label="Carrusel de noticias recientes"
-      >
-        {doble.map((n, i) => (
-          <Link
-            key={`${n.id}-${i}`}
-            to={`/portal/noticias/${n.id}`}
-            className="group relative block h-28 w-48 shrink-0 overflow-hidden rounded-xl ring-1 ring-white/10 shadow-md transition-transform hover:scale-[1.02]"
-            aria-hidden={i >= noticias.length ? 'true' : undefined}
-            tabIndex={i >= noticias.length ? -1 : undefined}
-          >
-            <img
-              src={n.imagen_url}
-              alt=""
-              loading="lazy"
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            />
-            {/* Gradiente bottom-up para legibilidad del título. */}
-            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-primary-900/85 via-primary-900/40 to-transparent" aria-hidden="true" />
-            {config.mostrar_categoria && n.categoria && (
-              <span
-                className="absolute left-2 top-2 inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-accent ring-1 ring-inset ring-accent/30"
-                style={{ backgroundColor: 'rgba(15, 28, 53, 0.80)' }}
-              >
-                {n.categoria}
-              </span>
-            )}
-            {config.mostrar_titulo && (
-              <p
-                className="absolute inset-x-0 bottom-0 line-clamp-2 px-2 pb-2 text-xs font-semibold leading-snug text-white"
-                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
-              >
-                {n.titulo}
-              </p>
-            )}
-          </Link>
-        ))}
-      </div>
-    </div>
+        className="pointer-events-none absolute inset-0"
+        style={{ backgroundColor: 'rgba(15, 28, 53, 0.70)' }}
+        aria-hidden="true"
+      />
+      {/* Dots indicator — solo si hay 2+ slides. */}
+      {slides.length > 1 && (
+        <div
+          role="tablist"
+          aria-label="Slides del hero"
+          className="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 gap-2"
+        >
+          {slides.map((_, i) => {
+            const active = i === current
+            return (
+              <button
+                key={i}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-label={`Ir al slide ${i + 1}`}
+                onClick={() => onJump(i)}
+                className={
+                  'rounded-full transition-all ' +
+                  (active
+                    ? 'h-2 w-8 bg-accent'
+                    : 'h-2 w-2 bg-white/40 hover:bg-white/60')
+                }
+              />
+            )
+          })}
+        </div>
+      )}
+    </>
   )
 }
 
 function Hero() {
+  // Slides de fondo desde configuracion_portal.hero_slides — filtramos
+  // los que estén activos y tengan imagen válida.
+  const { data: rawSlides = [] } = useConfigClavePublica('hero_slides', [])
+  const slides = (Array.isArray(rawSlides) ? rawSlides : [])
+    .filter(s => s && s.activo !== false && s.imagen_url)
+
+  const [idx, setIdx] = useState(0)
+
+  // Reinicio el índice si la lista cambia (ej: admin agrega/quita
+  // slides mientras estamos en el portal con la query refetcheada).
+  useEffect(() => { setIdx(0) }, [slides.length])
+
+  // Rotación automática cada HERO_SLIDES_INTERVAL_MS. Pausa si hay
+  // 1 slide o menos (no tiene sentido animar).
+  useEffect(() => {
+    if (slides.length < 2) return
+    const id = setInterval(
+      () => setIdx(i => (i + 1) % slides.length),
+      HERO_SLIDES_INTERVAL_MS,
+    )
+    return () => clearInterval(id)
+  }, [slides.length])
+
+  const tieneSlides = slides.length > 0
+
   return (
     <section
       className="relative overflow-hidden bg-primary text-white"
       style={{ minHeight: '70vh' }}
     >
-      <HeroDiagonalPattern />
-      {/* Halos decorativos sutiles */}
-      <div aria-hidden="true" className="pointer-events-none absolute -right-20 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
-      <div aria-hidden="true" className="pointer-events-none absolute -left-16 -bottom-24 h-80 w-80 rounded-full bg-ok/15 blur-3xl" />
+      {/* Patrón + halos solo si NO hay slides — sobre las imágenes
+          quedan ruidosos. */}
+      {!tieneSlides && (
+        <>
+          <HeroDiagonalPattern />
+          <div aria-hidden="true" className="pointer-events-none absolute -right-20 top-10 h-72 w-72 rounded-full bg-accent/20 blur-3xl" />
+          <div aria-hidden="true" className="pointer-events-none absolute -left-16 -bottom-24 h-80 w-80 rounded-full bg-ok/15 blur-3xl" />
+        </>
+      )}
+
+      <HeroSlidesBackground slides={slides} current={idx} onJump={setIdx} />
 
       <div className="relative mx-auto flex max-w-6xl flex-col items-start justify-center gap-5 px-4 pt-16 pb-8 sm:px-6 sm:pt-20 sm:pb-10 lg:pt-24 lg:pb-12">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur-sm">
@@ -621,8 +623,6 @@ function Hero() {
         </div>
       </div>
 
-      {/* Carrusel — strip horizontal infinite-scroll debajo del texto. */}
-      <HeroCarousel />
     </section>
   )
 }
@@ -1053,148 +1053,8 @@ function AutoridadesSection({ municipioId }) {
   )
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Sección: Historia del municipio
-// ─────────────────────────────────────────────────────────────────
-
-function Lightbox({ src, onClose }) {
-  useEffect(() => {
-    if (!src) return
-    const onKey = (e) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [src, onClose])
-  if (!src) return null
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/85 p-4 backdrop-blur-sm"
-    >
-      <img
-        src={src}
-        alt=""
-        className="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      />
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Cerrar"
-        className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-5 w-5">
-          <path strokeLinecap="round" d="M6 6l12 12M6 18L18 6" />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
-function HistoriaSection({ municipioId, municipioNombre }) {
-  const { data: historia, isLoading } = useHistoriaMunicipio(municipioId)
-  const [lightbox, setLightbox] = useState(null)
-
-  // IMPORTANTE: el id="historia" debe existir en el DOM SIEMPRE
-  // para que el ancla #historia del nav del header pueda hacer
-  // scroll. Antes devolvíamos null cuando no había contenido o
-  // no había municipioId, y el link "Historia" no llevaba a
-  // ningún lado. Ahora mantenemos el <section> montado siempre
-  // y reemplazamos el contenido por placeholders cuando faltan
-  // datos.
-
-  const tieneContenido = historia && (
-    historia.fundacion || historia.resena ||
-    historia.importancia_regional || historia.recursos_naturales ||
-    (Array.isArray(historia.fotos) && historia.fotos.length > 0)
-  )
-  const cargandoOMunicipio = !municipioId || isLoading
-  const sinContenido = !cargandoOMunicipio && !tieneContenido
-
-  const fotos = Array.isArray(historia?.fotos) ? historia.fotos.slice(0, 4) : []
-  const nombreMostrar = municipioNombre || 'Nuestra comunidad'
-  const titulo = historia?.fundacion
-    ? `${nombreMostrar} — Fundada en ${historia.fundacion}`
-    : nombreMostrar
-
-  return (
-    <section id="historia" aria-labelledby="historia-h2" className="scroll-mt-20 bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-        <header className="mb-8 sm:mb-10">
-          <p className="text-xs font-bold uppercase tracking-widest text-accent-700">
-            Nuestra historia
-          </p>
-          <h2 id="historia-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
-            {titulo}
-          </h2>
-        </header>
-
-        {cargandoOMunicipio ? (
-          <div className="card flex flex-col items-center justify-center gap-3 p-12 text-sm text-primary-400">
-            <Spinner size="lg" />
-            <span>Cargando historia…</span>
-          </div>
-        ) : sinContenido ? (
-          <div className="card p-10 text-center text-sm text-primary-400">
-            La historia del municipio se va a publicar pronto.
-          </div>
-        ) : (
-          <div className="grid gap-8 lg:grid-cols-5 lg:gap-10">
-            {/* Texto — 60% del ancho en desktop (3 de 5 columnas) */}
-            <div className="space-y-6 lg:col-span-3">
-              {historia?.resena && (
-                <p className="whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
-                  {historia.resena}
-                </p>
-              )}
-              {historia?.importancia_regional && (
-                <div>
-                  <h3 className="font-sora text-lg font-bold text-primary">Importancia regional</h3>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
-                    {historia.importancia_regional}
-                  </p>
-                </div>
-              )}
-              {historia?.recursos_naturales && (
-                <div>
-                  <h3 className="font-sora text-lg font-bold text-primary">Recursos naturales</h3>
-                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-primary-700 sm:text-base">
-                    {historia.recursos_naturales}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Galería — 40% del ancho (2 de 5 columnas), grid 2x2 */}
-            {fotos.length > 0 && (
-              <div className="lg:col-span-2">
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  {fotos.map((url, i) => (
-                    <button
-                      key={url + i}
-                      type="button"
-                      onClick={() => setLightbox(url)}
-                      className="group relative overflow-hidden rounded-lg border border-border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    >
-                      <img
-                        src={url}
-                        alt=""
-                        loading="lazy"
-                        className="aspect-square w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-      <Lightbox src={lightbox} onClose={() => setLightbox(null)} />
-    </section>
-  )
-}
+// Sección "Nuestra historia" migrada a página propia
+// (/portal/historia → src/pages/portal/HistoriaPage.jsx).
 
 // Defaults hardcodeados — se usan si configuracion_portal no tiene
 // las claves persistidas todavía. Cuando el admin guarda algo en
@@ -1363,8 +1223,11 @@ export default function PortalPublico() {
     error: errNoticias,
   } = useNoticiasPublicas({ limit: 15 })
   const { data: municipioId } = usePortalMunicipioId()
-  const { datos } = useDatosMunicipio()
-  const municipioNombre = datos?.nombre ?? datos?.nombre_oficial ?? MUNICIPIO_NOMBRE
+  // useDatosMunicipio queda invocado para que el bundle pre-caliente
+  // el cache (datos, redes, identidad_visual los usa el footer); el
+  // resultado no se desestructura porque municipioNombre se calculaba
+  // para HistoriaSection, que ya vive en /portal/historia.
+  useDatosMunicipio()
 
   return (
     <div className="min-h-svh bg-background">
@@ -1382,10 +1245,10 @@ export default function PortalPublico() {
           error={errNoticias}
         />
         <NoticiasProvinciales />
-        {/* Autoridades e Historia quedan al final — accesibles vía
-            anclas #autoridades / #historia del nav del header. */}
+        {/* Autoridades queda al final — accesible vía el ancla
+            #autoridades del nav. Historia se movió a su propia
+            página /portal/historia (HistoriaPage.jsx). */}
         <AutoridadesSection municipioId={municipioId} />
-        <HistoriaSection municipioId={municipioId} municipioNombre={municipioNombre} />
       </main>
 
       <FooterSection />

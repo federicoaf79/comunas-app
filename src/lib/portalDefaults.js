@@ -11,17 +11,22 @@
 // (20260514_hero_carousel_anon.sql, 20260514_tramites_portal_anon.sql).
 // =============================================================
 
-export const HERO_CAROUSEL_DEFAULT = {
-  activo:             true,
-  velocidad_segundos: 30,
-  mostrar_titulo:     true,
-  mostrar_categoria:  true,
-}
+// Slides de FONDO del Hero. Array de { imagen_url, titulo, activo }
+// — cada uno se renderiza como background-image y rota cada 5s con
+// crossfade. Si el array está vacío o todos los items son inactivos,
+// el Hero cae al fondo navy estático.
+//
+// Las imágenes viven en el bucket público `recursos/hero/` (subidas
+// desde el admin /admin/config?tab=hero). Para que la URL sirva como
+// background-image hace falta que el bucket sea público o que se
+// generen signed URLs — usamos public + getPublicUrl.
+export const HERO_SLIDES_DEFAULT = []
 
-// Opciones de velocidad expuestas en el admin — el frontend acepta
-// cualquier número, pero el slider del admin se limita a estos
-// valores para mantener UX consistente entre municipios.
-export const HERO_CAROUSEL_VELOCIDADES = [15, 30, 45, 60]
+// Tiempo entre slides (crossfade incluido). Hardcodeado por ahora —
+// si más adelante se quiere config por municipio, sumarlo al objeto
+// global de hero (hero_config). Para esta iteración el spec pide 5s
+// fijos.
+export const HERO_SLIDES_INTERVAL_MS = 5000
 
 // Cada trámite tiene 4 campos editables desde el admin (titulo /
 // descripcion / activo) + 4 inmutables (id / icono / tipo / url),

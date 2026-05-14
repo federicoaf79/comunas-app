@@ -83,7 +83,7 @@ const PORTAL_BUNDLE_CLAVES = [
   'redes_sociales',
   'identidad_visual',
   'historia_municipio',
-  'hero_carousel',
+  'hero_slides',
   'tramites_portal',
   'fuentes_rss',
 ]
