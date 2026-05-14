@@ -1095,13 +1095,22 @@ function Lightbox({ src, onClose }) {
 function HistoriaSection({ municipioId, municipioNombre }) {
   const { data: historia, isLoading } = useHistoriaMunicipio(municipioId)
   const [lightbox, setLightbox] = useState(null)
-  if (!municipioId) return null
+
+  // IMPORTANTE: el id="historia" debe existir en el DOM SIEMPRE
+  // para que el ancla #historia del nav del header pueda hacer
+  // scroll. Antes devolvíamos null cuando no había contenido o
+  // no había municipioId, y el link "Historia" no llevaba a
+  // ningún lado. Ahora mantenemos el <section> montado siempre
+  // y reemplazamos el contenido por placeholders cuando faltan
+  // datos.
+
   const tieneContenido = historia && (
     historia.fundacion || historia.resena ||
     historia.importancia_regional || historia.recursos_naturales ||
     (Array.isArray(historia.fotos) && historia.fotos.length > 0)
   )
-  if (!isLoading && !tieneContenido) return null
+  const cargandoOMunicipio = !municipioId || isLoading
+  const sinContenido = !cargandoOMunicipio && !tieneContenido
 
   const fotos = Array.isArray(historia?.fotos) ? historia.fotos.slice(0, 4) : []
   const nombreMostrar = municipioNombre || 'Nuestra comunidad'
@@ -1121,9 +1130,14 @@ function HistoriaSection({ municipioId, municipioNombre }) {
           </h2>
         </header>
 
-        {isLoading ? (
-          <div className="card flex items-center justify-center p-12">
+        {cargandoOMunicipio ? (
+          <div className="card flex flex-col items-center justify-center gap-3 p-12 text-sm text-primary-400">
             <Spinner size="lg" />
+            <span>Cargando historia…</span>
+          </div>
+        ) : sinContenido ? (
+          <div className="card p-10 text-center text-sm text-primary-400">
+            La historia del municipio se va a publicar pronto.
           </div>
         ) : (
           <div className="grid gap-8 lg:grid-cols-5 lg:gap-10">
