@@ -220,6 +220,8 @@ const NAV_GESTION = [
       { to: '/admin/config?tab=autoridades',    label: 'Autoridades' },
       { to: '/admin/config?tab=historia',       label: 'Historia' },
       { to: '/admin/config?tab=dependencias',   label: 'Dependencias' },
+      { to: '/admin/config?tab=hero',           label: 'Carrusel del Hero' },
+      { to: '/admin/config?tab=tramites',       label: 'Trámites del portal' },
     ],
   },
   {

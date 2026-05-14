@@ -15,6 +15,7 @@ import NoticiasProvinciales  from '../../components/portal/NoticiasProvinciales'
 import RecursosSection       from '../../components/portal/RecursosSection'
 import { getResumen } from '../../lib/noticiasCategoria'
 import { dateOf } from '../../lib/datetime'
+import { HERO_CAROUSEL_DEFAULT } from '../../lib/portalDefaults'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 const PROVINCIA        = 'Santiago del Estero'
@@ -24,6 +25,7 @@ const PROVINCIA        = 'Santiago del Estero'
 const NAV_LINKS = [
   { to:   '/portal/noticias', label: 'Noticias' },
   { href: '#servicios',       label: 'Servicios' },
+  { to:   '/portal/tramites', label: 'Trámites' },
   { href: '#recursos',        label: 'Recursos' },
   { to:   '/portal/turno',    label: 'Turnos' },
   { href: '#autoridades',     label: 'Autoridades' },
@@ -480,14 +482,9 @@ function Header() {
 // HeroCarousel — strip horizontal con las últimas 10 noticias con
 // imagen, scroll continuo configurable desde Portal Web (clave
 // `hero_carousel` de configuracion_portal). Pausa en hover.
+// Los defaults viven en src/lib/portalDefaults.js (compartido con
+// el tab admin de ConfigPortal para que no se desincronicen).
 // ─────────────────────────────────────────────────────────────────
-
-const HERO_CAROUSEL_DEFAULT = {
-  activo:             true,
-  velocidad_segundos: 30,
-  mostrar_titulo:     true,
-  mostrar_categoria:  true,
-}
 
 async function fetchHeroCarouselNoticias(municipioId) {
   if (!municipioId) return []
@@ -756,19 +753,19 @@ function BannerInstitucional({ icon, titulo, copy, cta, to }) {
     >
       <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
       <div className="absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-accent/10 blur-2xl" aria-hidden="true" />
-      <div className="relative flex h-full flex-col gap-3 p-6">
-        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent/15 text-3xl">
+      <div className="relative flex h-full flex-col gap-2 p-4">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/15 text-xl">
           <span aria-hidden="true">{icon}</span>
         </div>
-        <h3 className="font-sora text-lg font-bold leading-tight text-white sm:text-xl">
+        <h3 className="font-sora text-sm font-bold leading-tight text-white">
           {titulo}
         </h3>
-        <p className="text-sm leading-relaxed text-white/75">
+        <p className="text-xs leading-relaxed text-white/75">
           {copy}
         </p>
-        <span className="mt-auto inline-flex items-center gap-1.5 self-start rounded-md bg-accent px-3 py-2 text-sm font-semibold text-primary-900 transition-colors group-hover:bg-accent-600 group-hover:text-white">
+        <span className="mt-auto inline-flex items-center gap-1.5 self-start rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-primary-900 transition-colors group-hover:bg-accent-600 group-hover:text-white">
           {cta}
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-3.5 w-3.5" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
           </svg>
         </span>
@@ -861,7 +858,7 @@ function NoticiasSection({ noticias, loading, error }) {
                         titulo="Trámites online"
                         copy="Gestioná desde tu celular sin moverte de tu casa."
                         cta="Ir a trámites"
-                        to="/portal/turno"
+                        to="/portal/tramites"
                       />
                       <BannerInstitucional
                         icon="📱"

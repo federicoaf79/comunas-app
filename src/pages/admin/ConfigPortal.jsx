@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   useFuentesRssAdmin, useUpsertFuentesRss,
+  useConfigClaveAdmin, useUpsertConfigClave,
 } from '../../hooks/useConfigPortal'
+import {
+  HERO_CAROUSEL_DEFAULT, HERO_CAROUSEL_VELOCIDADES,
+  TRAMITES_PORTAL_DEFAULT, TRAMITE_TIPO_META,
+} from '../../lib/portalDefaults'
 import {
   useAutoridadesAdmin, useCreateAutoridad,
   useUpdateAutoridad, useDeleteAutoridad,
@@ -44,6 +49,8 @@ const SECCION_LABEL = {
   autoridades:    'Autoridades',
   historia:       'Historia',
   dependencias:   'Dependencias',
+  hero:           'Carrusel del Hero',
+  tramites:       'Trámites del portal',
   administracion: 'Administración',
 }
 const SECCIONES_VALIDAS = new Set(Object.keys(SECCION_LABEL))
@@ -808,6 +815,262 @@ function TabDependencias({ municipioId, sinMunicipio }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TAB 5 · Carrusel del Hero
+// ─────────────────────────────────────────────────────────────────
+
+function ToggleRow({ label, value, onChange, disabled }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-white px-3 py-2">
+      <span className="text-sm font-medium text-primary-700">{label}</span>
+      <input
+        type="checkbox"
+        checked={!!value}
+        onChange={e => onChange(e.target.checked)}
+        disabled={disabled}
+        className="h-4 w-4 rounded border-border accent-primary"
+      />
+    </label>
+  )
+}
+
+function TabHeroCarousel({ municipioId, sinMunicipio }) {
+  const { data: persisted, isLoading } = useConfigClaveAdmin(
+    'hero_carousel', HERO_CAROUSEL_DEFAULT, { municipioIdOverride: municipioId },
+  )
+  const upsertMut = useUpsertConfigClave('hero_carousel', { municipioIdOverride: municipioId })
+
+  const [form, setForm] = useState(HERO_CAROUSEL_DEFAULT)
+  const [okMsg, setOkMsg] = useState('')
+  const [error, setError] = useState('')
+
+  // Hidratamos cuando llega la query — mantenemos los defaults si
+  // la fila no existe todavía en DB.
+  useEffect(() => {
+    if (!persisted) return
+    setForm({ ...HERO_CAROUSEL_DEFAULT, ...persisted })
+  }, [persisted])
+
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+
+  async function handleSave() {
+    setError(''); setOkMsg('')
+    try {
+      await upsertMut.mutateAsync(form)
+      setOkMsg('Carrusel guardado.')
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo guardar.')
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <header>
+        <h2 className="text-lg font-bold text-primary">Carrusel del Hero</h2>
+        <p className="text-sm text-primary-500">
+          Strip horizontal debajo del título del Portal Ciudadano — muestra
+          las últimas noticias con imagen. Si está inactivo, no se renderea.
+        </p>
+      </header>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : (
+        <div className="card space-y-4 p-5 sm:p-6">
+          <ToggleRow
+            label="Activar carrusel"
+            value={form.activo}
+            onChange={v => set('activo', v)}
+            disabled={sinMunicipio}
+          />
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-primary-700">
+              Velocidad del ciclo completo
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {HERO_CAROUSEL_VELOCIDADES.map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => set('velocidad_segundos', v)}
+                  disabled={sinMunicipio || !form.activo}
+                  className={
+                    'rounded-md border-2 px-3 py-1.5 text-sm font-semibold transition-colors disabled:opacity-50 ' +
+                    (form.velocidad_segundos === v
+                      ? 'border-primary bg-primary text-white'
+                      : 'border-border bg-white text-primary-700 hover:border-primary')
+                  }
+                >
+                  {v}s
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-primary-400">
+              Tiempo que tarda el carrusel en completar un ciclo (más alto = más lento).
+            </p>
+          </div>
+          <ToggleRow
+            label="Mostrar título sobre la imagen"
+            value={form.mostrar_titulo}
+            onChange={v => set('mostrar_titulo', v)}
+            disabled={sinMunicipio || !form.activo}
+          />
+          <ToggleRow
+            label="Mostrar badge de categoría"
+            value={form.mostrar_categoria}
+            onChange={v => set('mostrar_categoria', v)}
+            disabled={sinMunicipio || !form.activo}
+          />
+
+          {error && (
+            <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>
+          )}
+          {okMsg && (
+            <div className="rounded-md border border-ok-100 bg-ok-50 p-3 text-sm text-ok-700">{okMsg}</div>
+          )}
+
+          <div className="flex justify-end pt-1">
+            <Button onClick={handleSave} loading={upsertMut.isPending} disabled={sinMunicipio}>
+              Guardar carrusel
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TAB 6 · Trámites del portal
+// ─────────────────────────────────────────────────────────────────
+
+// Merge entre los defaults (canónicos) y lo que tenga el municipio.
+// Los items existentes en DB pisan title/desc/activo; los que NO
+// estén en DB se agregan desde defaults para que aparezcan en la UI
+// aunque el admin nunca haya guardado la lista. Cuando se guarda,
+// persistimos el array completo.
+function mergeTramites(saved) {
+  if (!Array.isArray(saved) || saved.length === 0) return [...TRAMITES_PORTAL_DEFAULT]
+  const byId = new Map(saved.map(t => [t?.id, t]))
+  return TRAMITES_PORTAL_DEFAULT.map(def => {
+    const persisted = byId.get(def.id)
+    if (!persisted) return def
+    return {
+      ...def,
+      titulo:      persisted.titulo      ?? def.titulo,
+      descripcion: persisted.descripcion ?? def.descripcion,
+      activo:      persisted.activo !== false,
+    }
+  })
+}
+
+function TabTramitesPortal({ municipioId, sinMunicipio }) {
+  const { data: persisted, isLoading } = useConfigClaveAdmin(
+    'tramites_portal', TRAMITES_PORTAL_DEFAULT, { municipioIdOverride: municipioId },
+  )
+  const upsertMut = useUpsertConfigClave('tramites_portal', { municipioIdOverride: municipioId })
+
+  const [items, setItems] = useState(TRAMITES_PORTAL_DEFAULT)
+  const [okMsg, setOkMsg] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setItems(mergeTramites(persisted))
+  }, [persisted])
+
+  function setItem(id, patch) {
+    setItems(arr => arr.map(t => t.id === id ? { ...t, ...patch } : t))
+  }
+
+  async function handleSave() {
+    setError(''); setOkMsg('')
+    try {
+      await upsertMut.mutateAsync(items)
+      setOkMsg('Trámites guardados.')
+    } catch (e) {
+      setError(e?.message ?? 'No se pudo guardar.')
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-primary">Trámites del portal</h2>
+          <p className="text-sm text-primary-500">
+            Lista que se muestra en <code>/portal/tramites</code>. Editá título y
+            descripción inline; el toggle desactiva el trámite (no aparece en
+            el portal). Por ahora no se pueden agregar ni eliminar items —
+            queda para una versión futura.
+          </p>
+        </div>
+        <Button onClick={handleSave} loading={upsertMut.isPending} disabled={sinMunicipio}>
+          Guardar trámites
+        </Button>
+      </header>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : (
+        <div className="space-y-3">
+          {items.map(t => {
+            const meta = TRAMITE_TIPO_META[t.tipo] ?? TRAMITE_TIPO_META.presencial
+            const disabled = !t.activo
+            return (
+              <div
+                key={t.id}
+                className={`card p-4 transition-opacity ${disabled ? 'opacity-60' : ''}`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={t.activo !== false}
+                    onChange={e => setItem(t.id, { activo: e.target.checked })}
+                    disabled={sinMunicipio}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-border accent-primary"
+                    aria-label={`Activar ${t.titulo}`}
+                  />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta.cls}`}>
+                        {meta.label}
+                      </span>
+                      <code className="text-[10px] font-mono text-primary-400">{t.id}</code>
+                    </div>
+                    <Input
+                      label="Título"
+                      value={t.titulo}
+                      onChange={e => setItem(t.id, { titulo: e.target.value })}
+                      disabled={sinMunicipio}
+                    />
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary-700">Descripción</label>
+                      <textarea
+                        rows={2}
+                        value={t.descripcion}
+                        onChange={e => setItem(t.id, { descripcion: e.target.value })}
+                        disabled={sinMunicipio}
+                        className="input-field resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>
+      )}
+      {okMsg && (
+        <div className="rounded-md border border-ok-100 bg-ok-50 p-3 text-sm text-ok-700">{okMsg}</div>
+      )}
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal — tabs container
 // ─────────────────────────────────────────────────────────────────
 
@@ -855,6 +1118,8 @@ export default function ConfigPortal() {
       {seccion === 'autoridades'    && <TabAutoridades municipioId={municipioId} sinMunicipio={sinMunicipio} />}
       {seccion === 'historia'       && <TabHistoria   municipioId={municipioId} sinMunicipio={sinMunicipio} />}
       {seccion === 'dependencias'   && <TabDependencias municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {seccion === 'hero'           && <TabHeroCarousel municipioId={municipioId} sinMunicipio={sinMunicipio} />}
+      {seccion === 'tramites'       && <TabTramitesPortal municipioId={municipioId} sinMunicipio={sinMunicipio} />}
       {seccion === 'administracion' && (
         <AdministracionTab
           dependenciaId={depPortal?.id ?? null}
