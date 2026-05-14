@@ -209,10 +209,9 @@ function IdentidadVisualForm({ initial, disabled, municipioId }) {
   }
 
   async function handleUpload() {
-    if (!file) {
-      inputRef.current?.click()
-      return
-    }
+    // El botón "Subir logo" queda disabled cuando no hay file, así
+    // que este early-return es defensivo nada más.
+    if (!file) return
     setError(''); setOk(''); setUploading(true)
     try {
       const url = await uploadLogoToStorage({ file, municipioId })
@@ -267,7 +266,12 @@ function IdentidadVisualForm({ initial, disabled, municipioId }) {
           )}
         </div>
 
-        {/* Controles */}
+        {/* Controles. Antes había dos botones que abrían el file
+            picker (el chrome del <input type="file"> + un <Button>
+            "Elegir archivo"). Ahora el input es sr-only y la única
+            forma de abrirlo es con el botón "Seleccionar archivo".
+            El segundo botón ("Subir logo") solo es activo cuando
+            ya hay un archivo elegido. */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <input
             ref={inputRef}
@@ -275,18 +279,30 @@ function IdentidadVisualForm({ initial, disabled, municipioId }) {
             accept="image/*,image/svg+xml"
             onChange={onPickFile}
             disabled={disabled || uploading}
-            className="block w-full text-sm text-primary-700 file:mr-4 file:rounded-md file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-primary-700 disabled:opacity-50"
+            className="sr-only"
           />
+          {file && (
+            <p className="truncate text-xs text-primary-700">
+              <span className="font-semibold">Seleccionado:</span> {file.name}
+            </p>
+          )}
           <p className="text-xs text-primary-400">
             PNG o SVG. Mínimo 200×200px. Se usa en el portal, documentos y encabezados.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
+              variant="secondary"
+              onClick={() => inputRef.current?.click()}
+              disabled={disabled || uploading}
+            >
+              Seleccionar archivo
+            </Button>
+            <Button
               onClick={handleUpload}
               loading={uploading || upsertMut.isPending}
-              disabled={disabled || (!file && !!logoUrl) || uploading}
+              disabled={disabled || !file || uploading}
             >
-              {file ? 'Subir logo' : 'Elegir archivo'}
+              Subir logo
             </Button>
             {logoUrl && !file && (
               <a
