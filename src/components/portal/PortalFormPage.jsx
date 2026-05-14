@@ -36,7 +36,7 @@ function Escudo({ className = 'h-9 w-9' }) {
 // pensado para formularios que tienen muchos campos y necesitan
 // caber en pantalla sin scroll horizontal a 100% de zoom.
 export default function PortalFormPage({ titulo, descripcion, children, compact = false }) {
-  const mainWidth   = compact ? 'max-w-lg' : 'max-w-3xl'
+  const mainWidth   = compact ? 'max-w-2xl' : 'max-w-3xl'
   const mainPad     = compact ? 'py-6 sm:py-8' : 'py-8 sm:py-12'
   const headerSpace = compact ? 'mb-5 sm:mb-6' : 'mb-8 sm:mb-10'
   const tituloSize  = compact ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'

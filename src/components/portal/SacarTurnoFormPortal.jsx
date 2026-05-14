@@ -143,9 +143,8 @@ function ParaQuienSelector({ value, onChange }) {
     {
       v:       'mi',
       label:   'Para mí',
-      desc:    'El turno es para mí mismo/a.',
       icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
           <circle cx="12" cy="8" r="4" />
           <path strokeLinecap="round" d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6" />
         </svg>
@@ -154,9 +153,8 @@ function ParaQuienSelector({ value, onChange }) {
     {
       v:       'familiar',
       label:   'Para un familiar',
-      desc:    'Saco el turno por otra persona.',
       icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-4 w-4" aria-hidden="true">
           <circle cx="9"  cy="8" r="3.2" />
           <circle cx="17" cy="9" r="2.6" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 20c.8-3 3.3-5 6-5s5.2 2 6 5M14 20c.6-2 2-3 3.5-3s2.9 1 3.5 3" />
@@ -166,17 +164,17 @@ function ParaQuienSelector({ value, onChange }) {
   ]
   return (
     <fieldset>
-      <legend className="mb-2 text-sm font-semibold text-primary-700">
+      <legend className="mb-1.5 text-xs font-bold uppercase tracking-widest text-primary">
         ¿Para quién es el turno?
       </legend>
-      <div role="radiogroup" className="grid gap-3 sm:grid-cols-2">
+      <div role="radiogroup" className="grid grid-cols-2 gap-2">
         {options.map(o => {
           const active = value === o.v
           return (
             <label
               key={o.v}
               className={
-                'flex min-h-[56px] cursor-pointer items-start gap-3 rounded-lg border-2 p-3 transition-colors ' +
+                'flex cursor-pointer items-center gap-2 rounded-md border-2 p-2 text-xs transition-colors ' +
                 (active
                   ? 'border-primary bg-primary-50 text-primary'
                   : 'border-border bg-white text-primary-700 hover:border-primary-200 hover:bg-primary-50')
@@ -192,13 +190,13 @@ function ParaQuienSelector({ value, onChange }) {
               />
               <span
                 className={
-                  'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ' +
+                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ' +
                   (active ? 'border-primary bg-primary' : 'border-primary-300 bg-white')
                 }
                 aria-hidden="true"
               >
                 {active && (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="h-3 w-3">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" className="h-2.5 w-2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -206,10 +204,7 @@ function ParaQuienSelector({ value, onChange }) {
               <span className={'shrink-0 ' + (active ? 'text-primary' : 'text-primary-500')}>
                 {o.icon}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{o.label}</span>
-                <span className="mt-0.5 block text-xs text-primary-500">{o.desc}</span>
-              </span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{o.label}</span>
             </label>
           )
         })}
@@ -516,152 +511,144 @@ export default function SacarTurnoFormPortal() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card flex flex-col gap-4 p-5">
-      {/* ¿Para quién es? */}
-      <ParaQuienSelector value={form.paraQuien} onChange={v => set('paraQuien', v)} />
-
-      {/* Datos del solicitante (= persona que llena el formulario) */}
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
-          {isFamiliar ? 'Tus datos (solicitante)' : 'Tus datos'}
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input
-            label="DNI"
-            value={form.dni}
-            onChange={e => set('dni', e.target.value.replace(/[^\d]/g, ''))}
-            onBlur={handleDniBlur}
-            required
-            inputMode="numeric"
-            type="text"
-            autoComplete="off"
-          />
-          <Input
-            label="Nombre completo"
-            value={form.nombre}
-            onChange={e => set('nombre', e.target.value)}
-            required
-            autoComplete="name"
-          />
-
-          {/* Status del lookup por DNI — banner debajo de los dos
-              inputs anteriores. Span completo de la grilla. */}
-          {dniStatus === 'searching' && (
-            <div className="flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-xs text-primary-500 sm:col-span-2">
-              <Spinner size="sm" />
-              Buscando tu DNI…
-            </div>
-          )}
-          {dniStatus === 'found' && (
-            <div className="flex items-center gap-2 rounded-md border border-ok-100 bg-ok-50 px-3 py-2 text-xs text-ok-700 sm:col-span-2">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>
-                <strong>DNI encontrado.</strong> Cargamos tus datos — verificá nombre y teléfono.
-              </span>
-            </div>
-          )}
-          {dniStatus === 'notfound' && (
-            <div
-              className="rounded-md border-2 px-3 py-3 sm:col-span-2"
-              style={{
-                backgroundColor: 'rgba(201, 168, 76, 0.10)',
-                borderColor: '#C9A84C',
-              }}
-            >
-              <p className="text-sm font-semibold text-primary">
-                No encontramos tu DNI en el sistema.
-              </p>
-              <p className="mt-1 text-xs text-primary-700">
-                Completá estos datos para registrarte:
-              </p>
-              <ul className="mt-1 ml-4 list-disc text-xs text-primary-700">
-                <li>Nombre completo (arriba)</li>
-                <li>Teléfono celular formato +54 9… (abajo)</li>
-              </ul>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-primary-700">
-                <input
-                  type="checkbox"
-                  checked={esVecino}
-                  onChange={e => setEsVecino(e.target.checked)}
-                  className="h-4 w-4 rounded border-border accent-primary"
-                />
-                <span>
-                  Soy vecino de <strong>Real Sayana</strong>.
-                </span>
-              </label>
-            </div>
-          )}
-
-          <Input
-            label="Teléfono celular"
-            value={form.telefono}
-            onChange={e => set('telefono', e.target.value)}
-            required
-            inputMode="tel"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+54 9 ..."
-          />
-          <Select
-            label="Canal de contacto"
-            value={form.canal}
-            onChange={v => set('canal', v)}
-            options={CANALES}
-          />
-        </div>
+    <form onSubmit={handleSubmit} className="card form-tight grid grid-cols-2 gap-3 p-4">
+      {/* ¿Para quién es? — full width */}
+      <div className="col-span-2">
+        <ParaQuienSelector value={form.paraQuien} onChange={v => set('paraQuien', v)} />
       </div>
 
-      {/* Datos del familiar — sólo en modo "para familiar" */}
-      {isFamiliar && <FamiliarPanel form={form} set={set} />}
+      {/* Sección "Tus datos" — header full width, luego DNI | Nombre */}
+      <h3 className="col-span-2 mt-2 text-xs font-bold uppercase tracking-widest text-primary">
+        {isFamiliar ? 'Tus datos (solicitante)' : 'Tus datos'}
+      </h3>
+      <Input
+        label="DNI"
+        value={form.dni}
+        onChange={e => set('dni', e.target.value.replace(/[^\d]/g, ''))}
+        onBlur={handleDniBlur}
+        required
+        inputMode="numeric"
+        type="text"
+        autoComplete="off"
+      />
+      <Input
+        label="Nombre completo"
+        value={form.nombre}
+        onChange={e => set('nombre', e.target.value)}
+        required
+        autoComplete="name"
+      />
 
-      {/* Datos del turno */}
-      <div>
-        <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-primary">
-          Datos del turno
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select
-            label="Dependencia"
-            value={form.dependencia}
-            onChange={v => set('dependencia', v)}
-            placeholder="Seleccionar..."
-            options={DEP_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
-          />
-          <Input
-            label="Fecha preferida"
-            type="date"
-            value={form.fecha}
-            onChange={e => set('fecha', e.target.value)}
-            required
-          />
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-sm font-medium text-primary-700">
-              Motivo <span className="font-normal text-primary-400">(opcional)</span>
-            </label>
-            <textarea
-              value={form.motivo}
-              onChange={e => set('motivo', e.target.value)}
-              rows={3}
-              className="input-field resize-none"
-              placeholder={
-                isFamiliar
-                  ? 'Contanos brevemente para qué pedís el turno (síntomas, motivo de consulta, etc.)'
-                  : 'Contanos brevemente para qué pedís el turno'
-              }
-            />
-          </div>
+      {/* Status del lookup por DNI — full width */}
+      {dniStatus === 'searching' && (
+        <div className="col-span-2 flex items-center gap-2 rounded-md border border-border bg-white px-3 py-1.5 text-xs text-primary-500">
+          <Spinner size="sm" />
+          Buscando tu DNI…
         </div>
+      )}
+      {dniStatus === 'found' && (
+        <div className="col-span-2 flex items-center gap-2 rounded-md border border-ok-100 bg-ok-50 px-3 py-1.5 text-xs text-ok-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            <strong>DNI encontrado.</strong> Cargamos tus datos — verificá nombre y teléfono.
+          </span>
+        </div>
+      )}
+      {dniStatus === 'notfound' && (
+        <div
+          className="col-span-2 rounded-md border-2 px-3 py-2"
+          style={{
+            backgroundColor: 'rgba(201, 168, 76, 0.10)',
+            borderColor: '#C9A84C',
+          }}
+        >
+          <p className="text-xs font-semibold text-primary">
+            No encontramos tu DNI en el sistema. Completá estos datos para registrarte:
+          </p>
+          <p className="mt-0.5 text-[11px] text-primary-700">
+            · Nombre completo y teléfono celular (formato +54 9…) en los campos del form.
+          </p>
+          <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-primary-700">
+            <input
+              type="checkbox"
+              checked={esVecino}
+              onChange={e => setEsVecino(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            <span>Soy vecino de <strong>Real Sayana</strong>.</span>
+          </label>
+        </div>
+      )}
+
+      <Input
+        label="Teléfono celular"
+        value={form.telefono}
+        onChange={e => set('telefono', e.target.value)}
+        required
+        inputMode="tel"
+        type="tel"
+        autoComplete="tel"
+        placeholder="+54 9 ..."
+      />
+      <Select
+        label="Canal de contacto"
+        value={form.canal}
+        onChange={v => set('canal', v)}
+        options={CANALES}
+      />
+
+      {/* Datos del familiar — full width, sólo si "para un familiar" */}
+      {isFamiliar && (
+        <div className="col-span-2">
+          <FamiliarPanel form={form} set={set} />
+        </div>
+      )}
+
+      {/* Sección "Datos del turno" — header full width, luego Dep | Fecha,
+          y Motivo span completo. */}
+      <h3 className="col-span-2 mt-2 text-xs font-bold uppercase tracking-widest text-primary">
+        Datos del turno
+      </h3>
+      <Select
+        label="Dependencia"
+        value={form.dependencia}
+        onChange={v => set('dependencia', v)}
+        placeholder="Seleccionar..."
+        options={DEP_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+      />
+      <Input
+        label="Fecha preferida"
+        type="date"
+        value={form.fecha}
+        onChange={e => set('fecha', e.target.value)}
+        required
+      />
+      <div className="col-span-2">
+        <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-700">
+          Motivo <span className="font-normal normal-case tracking-normal text-primary-400">(opcional)</span>
+        </label>
+        <textarea
+          value={form.motivo}
+          onChange={e => set('motivo', e.target.value)}
+          rows={2}
+          className="input-field resize-none"
+          placeholder={
+            isFamiliar
+              ? 'Síntomas, motivo de consulta, etc.'
+              : 'Contanos brevemente para qué pedís el turno'
+          }
+        />
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+        <div className="col-span-2 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-danger">
           {error}
         </div>
       )}
 
-      <div>
+      <div className="col-span-2">
         <Button
           type="submit"
           loading={submitting}
@@ -670,7 +657,7 @@ export default function SacarTurnoFormPortal() {
         >
           Solicitar turno
         </Button>
-        <p className="mt-2 text-center text-xs text-primary-400">
+        <p className="mt-1.5 text-center text-[11px] text-primary-400">
           Te confirmamos por {form.canal === 'whatsapp' ? 'WhatsApp' : 'SMS'} en menos de 24hs.
         </p>
       </div>
