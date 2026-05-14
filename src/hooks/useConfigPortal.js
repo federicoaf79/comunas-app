@@ -65,17 +65,77 @@ export function useConfigClaveAdmin(clave, defaultValue = null, { municipioIdOve
   })
 }
 
-// Hook genérico para el portal público — sin filtro de municipio,
-// usa supabaseAnon. Solo funciona para claves del whitelist.
-export function useConfigClavePublica(clave, defaultValue = null) {
+// ─────────────────────────────────────────────────────────────────
+// Bundle público — UNA query trae todas las claves del whitelist
+// anon. Reemplaza ~7 SELECTs paralelos por 1, lo que evitaba que
+// Supabase JS pelee por el navigator-lock ('Lock:comunas-auth was
+// released because another request stole it') al montar el portal.
+//
+// Cada hook público (useConfigClavePublica, usePortalMunicipioId,
+// useHistoriaMunicipio) ahora deriva del bundle vía el cache de
+// React Query — no hacen su propio fetch.
+// ─────────────────────────────────────────────────────────────────
+
+// Claves que el portal público lee. DEBE coincidir con el whitelist
+// anon en RLS (ver 20260514_historia_anon.sql / _tramites_portal_anon /
+// _hero_carousel_anon). Si se agrega una clave anon nueva, sumar acá.
+const PORTAL_BUNDLE_CLAVES = [
+  'datos_municipio',
+  'redes_sociales',
+  'identidad_visual',
+  'historia_municipio',
+  'hero_carousel',
+  'tramites_portal',
+  'fuentes_rss',
+]
+
+async function fetchPortalConfigBundle() {
+  const { data, error } = await supabaseAnon
+    .from('configuracion_portal')
+    .select('clave, valor, municipio_id')
+    .in('clave', PORTAL_BUNDLE_CLAVES)
+  if (error) {
+    if (!/permission|policy/i.test(error.message ?? '')) {
+      console.warn('[usePortalConfigBundle] error:', error.message)
+    }
+    return { byClave: {}, municipio_id: null }
+  }
+
+  // Multi-municipio defense: si la DB tiene rows para varios
+  // municipios, anclamos al municipio de datos_municipio y descartamos
+  // el resto (mismo criterio que el comportamiento previo que
+  // implícitamente tomaba el primero por .limit(1)).
+  const rows = data ?? []
+  const datosRow = rows.find(r => r.clave === 'datos_municipio')
+  const municipio_id = datosRow?.municipio_id ?? rows[0]?.municipio_id ?? null
+  const byClave = {}
+  for (const r of rows) {
+    if (municipio_id && r.municipio_id && r.municipio_id !== municipio_id) continue
+    byClave[r.clave] = r.valor
+  }
+  return { byClave, municipio_id }
+}
+
+// Hook centralizado — el resto de las lecturas públicas se derivan
+// de éste para que solo haya 1 query en vuelo.
+export function usePortalConfigBundle() {
   return useQuery({
-    queryKey: ['config-portal', clave, '__public__'],
-    queryFn:  async () => {
-      const v = await fetchClave({ client: supabaseAnon, municipioId: null, clave })
-      return v ?? defaultValue
-    },
-    staleTime: 5 * 60 * 1000, // 5 min — los settings cambian poco
+    queryKey: ['portal-config-bundle'],
+    queryFn:  fetchPortalConfigBundle,
+    staleTime: 5 * 60 * 1000,
   })
+}
+
+// Hook genérico para el portal público — derivado del bundle. Las
+// claves fuera del whitelist quedan en `defaultValue` (RLS las
+// bloquea igual, así que ahorramos la network call).
+export function useConfigClavePublica(clave, defaultValue = null) {
+  const bundle = usePortalConfigBundle()
+  const valor = bundle.data?.byClave?.[clave]
+  return {
+    ...bundle,
+    data: valor ?? defaultValue,
+  }
 }
 
 // Mutación genérica — upsert por (municipio_id, clave) reemplazando
@@ -106,7 +166,13 @@ export function useUpsertConfigClave(clave, { municipioIdOverride } = {}) {
   const municipioId = municipioIdOverride ?? perfil?.municipio_id ?? null
   return useMutation({
     mutationFn: (valor) => upsertClave({ municipioId, clave, valor }),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['config-portal', clave] }),
+    onSuccess:  () => {
+      qc.invalidateQueries({ queryKey: ['config-portal', clave] })
+      // Bundle público lee todas las claves de configuracion_portal
+      // en una sola query — hay que invalidarlo también para que el
+      // portal refresque después de guardar desde el admin.
+      qc.invalidateQueries({ queryKey: ['portal-config-bundle'] })
+    },
   })
 }
 
@@ -231,28 +297,13 @@ export function useUpsertSalaPaConfig({ municipioIdOverride } = {}) {
 }
 
 // usePortalMunicipioId — devuelve el `municipio_id` del portal
-// público. Lee la fila `datos_municipio` (clave del whitelist anon)
-// y aprovecha la columna municipio_id que viene en el SELECT.
-// Útil para hooks anon que necesitan filtrar por municipio
-// (useAutoridades, useHistoriaMunicipio, useDependenciaPublica).
+// público. Derivado del bundle (ver usePortalConfigBundle), que
+// extrae el municipio_id desde la fila `datos_municipio`. Antes
+// hacía su propia query — ahora comparte la del bundle.
 export function usePortalMunicipioId() {
-  return useQuery({
-    queryKey: ['portal-municipio-id'],
-    queryFn:  async () => {
-      const { data, error } = await supabaseAnon
-        .from('configuracion_portal')
-        .select('municipio_id')
-        .eq('clave', 'datos_municipio')
-        .limit(1)
-        .maybeSingle()
-      if (error) {
-        if (!/permission|policy/i.test(error.message ?? '')) {
-          console.warn('[usePortalMunicipioId] error:', error.message)
-        }
-        return null
-      }
-      return data?.municipio_id ?? null
-    },
-    staleTime: 60 * 60 * 1000,
-  })
+  const bundle = usePortalConfigBundle()
+  return {
+    ...bundle,
+    data: bundle.data?.municipio_id ?? null,
+  }
 }

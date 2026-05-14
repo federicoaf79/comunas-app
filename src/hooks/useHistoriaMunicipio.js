@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { supabaseAnon } from '../lib/supabaseAnon'
 import { useAuth } from '../context/AuthContext'
+import { usePortalConfigBundle } from './useConfigPortal'
 
 // =============================================================
 // useHistoriaMunicipio — clave `historia_municipio` en
@@ -25,28 +25,19 @@ const EMPTY = {
   fotos: [],
 }
 
-// Lectura pública — usa supabaseAnon. Devuelve EMPTY si no hay fila.
-export function useHistoriaMunicipio(municipioId) {
-  return useQuery({
-    queryKey: ['historia-municipio', municipioId ?? '__none__'],
-    queryFn:  async () => {
-      if (!municipioId) return EMPTY
-      const { data, error } = await supabaseAnon
-        .from('configuracion_portal')
-        .select('valor')
-        .eq('clave', 'historia_municipio')
-        .eq('municipio_id', municipioId)
-        .maybeSingle()
-      if (error) {
-        if (!/permission|policy/i.test(error.message ?? '')) {
-          console.warn('[useHistoriaMunicipio] error:', error.message)
-        }
-        return EMPTY
-      }
-      return { ...EMPTY, ...(data?.valor ?? {}) }
-    },
-    staleTime: 5 * 60 * 1000,
-  })
+// Lectura pública — derivada del bundle portal (usePortalConfigBundle).
+// Antes hacía su propio SELECT a configuracion_portal en paralelo con
+// los otros 5+ hooks del portal y eso causaba contención del lock
+// `comunas-auth`. Ahora todos comparten la misma query.
+//
+// `municipioId` se mantiene en la firma por compatibilidad, pero el
+// bundle ya viene anclado al municipio del portal — el filtro queda
+// implícito (multi-municipio defense vive en el bundle).
+export function useHistoriaMunicipio(municipioId) { // eslint-disable-line no-unused-vars
+  const bundle = usePortalConfigBundle()
+  const valor = bundle.data?.byClave?.historia_municipio
+  const data = { ...EMPTY, ...(valor && typeof valor === 'object' ? valor : {}) }
+  return { ...bundle, data }
 }
 
 // Lectura admin — usa el cliente autenticado para que también lea
@@ -115,6 +106,11 @@ export function useUpdateHistoria({ municipioIdOverride } = {}) {
         )
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['historia-municipio'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['historia-municipio'] })
+      // El portal público lee historia desde el bundle compartido,
+      // así que también hay que invalidarlo.
+      qc.invalidateQueries({ queryKey: ['portal-config-bundle'] })
+    },
   })
 }
