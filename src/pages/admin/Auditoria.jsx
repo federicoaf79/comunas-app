@@ -333,7 +333,6 @@ function AccesosTab() {
                 <Th>Fecha / hora</Th>
                 <Th>Usuario</Th>
                 <Th>Email</Th>
-                <Th>Dispositivo</Th>
               </Tr>
             </THead>
             <tbody>
@@ -345,11 +344,6 @@ function AccesosTab() {
                   <Td className="font-medium text-primary">{actorLabel(r)}</Td>
                   <Td className="text-xs text-primary-500">
                     {r.usuarios?.email || '—'}
-                  </Td>
-                  <Td>
-                    <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-inset ring-primary-100">
-                      {deviceLabel(r.user_agent)}
-                    </span>
                   </Td>
                 </Tr>
               ))}
