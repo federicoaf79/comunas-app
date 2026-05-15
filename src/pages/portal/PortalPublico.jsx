@@ -403,16 +403,40 @@ function IngresarButton({ onClick, mobile = false }) {
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = () => setMenuOpen(false)
-  // El logo institucional viene de configuracion_portal clave
-  // 'identidad_visual'. Si no está cargado caemos al Escudo SVG.
-  const { identidad } = useDatosMunicipio()
-  const logoUrl = identidad?.logo_url || null
+
+  // Logo institucional — query DIRECTA a configuracion_portal en
+  // vez de pasar por useDatosMunicipio()/bundle. El bundle venía
+  // fallando en devolver identidad_visual; este fetch puntual con
+  // supabasePublic (cliente anon sin lock de auth) lo resuelve de
+  // forma definitiva e independiente del resto del portal.
+  const { data: municipioId } = usePortalMunicipioId()
+  const [logoUrl, setLogoUrl]   = useState(null)
+  const [logoError, setLogoError] = useState(false)
+
+  useEffect(() => {
+    let cancel = false
+    // Filtramos por municipio si ya lo tenemos; si todavía no
+    // resolvió (portal de un solo municipio), traemos la única
+    // fila de identidad_visual igual — así el logo no espera al
+    // resolver del municipio.
+    let q = supabasePublic
+      .from('configuracion_portal')
+      .select('valor')
+      .eq('clave', 'identidad_visual')
+      .limit(1)
+    if (municipioId) q = q.eq('municipio_id', municipioId)
+    q.maybeSingle().then(({ data }) => {
+      if (cancel) return
+      const url = data?.valor?.logo_url || null
+      setLogoUrl(url)
+      setLogoError(false)
+    })
+    return () => { cancel = true }
+  }, [municipioId])
+
   // Si la URL existe pero la imagen falla al cargar (bucket
   // `avatares` no público, objeto borrado, URL vieja), degradamos
-  // al Escudo en vez de mostrar el ícono de imagen rota. El estado
-  // se resetea cuando cambia la URL.
-  const [logoError, setLogoError] = useState(false)
-  useEffect(() => { setLogoError(false) }, [logoUrl])
+  // al Escudo en vez de mostrar el ícono de imagen rota.
   const mostrarLogo = !!logoUrl && !logoError
   return (
     <header className="sticky top-0 z-40 border-b border-primary-900 bg-primary text-white shadow-sm">
@@ -428,12 +452,12 @@ function Header() {
             // ultra-ancho rompa la grilla del nav.
             <img
               src={logoUrl}
-              alt={`Logo de ${MUNICIPIO_NOMBRE}`}
+              alt="Logo municipio"
               onError={() => setLogoError(true)}
               className="h-10 w-auto max-w-[160px] shrink-0 object-contain"
             />
           ) : (
-            <Escudo className="h-11 w-11 shrink-0" />
+            <Escudo className="h-10 w-10 shrink-0" />
           )}
           <div className="leading-tight">
             <p className="font-sora text-base font-bold sm:text-lg">{MUNICIPIO_NOMBRE}</p>

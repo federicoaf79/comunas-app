@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { useDatosMunicipio } from '../../hooks/useConfigPortal'
+import { supabasePublic } from '../../lib/supabase'
 import { RoleBadge } from '../ui/Badge'
 
 const ROLE_PRIORITY = ['superadmin', 'admin_comuna', 'operador', 'vecino']
@@ -27,11 +28,35 @@ function navFor(roles) {
 
 export default function AppShell() {
   const { perfil, municipio, signOut } = useAuth()
-  const { identidad } = useDatosMunicipio()
-  const logoUrl = identidad?.logo_url || null
   const navigate = useNavigate()
   const role = primaryRole(perfil?.roles)
   const nav = navFor(perfil?.roles)
+
+  // Logo institucional — query DIRECTA a configuracion_portal con
+  // supabasePublic (anon, sin lock de auth), igual que el Header
+  // del portal. No pasa por useDatosMunicipio()/bundle, que venía
+  // fallando en devolver identidad_visual.
+  const municipioId = municipio?.id ?? null
+  const [logoUrl, setLogoUrl]     = useState(null)
+  const [logoError, setLogoError] = useState(false)
+
+  useEffect(() => {
+    let cancel = false
+    let q = supabasePublic
+      .from('configuracion_portal')
+      .select('valor')
+      .eq('clave', 'identidad_visual')
+      .limit(1)
+    if (municipioId) q = q.eq('municipio_id', municipioId)
+    q.maybeSingle().then(({ data }) => {
+      if (cancel) return
+      setLogoUrl(data?.valor?.logo_url || null)
+      setLogoError(false)
+    })
+    return () => { cancel = true }
+  }, [municipioId])
+
+  const mostrarLogo = !!logoUrl && !logoError
 
   async function handleSignOut() {
     await signOut()
@@ -43,15 +68,15 @@ export default function AppShell() {
       <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3 shadow-card">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5">
-            {logoUrl && (
+            {mostrarLogo && (
               // 40px de alto, object-contain, w-auto: el logo
-              // municipal suele ser rectangular. El viejo
-              // object-cover + rounded-full lo recortaba a un
-              // círculo de 32px casi ilegible. max-w para no
-              // empujar el nav del topbar.
+              // municipal suele ser rectangular. max-w para no
+              // empujar el nav del topbar. onError degrada a solo
+              // "COMUNAS" si la imagen 404 (bucket no público).
               <img
                 src={logoUrl}
                 alt="Logo municipio"
+                onError={() => setLogoError(true)}
                 className="h-10 w-auto max-w-[140px] shrink-0 object-contain"
               />
             )}
