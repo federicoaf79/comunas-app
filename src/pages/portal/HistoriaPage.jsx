@@ -36,9 +36,6 @@ function osmEmbedUrl({ lat, lng }) {
   const marker = `${lat},${lng}`
   return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${marker}`
 }
-function osmLinkUrl({ lat, lng }) {
-  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=14/${lat}/${lng}`
-}
 
 // Lightbox simple — copiado del HistoriaSection original. Se cierra
 // con click fuera, ESC o botón X.
@@ -167,26 +164,21 @@ export default function HistoriaPage() {
             </section>
           )}
 
-          {/* Mapa */}
-          <section>
+          {/* Mapa — última sección, pegada al borde inferior. El -mb
+              contrarresta el padding-bottom del <main> de
+              PortalFormPage (py-8 / sm:py-12) para que el iframe
+              quede flush con el fin de la página, sin espacio vacío.
+              display:block en el iframe elimina el gap inline de ~4px.
+              Bordes redondeados solo arriba (abajo va a ras). */}
+          <section className="-mb-8 sm:-mb-12">
             <h2 className="font-sora text-lg font-bold text-primary mb-3">Ubicación</h2>
             <iframe
               title={`Mapa de ${municipioNombre}`}
               src={osmEmbedUrl({ lat, lng })}
               loading="lazy"
-              className="w-full"
-              style={{ height: 350, border: 'none', borderRadius: 12 }}
+              className="block w-full"
+              style={{ height: 450, border: 'none', borderRadius: '12px 12px 0 0' }}
             />
-            <p className="mt-2 text-xs text-primary-400">
-              <a
-                href={osmLinkUrl({ lat, lng })}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-accent-700 underline-offset-2 hover:underline"
-              >
-                Ver más grande en OpenStreetMap →
-              </a>
-            </p>
           </section>
         </div>
       )}
