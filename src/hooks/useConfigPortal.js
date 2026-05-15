@@ -214,36 +214,41 @@ export function useUpsertConfigClave(clave, { municipioIdOverride } = {}) {
 // guardadas vía /admin/config (que persistían `label`).
 export const DEFAULT_FUENTES_RSS = [
   {
-    key:    'entrerriano-municipios',
-    nombre: 'Municipios — Interior',
-    url:    'https://www.entrerrianodigital.com/categoria/municipios/feed/',
-    home:   'https://www.entrerrianodigital.com',
+    key:    'sgo-nuevodiario',
+    nombre: 'Nuevo Diario SGO',
+    url:    'https://www.nuevodiarioweb.com.ar/rss/',
+    home:   'https://www.nuevodiarioweb.com.ar',
     active: true,
-    palabras_clave: ['municipio', 'interior', 'localidad', 'comisión'],
+    palabras_clave: ['santiago del estero', 'sgo', 'municipio', 'comuna', 'localidad', 'interior'],
   },
   {
-    key:    'entrerriano-clima',
-    nombre: 'Clima — Interior',
-    url:    'https://www.entrerrianodigital.com/categoria/clima/feed/',
-    home:   'https://www.entrerrianodigital.com',
+    key:    'sgo-panorama',
+    nombre: 'Diario Panorama SGO',
+    url:    'https://www.diariopanorama.com/rss.xml',
+    home:   'https://www.diariopanorama.com',
     active: true,
-    palabras_clave: ['clima', 'lluvia', 'temperatura', 'alerta'],
+    palabras_clave: ['santiago del estero', 'sgo', 'municipio', 'provincia', 'localidad'],
   },
   {
-    key:    'clarin-rural',
-    nombre: 'Clarín Rural',
-    url:    'https://www.clarin.com/rss/rural/',
-    home:   'https://www.clarin.com',
+    key:    'sgo-rural',
+    nombre: 'Nuevo Diario — Interior',
+    url:    'https://www.nuevodiarioweb.com.ar/rss/',
+    home:   'https://www.nuevodiarioweb.com.ar',
     active: true,
-    palabras_clave: ['campo', 'agro', 'cosecha', 'rural', 'soja', 'maiz'],
+    palabras_clave: ['campo', 'agro', 'rural', 'cosecha', 'soja', 'maíz', 'maiz', 'ganadería', 'ganaderia', 'productor'],
   },
   {
-    key:    'clarin-sociedad',
-    nombre: 'Clarín Sociedad',
-    url:    'https://www.clarin.com/rss/sociedad/',
-    home:   'https://www.clarin.com',
+    // El Liberal — diario histórico de Santiago del Estero. Hace de
+    // fuente general/fallback: si Nuevo Diario o Panorama fallan al
+    // fetchear (proxy/feed caído), este tab sigue trayendo noticias
+    // locales. El encadenado de proxies (rss2json → corsproxy) no
+    // se tocó; esto es solo otra fuente del whitelist.
+    key:    'sgo-elliberal',
+    nombre: 'El Liberal SGO',
+    url:    'https://www.elliberal.com.ar/feed',
+    home:   'https://www.elliberal.com.ar',
     active: true,
-    palabras_clave: [],
+    palabras_clave: ['santiago del estero', 'sgo', 'provincia'],
   },
 ]
 
