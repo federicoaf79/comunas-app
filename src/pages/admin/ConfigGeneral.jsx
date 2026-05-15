@@ -287,7 +287,9 @@ function IdentidadVisualForm({ initial, disabled, municipioId }) {
             </p>
           )}
           <p className="text-xs text-primary-400">
-            PNG o SVG. Mínimo 200×200px. Se usa en el portal, documentos y encabezados.
+            Formato PNG transparente · Mínimo 400×200px · Máx 500KB.
+            Se muestra a 40px de alto (ancho automático, máx 160px) en
+            los headers del portal y del panel.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Button

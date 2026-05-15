@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabasePublic } from '../../lib/supabase'
+import { useLogoMunicipio } from '../../hooks/useLogoMunicipio'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
@@ -38,26 +37,10 @@ function Escudo({ className = 'h-9 w-9' }) {
 // pensado para formularios que tienen muchos campos y necesitan
 // caber en pantalla sin scroll horizontal a 100% de zoom.
 export default function PortalFormPage({ titulo, descripcion, children, compact = false }) {
-  // Logo institucional — query DIRECTA a configuracion_portal con
-  // supabasePublic (anon, sin lock de auth), mismo patrón que el
-  // Header de PortalPublico (commit 72dfe3e). No depende del bundle
-  // ni de useDatosMunicipio, que venían sin devolver identidad_visual.
-  // Portal de un solo municipio → traemos la única fila sin filtrar
-  // por municipio_id (no lo tenemos en este layout compartido).
-  const [logoUrl, setLogoUrl] = useState(null)
-  useEffect(() => {
-    let cancel = false
-    supabasePublic
-      .from('configuracion_portal')
-      .select('valor')
-      .eq('clave', 'identidad_visual')
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancel && data?.valor?.logo_url) setLogoUrl(data.valor.logo_url)
-      })
-    return () => { cancel = true }
-  }, [])
+  // Logo institucional — hook compartido (mismo que PortalPublico
+  // Header y AppShell). Query directa con supabasePublic, sin pasar
+  // por el bundle/useDatosMunicipio que venían fallando.
+  const { logoUrl } = useLogoMunicipio()
 
   const mainWidth   = compact ? 'max-w-2xl' : 'max-w-3xl'
   const mainPad     = compact ? 'py-6 sm:py-8' : 'py-8 sm:py-12'
@@ -74,11 +57,11 @@ export default function PortalFormPage({ titulo, descripcion, children, compact 
               <img
                 src={logoUrl}
                 alt="Logo municipio"
-                onError={() => setLogoUrl(null)}
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
                 className="h-10 w-auto max-w-[160px] shrink-0 object-contain"
               />
             ) : (
-              <Escudo className="h-10 w-10 shrink-0" />
+              <Escudo className="h-10 w-10 shrink-0 text-accent" />
             )}
             <div className="leading-tight">
               <p className="font-sora text-sm font-bold sm:text-base">{MUNICIPIO_NOMBRE}</p>

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import { useDatosMunicipio, usePortalMunicipioId, useConfigClavePublica } from '../../hooks/useConfigPortal'
 import { useAutoridades } from '../../hooks/useAutoridades'
+import { useLogoMunicipio } from '../../hooks/useLogoMunicipio'
 import { useVecino } from '../../context/VecinoContext'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { supabasePublic } from '../../lib/supabase'
@@ -404,60 +405,24 @@ function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const closeMenu = () => setMenuOpen(false)
 
-  // Logo institucional — query DIRECTA a configuracion_portal en
-  // vez de pasar por useDatosMunicipio()/bundle. El bundle venía
-  // fallando en devolver identidad_visual; este fetch puntual con
-  // supabasePublic (cliente anon sin lock de auth) lo resuelve de
-  // forma definitiva e independiente del resto del portal.
-  const { data: municipioId } = usePortalMunicipioId()
-  const [logoUrl, setLogoUrl]   = useState(null)
-  const [logoError, setLogoError] = useState(false)
-
-  useEffect(() => {
-    let cancel = false
-    // Filtramos por municipio si ya lo tenemos; si todavía no
-    // resolvió (portal de un solo municipio), traemos la única
-    // fila de identidad_visual igual — así el logo no espera al
-    // resolver del municipio.
-    let q = supabasePublic
-      .from('configuracion_portal')
-      .select('valor')
-      .eq('clave', 'identidad_visual')
-      .limit(1)
-    if (municipioId) q = q.eq('municipio_id', municipioId)
-    q.maybeSingle().then(({ data }) => {
-      if (cancel) return
-      const url = data?.valor?.logo_url || null
-      setLogoUrl(url)
-      setLogoError(false)
-    })
-    return () => { cancel = true }
-  }, [municipioId])
-
-  // Si la URL existe pero la imagen falla al cargar (bucket
-  // `avatares` no público, objeto borrado, URL vieja), degradamos
-  // al Escudo en vez de mostrar el ícono de imagen rota.
-  const mostrarLogo = !!logoUrl && !logoError
+  // Logo institucional — hook compartido useLogoMunicipio (query
+  // directa con supabasePublic, sin pasar por el bundle que venía
+  // fallando). Mismo hook en PortalFormPage y AppShell.
+  const { logoUrl } = useLogoMunicipio()
   return (
     <header className="sticky top-0 z-40 border-b border-primary-900 bg-primary text-white shadow-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         {/* Marca */}
         <Link to="/portal" className="flex items-center gap-3 text-white">
-          {mostrarLogo ? (
-            // 40px de alto, object-contain y w-auto: el logo
-            // municipal suele ser rectangular — el viejo
-            // object-cover + rounded-full lo recortaba a un
-            // círculo chico irreconocible y parecía que "no
-            // reemplazaba" al escudo. max-w evita que un logo
-            // ultra-ancho rompa la grilla del nav.
+          {logoUrl ? (
             <img
               src={logoUrl}
               alt="Logo municipio"
-              onError={() => setLogoError(true)}
+              onError={(e) => { e.currentTarget.style.display = 'none' }}
               className="h-10 w-auto max-w-[160px] shrink-0 object-contain"
             />
           ) : (
-            <Escudo className="h-10 w-10 shrink-0" />
+            <Escudo className="h-10 w-10 shrink-0 text-accent" />
           )}
           <div className="leading-tight">
             <p className="font-sora text-base font-bold sm:text-lg">{MUNICIPIO_NOMBRE}</p>
