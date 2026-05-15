@@ -62,9 +62,9 @@ function fmtDateTime(iso) {
 }
 
 function actorLabel(row) {
-  const a = row?.usuario
+  const a = row?.usuarios
   if (a?.nombre) return a.nombre
-  return row?.actor_email || a?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
+  return a?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
 }
 
 // CSV escape: encierra entre comillas y duplica las comillas
@@ -126,9 +126,8 @@ function LogTab() {
     const t = actorEmail.trim().toLowerCase()
     if (!t) return rows
     return rows.filter(r =>
-      (r.actor_email ?? '').toLowerCase().includes(t)
-      || (r.usuario?.email ?? '').toLowerCase().includes(t)
-      || (r.usuario?.nombre ?? '').toLowerCase().includes(t),
+      (r.usuarios?.email ?? '').toLowerCase().includes(t)
+      || (r.usuarios?.nombre ?? '').toLowerCase().includes(t),
     )
   }, [rows, actorEmail])
 
@@ -139,7 +138,7 @@ function LogTab() {
       [
         { label: 'Fecha',       get: r => fmtDateTime(r.created_at) },
         { label: 'Usuario',     get: r => actorLabel(r) },
-        { label: 'Email',       get: r => r.actor_email ?? r.usuario?.email ?? '' },
+        { label: 'Email',       get: r => r.usuarios?.email ?? '' },
         { label: 'Acción',      get: r => r.accion },
         { label: 'Entidad',     get: r => r.entidad ?? '' },
         { label: 'Entidad ID',  get: r => r.entidad_id ?? '' },
@@ -235,9 +234,9 @@ function LogTab() {
                   </Td>
                   <Td>
                     <p className="font-medium text-primary">{actorLabel(r)}</p>
-                    {(r.actor_email || r.usuario?.email) && (
+                    {r.usuarios?.email && (
                       <p className="text-[11px] text-primary-400">
-                        {r.actor_email || r.usuario?.email}
+                        {r.usuarios.email}
                       </p>
                     )}
                   </Td>
@@ -345,7 +344,7 @@ function AccesosTab() {
                   </Td>
                   <Td className="font-medium text-primary">{actorLabel(r)}</Td>
                   <Td className="text-xs text-primary-500">
-                    {r.actor_email || r.usuario?.email || '—'}
+                    {r.usuarios?.email || '—'}
                   </Td>
                   <Td>
                     <span className="inline-flex items-center rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-inset ring-primary-100">

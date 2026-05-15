@@ -6,10 +6,15 @@ import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 // =============================================================
 // useAuditLog — lectura y registro del log de auditoría.
 //
-// Schema: ver migration 20260514_audit_log.sql
-//   audit_log (id, municipio_id, usuario_id, actor_email, accion,
-//     entidad, entidad_id, descripcion, metadata, ip, user_agent,
-//     created_at)
+// Schema REAL de la tabla (verificado contra el error
+// "column audit_log.actor_email does not exist"):
+//   audit_log (id, municipio_id, usuario_id, accion, entidad,
+//     entidad_id, descripcion, datos_antes, datos_despues,
+//     ip_address, created_at)
+//
+// NO existen: actor_email, actor_nombre, metadata, ip, user_agent.
+// El nombre/email del actor se obtienen por join a `usuarios`
+// vía la FK usuario_id (embed key `usuarios`).
 //
 // Acciones soportadas (texto libre, este conjunto es el que la
 // UI sabe pintar con badges):
@@ -18,9 +23,9 @@ import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 // =============================================================
 
 const COLS = `
-  id, municipio_id, usuario_id, actor_email, accion, entidad,
-  entidad_id, descripcion, metadata, ip, user_agent, created_at,
-  usuario:usuario_id ( id, nombre, email )
+  id, municipio_id, usuario_id, accion, entidad, entidad_id,
+  descripcion, datos_antes, datos_despues, ip_address, created_at,
+  usuarios:usuario_id ( nombre, email )
 `
 
 const LIMIT_DEFAULT = 100
@@ -150,31 +155,31 @@ export async function createAuditLog({
   if (!accion) throw new Error('createAuditLog: accion es requerida.')
   const { data: { user } = {} } = await supabase.auth.getUser()
   if (!user) throw new Error('createAuditLog: sin sesión activa.')
-  // Resolvemos email + municipio_id del usuario para snapshot.
-  let actor_email = user.email ?? null
+  // Solo necesitamos municipio_id para scopear la fila — el
+  // email/nombre del actor se resuelven en lectura vía join a
+  // `usuarios`, no se desnormalizan en la fila (no hay columna
+  // actor_email en el schema real).
   let municipio_id = null
   try {
     const { data: row } = await supabase
       .from('usuarios')
-      .select('email, municipio_id')
+      .select('municipio_id')
       .eq('id', user.id)
       .maybeSingle()
-    if (row?.email) actor_email = row.email
     municipio_id = row?.municipio_id ?? null
   } catch { /* falla silenciosa — seguimos con lo que tenemos */ }
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : null
   const { error } = await supabase
     .from('audit_log')
     .insert({
       municipio_id,
       usuario_id:  user.id,
-      actor_email,
       accion,
       entidad:     entidad ?? null,
       entidad_id:  entidadId == null ? null : String(entidadId),
       descripcion: descripcion ?? null,
-      metadata:    metadata ?? {},
-      user_agent:  ua,
+      // El payload libre que antes iba a `metadata` (columna
+      // inexistente) ahora se persiste en `datos_despues` (jsonb).
+      datos_despues: metadata ?? {},
     })
   if (error) {
     if (/relation .*audit_log.*does not exist/i.test(error.message ?? '')) return
