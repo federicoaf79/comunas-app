@@ -100,17 +100,41 @@ async function fetchPortalConfigBundle() {
     return { byClave: {}, municipio_id: null }
   }
 
-  // Multi-municipio defense: si la DB tiene rows para varios
-  // municipios, anclamos al municipio de datos_municipio y descartamos
-  // el resto (mismo criterio que el comportamiento previo que
-  // implícitamente tomaba el primero por .limit(1)).
+  // Multi-municipio defense — versión corregida.
+  //
+  // El bug anterior: si una fila (ej: identidad_visual) tenía un
+  // municipio_id distinto al de datos_municipio, se DESCARTABA por
+  // completo (`continue`) y la clave desaparecía del bundle — el
+  // logo del portal/admin nunca se mostraba aunque la URL estaba
+  // bien guardada en la DB. Pasaba seguido porque identidad_visual
+  // se guarda desde ConfigGeneral con el municipio efectivo del
+  // staff, que puede no coincidir exacto con el de datos_municipio
+  // (o datos_municipio puede no existir todavía).
+  //
+  // Criterio nuevo: agrupamos por clave. La primera fila de cada
+  // clave entra siempre. Si más adelante aparece otra fila de la
+  // MISMA clave que sí matchea el municipio ancla y la que teníamos
+  // no matcheaba, la pisamos. Resultado: ninguna clave se pierde,
+  // pero ante duplicados gana la del municipio del portal.
   const rows = data ?? []
   const datosRow = rows.find(r => r.clave === 'datos_municipio')
   const municipio_id = datosRow?.municipio_id ?? rows[0]?.municipio_id ?? null
   const byClave = {}
+  const chosenMun = {}
   for (const r of rows) {
-    if (municipio_id && r.municipio_id && r.municipio_id !== municipio_id) continue
-    byClave[r.clave] = r.valor
+    if (!(r.clave in byClave)) {
+      byClave[r.clave]   = r.valor
+      chosenMun[r.clave] = r.municipio_id ?? null
+      continue
+    }
+    if (
+      municipio_id &&
+      r.municipio_id === municipio_id &&
+      chosenMun[r.clave] !== municipio_id
+    ) {
+      byClave[r.clave]   = r.valor
+      chosenMun[r.clave] = r.municipio_id ?? null
+    }
   }
   return { byClave, municipio_id }
 }
