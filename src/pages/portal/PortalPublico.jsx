@@ -407,12 +407,19 @@ function Header() {
   // 'identidad_visual'. Si no está cargado caemos al Escudo SVG.
   const { identidad } = useDatosMunicipio()
   const logoUrl = identidad?.logo_url || null
+  // Si la URL existe pero la imagen falla al cargar (bucket
+  // `avatares` no público, objeto borrado, URL vieja), degradamos
+  // al Escudo en vez de mostrar el ícono de imagen rota. El estado
+  // se resetea cuando cambia la URL.
+  const [logoError, setLogoError] = useState(false)
+  useEffect(() => { setLogoError(false) }, [logoUrl])
+  const mostrarLogo = !!logoUrl && !logoError
   return (
     <header className="sticky top-0 z-40 border-b border-primary-900 bg-primary text-white shadow-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         {/* Marca */}
         <Link to="/portal" className="flex items-center gap-3 text-white">
-          {logoUrl ? (
+          {mostrarLogo ? (
             // 40px de alto, object-contain y w-auto: el logo
             // municipal suele ser rectangular — el viejo
             // object-cover + rounded-full lo recortaba a un
@@ -422,6 +429,7 @@ function Header() {
             <img
               src={logoUrl}
               alt={`Logo de ${MUNICIPIO_NOMBRE}`}
+              onError={() => setLogoError(true)}
               className="h-10 w-auto max-w-[160px] shrink-0 object-contain"
             />
           ) : (
