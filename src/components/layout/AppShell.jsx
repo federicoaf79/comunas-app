@@ -44,10 +44,15 @@ export default function AppShell() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5">
             {logoUrl && (
+              // 40px de alto, object-contain, w-auto: el logo
+              // municipal suele ser rectangular. El viejo
+              // object-cover + rounded-full lo recortaba a un
+              // círculo de 32px casi ilegible. max-w para no
+              // empujar el nav del topbar.
               <img
                 src={logoUrl}
                 alt="Logo municipio"
-                className="h-8 w-8 shrink-0 rounded-full bg-primary-50 object-cover ring-1 ring-inset ring-border"
+                className="h-10 w-auto max-w-[140px] shrink-0 object-contain"
               />
             )}
             <span className="text-lg font-bold text-primary">COMUNAS</span>

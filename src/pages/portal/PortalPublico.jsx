@@ -413,10 +413,16 @@ function Header() {
         {/* Marca */}
         <Link to="/portal" className="flex items-center gap-3 text-white">
           {logoUrl ? (
+            // 40px de alto, object-contain y w-auto: el logo
+            // municipal suele ser rectangular — el viejo
+            // object-cover + rounded-full lo recortaba a un
+            // círculo chico irreconocible y parecía que "no
+            // reemplazaba" al escudo. max-w evita que un logo
+            // ultra-ancho rompa la grilla del nav.
             <img
               src={logoUrl}
               alt={`Logo de ${MUNICIPIO_NOMBRE}`}
-              className="h-11 w-11 shrink-0 rounded-full bg-white/10 object-cover ring-1 ring-inset ring-white/20"
+              className="h-10 w-auto max-w-[160px] shrink-0 object-contain"
             />
           ) : (
             <Escudo className="h-11 w-11 shrink-0" />
