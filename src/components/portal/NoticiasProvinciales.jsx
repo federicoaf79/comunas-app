@@ -55,20 +55,16 @@ function matchesKeywords(item, keywords) {
   })
 }
 
-// Cadena de proxies para leer RSS desde el browser (los feeds no
-// mandan CORS, así que el fetch directo lo bloquea el navegador).
-// Se intentan EN ORDEN hasta que uno devuelva items; si todos
-// fallan, se lanza el error y la UI muestra el link directo al medio.
+// Proxy propio (serverless en Vercel: api/rss.js). Los proxies
+// públicos (rss2json, corsproxy.io, allorigins) fallaban por
+// CORS/403 con los medios de Santiago del Estero. El endpoint
+// propio fetchea server-side y devuelve el XML crudo, que se
+// parsea con parseRssXml() — mismo flujo que antes.
 //
-// OJO: cada proxy devuelve un shape distinto, así que el parseo
-// se ramifica por índice:
-//   [0] rss2json     → JSON { status, items:[…] } ya parseado.
-//   [1] corsproxy.io → XML crudo (pass-through) → parseRssXml.
-//   [2] allorigins   → JSON { contents:"<xml>" } → parseRssXml(contents).
+// Se deja como array de un elemento por si más adelante hay que
+// reintroducir fallbacks; el loop de fetchRss no cambia.
 const PROXIES = [
-  (url) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&api_key=&count=10`,
-  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  (url) => `/api/rss?url=${encodeURIComponent(url)}`,
 ]
 
 // Devuelve hasta 30 items crudos para que el filtro de keywords
@@ -80,26 +76,8 @@ async function fetchRss(rawRssUrl) {
     try {
       const res = await fetch(proxyUrl)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-
-      let items
-      if (i === 0) {
-        // rss2json — JSON con items ya normalizados.
-        const data = await res.json()
-        if (data?.status !== 'ok' || !Array.isArray(data.items)) {
-          throw new Error('rss2json sin items')
-        }
-        items = data.items
-      } else if (i === 2) {
-        // allorigins /get — envuelve el feed en { contents }.
-        const data = await res.json()
-        if (!data?.contents) throw new Error('allorigins sin contents')
-        items = parseRssXml(data.contents)
-      } else {
-        // corsproxy.io — pass-through del XML crudo.
-        const text = await res.text()
-        items = parseRssXml(text)
-      }
-
+      const text = await res.text()
+      const items = parseRssXml(text)
       if (items.length > 0) return items.slice(0, 30)
       throw new Error('feed sin items')
     } catch (e) {
@@ -108,10 +86,10 @@ async function fetchRss(rawRssUrl) {
         `[NoticiasProvinciales] proxy ${i} (${proxyUrl.split('?')[0]}) falló:`,
         e?.message,
       )
-      // sigue con el próximo proxy
+      // sigue con el próximo proxy (hoy solo hay uno)
     }
   }
-  throw lastErr ?? new Error('Todos los proxies de RSS fallaron.')
+  throw lastErr ?? new Error('No se pudo cargar el feed RSS.')
 }
 
 // Parsea un string XML de RSS 2.0 a la misma shape que produce
