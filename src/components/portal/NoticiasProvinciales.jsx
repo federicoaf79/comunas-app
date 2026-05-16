@@ -55,39 +55,63 @@ function matchesKeywords(item, keywords) {
   })
 }
 
-// Cadena de fallback para leer RSS desde el browser:
+// Cadena de proxies para leer RSS desde el browser (los feeds no
+// mandan CORS, así que el fetch directo lo bloquea el navegador).
+// Se intentan EN ORDEN hasta que uno devuelva items; si todos
+// fallan, se lanza el error y la UI muestra el link directo al medio.
 //
-//   1. rss2json.com — convierte RSS a JSON. Cuando funciona da
-//      thumbnails ya extraídos y un shape estable, pero su plan
-//      gratuito devuelve 422 para varios medios argentinos.
-//   2. corsproxy.io — proxy CORS-permisivo que sirve el XML crudo.
-//      Lo parseamos manual con DOMParser y normalizamos al mismo
-//      shape que rss2json para que el resto del componente no se
-//      entere de qué fuente vino.
-//
-// Devuelve hasta 30 items crudos para que el filtro de keywords
-// tenga material — luego acotamos a MAX_ITEMS (8) para mostrar.
-async function fetchRss(rawRssUrl) {
-  // Intento 1 — rss2json
-  try {
-    const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rawRssUrl)}`
-    const res = await fetch(proxyUrl)
-    if (res.ok) {
-      const data = await res.json()
-      if (data?.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
-        return data.items.slice(0, 30)
-      }
-    }
-  } catch (e) {
-    console.warn('[NoticiasProvinciales] rss2json falló, intento corsproxy:', e?.message)
-  }
+// OJO: cada proxy devuelve un shape distinto, así que el parseo
+// se ramifica por índice:
+//   [0] rss2json     → JSON { status, items:[…] } ya parseado.
+//   [1] corsproxy.io → XML crudo (pass-through) → parseRssXml.
+//   [2] allorigins   → JSON { contents:"<xml>" } → parseRssXml(contents).
+const PROXIES = [
+  (url) => `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&api_key=&count=10`,
+  (url) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+]
 
-  // Intento 2 — corsproxy.io + DOMParser
-  const corsUrl = `https://corsproxy.io/?${encodeURIComponent(rawRssUrl)}`
-  const res = await fetch(corsUrl)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const text = await res.text()
-  return parseRssXml(text).slice(0, 30)
+// Devuelve hasta 30 items crudos para que el filtro de keywords
+// tenga material — luego el componente acota a MAX_ITEMS para mostrar.
+async function fetchRss(rawRssUrl) {
+  let lastErr = null
+  for (let i = 0; i < PROXIES.length; i++) {
+    const proxyUrl = PROXIES[i](rawRssUrl)
+    try {
+      const res = await fetch(proxyUrl)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      let items
+      if (i === 0) {
+        // rss2json — JSON con items ya normalizados.
+        const data = await res.json()
+        if (data?.status !== 'ok' || !Array.isArray(data.items)) {
+          throw new Error('rss2json sin items')
+        }
+        items = data.items
+      } else if (i === 2) {
+        // allorigins /get — envuelve el feed en { contents }.
+        const data = await res.json()
+        if (!data?.contents) throw new Error('allorigins sin contents')
+        items = parseRssXml(data.contents)
+      } else {
+        // corsproxy.io — pass-through del XML crudo.
+        const text = await res.text()
+        items = parseRssXml(text)
+      }
+
+      if (items.length > 0) return items.slice(0, 30)
+      throw new Error('feed sin items')
+    } catch (e) {
+      lastErr = e
+      console.warn(
+        `[NoticiasProvinciales] proxy ${i} (${proxyUrl.split('?')[0]}) falló:`,
+        e?.message,
+      )
+      // sigue con el próximo proxy
+    }
+  }
+  throw lastErr ?? new Error('Todos los proxies de RSS fallaron.')
 }
 
 // Parsea un string XML de RSS 2.0 a la misma shape que produce
@@ -271,7 +295,7 @@ export default function NoticiasProvinciales() {
               Medios externos
             </p>
             <h2 id="nacionales-h2" className="mt-1 font-sora text-2xl font-bold text-primary sm:text-3xl">
-              Noticias de Argentina
+              Noticias de la Región
             </h2>
             <p className="mt-2 text-sm text-primary-500 sm:text-base">
               Actualidad nacional y regional — contenido publicado por medios
