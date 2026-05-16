@@ -1,28 +1,53 @@
-// Proxy RSS server-side. Los feeds de los medios de Santiago del
-// Estero (Nuevo Diario, Panorama, El Liberal) no mandan CORS y
-// además bloquean (403) a los proxies públicos compartidos. Este
-// endpoint los fetchea desde el server de Vercel —sin CORS, con
-// un User-Agent de browser— y devuelve el XML crudo al portal,
-// que lo parsea con parseRssXml() como ya hacía.
+// Proxy RSS server-side (Vercel Node.js runtime). Los feeds de los
+// medios de Santiago del Estero no mandan CORS y bloquean (403) a
+// los proxies públicos. Esta función los fetchea desde el server
+// con el cliente http/https nativo de Node (más robusto que fetch
+// para timeouts y errores de red) y devuelve el XML crudo.
+import https from 'https'
+import http from 'http'
+
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET')
+
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'url requerida' })
 
+  let targetUrl
   try {
-    const response = await fetch(decodeURIComponent(url), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ComunasBot/1.0)',
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-      },
+    targetUrl = decodeURIComponent(url)
+    new URL(targetUrl) // valida que sea URL válida
+  } catch {
+    return res.status(400).json({ error: 'URL inválida' })
+  }
+
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const client = targetUrl.startsWith('https') ? https : http
+      const request = client.get(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        },
+        timeout: 8000,
+      }, (response) => {
+        let body = ''
+        response.on('data', chunk => body += chunk)
+        response.on('end', () => resolve({ status: response.statusCode, body }))
+      })
+      request.on('error', reject)
+      request.on('timeout', () => { request.destroy(); reject(new Error('timeout')) })
     })
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    if (data.status >= 400) {
+      return res.status(502).json({ error: `Feed respondió ${data.status}` })
+    }
 
-    const xml = await response.text()
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Content-Type', 'application/xml')
-    res.status(200).send(xml)
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8')
+    res.setHeader('Cache-Control', 's-maxage=300')
+    return res.status(200).send(data.body)
+
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    return res.status(500).json({ error: error.message })
   }
 }
