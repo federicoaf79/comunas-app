@@ -212,43 +212,44 @@ export function useUpsertConfigClave(clave, { municipioIdOverride } = {}) {
 // Las fuentes nuevas usan `nombre`; el componente acepta tanto
 // `nombre` como `label` para compatibilidad con configs viejas
 // guardadas vía /admin/config (que persistían `label`).
+// Feeds vía Google News RSS — search scopeado por región/medio.
+// Resuelven SIEMPRE desde server (los feeds nativos de los medios
+// SGO devolvían 403/CORS hasta a los proxies). El query ya filtra
+// por región, así que palabras_clave queda vacío (igual el
+// componente aplica BASE_KEYWORDS con fallback graceful).
+//
+// Shape completo (key/home/active/palabras_clave) se mantiene aunque
+// el spec del usuario sólo pidiera nombre/url/activo: el componente
+// usa `f.key` para la identidad de cada tab y `f.active` para
+// filtrar — sin esos campos los tabs se rompen. `activo` se agrega
+// además para matchear textual el spec (inocuo).
 export const DEFAULT_FUENTES_RSS = [
   {
-    key:    'sgo-nuevodiario',
-    nombre: 'Nuevo Diario SGO',
-    url:    'https://www.nuevodiarioweb.com.ar/rss/',
-    home:   'https://www.nuevodiarioweb.com.ar',
+    key:    'sgo-noticias',
+    nombre: 'Noticias SGO',
+    url:    'https://news.google.com/rss/search?q=santiago+del+estero&hl=es-419&gl=AR&ceid=AR:es-419',
+    home:   'https://news.google.com/search?q=santiago%20del%20estero&hl=es-419',
     active: true,
-    palabras_clave: ['santiago del estero', 'sgo', 'municipio', 'comuna', 'localidad', 'interior'],
+    activo: true,
+    palabras_clave: [],
   },
   {
-    key:    'sgo-panorama',
-    nombre: 'Diario Panorama SGO',
-    url:    'https://www.diariopanorama.com/rss.xml',
-    home:   'https://www.diariopanorama.com',
+    key:    'sgo-agro',
+    nombre: 'Agro & Campo SGO',
+    url:    'https://news.google.com/rss/search?q=agricultura+ganaderia+santiago+del+estero&hl=es-419&gl=AR&ceid=AR:es-419',
+    home:   'https://news.google.com/search?q=agricultura%20ganaderia%20santiago%20del%20estero&hl=es-419',
     active: true,
-    palabras_clave: ['santiago del estero', 'sgo', 'municipio', 'provincia', 'localidad'],
+    activo: true,
+    palabras_clave: [],
   },
   {
-    key:    'sgo-rural',
-    nombre: 'Nuevo Diario — Interior',
-    url:    'https://www.nuevodiarioweb.com.ar/rss/',
-    home:   'https://www.nuevodiarioweb.com.ar',
-    active: true,
-    palabras_clave: ['campo', 'agro', 'rural', 'cosecha', 'soja', 'maíz', 'maiz', 'ganadería', 'ganaderia', 'productor'],
-  },
-  {
-    // El Liberal — diario histórico de Santiago del Estero. Hace de
-    // fuente general/fallback: si Nuevo Diario o Panorama fallan al
-    // fetchear (proxy/feed caído), este tab sigue trayendo noticias
-    // locales. El encadenado de proxies (rss2json → corsproxy) no
-    // se tocó; esto es solo otra fuente del whitelist.
     key:    'sgo-elliberal',
     nombre: 'El Liberal SGO',
-    url:    'https://www.elliberal.com.ar/feed',
+    url:    'https://news.google.com/rss/search?q=site:elliberal.com.ar&hl=es-419&gl=AR&ceid=AR:es-419',
     home:   'https://www.elliberal.com.ar',
     active: true,
-    palabras_clave: ['santiago del estero', 'sgo', 'provincia'],
+    activo: true,
+    palabras_clave: [],
   },
 ]
 
