@@ -26,6 +26,7 @@ import AtencionDetalle      from './pages/admin/AtencionDetalle'
 import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
 import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
+import DependenciaGestion  from './pages/admin/DependenciaGestion'
 import Inventario          from './pages/admin/Inventario'
 import Flota               from './pages/admin/Flota'
 import Patrimonio          from './pages/admin/Patrimonio'
@@ -132,6 +133,10 @@ const router = createBrowserRouter([
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
+                  // Módulo genérico nuevo, keyeado por UUID de la
+                  // fila (no por tipo). Path distinto a propósito
+                  // para no colisionar con :tipo en React Router.
+                  { path: '/admin/dependencia-gestion/:dependenciaId', element: <DependenciaGestion /> },
                   { path: '/admin/inventario',           element: <Inventario /> },
                   { path: '/admin/flota',                element: <Flota /> },
                   { path: '/admin/patrimonio',           element: <Patrimonio /> },

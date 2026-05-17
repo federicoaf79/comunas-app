@@ -4,6 +4,7 @@ import { useDependencias } from '../../hooks/useTurnos'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useModulosActivos } from '../../hooks/useModulos'
+import { useDependenciasAdmin } from '../../hooks/useDependenciaPublica'
 
 // Tipos de dependencia que tienen su propio módulo top-level —
 // se EXCLUYEN de la lista "Otras dependencias" para no duplicar
@@ -528,6 +529,42 @@ function SuperadminSection() {
   )
 }
 
+// Grupo de sidebar para el módulo genérico de gestión de
+// dependencias (DependenciaGestion, ruta /admin/dependencia-gestion/:id).
+// Aislado a propósito: hace su propia query y NO toca la lógica
+// de dependencias por :tipo existente más abajo. Lista las
+// dependencias activas del municipio que NO tienen módulo propio
+// (excluye sala PA, juzgado, SUM, administración, obras).
+const TIPOS_GESTION_EXCLUIDOS = new Set([
+  ...TIPOS_CON_MODULO_PROPIO,
+  'obras', 'obras_publicas',
+])
+
+function DependenciasGestionNav() {
+  const municipioId = useEffectiveMunicipioId()
+  const { data: deps = [] } = useDependenciasAdmin({ municipioIdOverride: municipioId })
+
+  const items = (deps ?? [])
+    .filter(d => d?.activo !== false)
+    .filter(d => !TIPOS_GESTION_EXCLUIDOS.has((d.tipo ?? '').toLowerCase()))
+    .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
+
+  if (items.length === 0) return null
+
+  return (
+    <>
+      <Rotulo>Dependencias</Rotulo>
+      {items.map(d => (
+        <FlatNavLink
+          key={d.id}
+          to={`/admin/dependencia-gestion/${d.id}`}
+          label={d.nombre}
+        />
+      ))}
+    </>
+  )
+}
+
 // Rótulo separador entre secciones del sidebar.
 function Rotulo({ children }) {
   return (
@@ -714,6 +751,8 @@ export default function AdminLayout() {
               ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
+
+          <DependenciasGestionNav />
 
           {navGestionFiltrado.length > 0 && <Rotulo>Gestión municipal</Rotulo>}
           {navGestionFiltrado.map(item => (
