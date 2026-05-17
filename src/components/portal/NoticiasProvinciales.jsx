@@ -161,17 +161,33 @@ function FuenteChip({ active, label, onClick }) {
   )
 }
 
-function PlaceholderImg() {
+// Estado sin imagen — fondo navy degradado + patrón diagonal
+// sutil (mismo espíritu que el hero, hecho con repeating-linear-
+// gradient para no duplicar IDs de <pattern> SVG por card),
+// ícono de periódico y el nombre de la fuente centrado.
+function PlaceholderImg({ fuenteNombre }) {
   return (
-    <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-primary via-primary-700 to-primary-900 text-white/70">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-12 w-12" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4h16v16H4zM4 9h16M9 4v16" />
-      </svg>
+    <div
+      className="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-primary-900 to-primary-800"
+      style={{
+        backgroundImage:
+          'linear-gradient(to bottom right, rgb(6 13 26), rgb(10 20 38)), repeating-linear-gradient(135deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 16px)',
+      }}
+    >
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-8 w-8 text-white/40" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 5h11a1 1 0 0 1 1 1v12a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a1 1 0 0 1 1 1v9M8 9h5M8 12h5M8 15h3" />
+        </svg>
+        <span className="text-center text-xs font-medium text-white/60">
+          {fuenteNombre || 'Fuente externa'}
+        </span>
+      </div>
     </div>
   )
 }
 
-function NoticiaExternaCard({ item, badgeLabel = 'Externo' }) {
+function NoticiaExternaCard({ item, badgeLabel = 'Externo', fuenteNombre }) {
   const img = getImageUrl(item)
   return (
     <a
@@ -191,7 +207,7 @@ function NoticiaExternaCard({ item, badgeLabel = 'Externo' }) {
               onError={e => { e.currentTarget.style.opacity = '0.3' }}
             />
           ) : (
-            <PlaceholderImg />
+            <PlaceholderImg fuenteNombre={item.source || fuenteNombre} />
           )}
           <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary-900/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent shadow-sm">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-2.5 w-2.5" aria-hidden="true">
@@ -357,6 +373,7 @@ export default function NoticiasProvinciales() {
                   key={item.guid ?? item.link}
                   item={item}
                   badgeLabel={badgeLabel}
+                  fuenteNombre={fuente?.nombre ?? fuente?.label}
                 />
               ))}
             </div>
