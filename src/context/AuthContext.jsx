@@ -206,8 +206,37 @@ export function AuthProvider({ children }) {
   }, [fetchPerfil])
 
   const signIn = useCallback(async ({ email, password }) => {
-    return supabase.auth.signInWithPassword({ email, password })
-  }, [])
+    const result = await supabase.auth.signInWithPassword({ email, password })
+
+    // Auditoría de acceso. Se registra acá —en el login interactivo
+    // exitoso— y NO en onAuthStateChange: SIGNED_IN también dispara
+    // en session-restore y token-refresh; signIn solo lo llama el
+    // usuario al enviar credenciales, así que es "el primer login
+    // de la sesión" por construcción. try/catch silencioso: si la
+    // auditoría falla (RLS, red), el login no se bloquea.
+    const uid = result?.data?.user?.id
+    if (uid && !result.error) {
+      try {
+        const u = await fetchPerfil(uid)
+        if (u) {
+          await supabase.from('audit_log').insert({
+            municipio_id:  u.municipio_id ?? null,
+            usuario_id:    u.id,
+            accion:        'LOGIN',
+            entidad:       'auth',
+            entidad_id:    u.id,
+            descripcion:   `Inicio de sesión — ${u.nombre} (${u.email})`,
+            datos_despues: {
+              roles:     u.roles ?? [],
+              timestamp: new Date().toISOString(),
+            },
+          })
+        }
+      } catch { /* no bloquear el login si falla la auditoría */ }
+    }
+
+    return result
+  }, [fetchPerfil])
 
   const signUp = useCallback(async ({ email, password, nombre }) => {
     return supabase.auth.signUp({
