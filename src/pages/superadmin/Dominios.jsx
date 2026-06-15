@@ -8,7 +8,7 @@ import Select from '../../components/ui/Select'
 import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
-import Badge from '../../components/ui/Badge'
+import { Badge } from '../../components/ui/Badge'
 
 const TIPO_META = {
   subdominio:     { label: 'Subdominio', cls: 'bg-primary-100 text-primary-700' },
