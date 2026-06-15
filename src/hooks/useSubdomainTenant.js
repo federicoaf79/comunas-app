@@ -55,10 +55,28 @@ export function isAdminDomain() {
 // de ventas (comunas.lat o www.comunas.lat).
 //
 // En producción: solo comunas.lat y www.comunas.lat
-// En desarrollo: también localhost (para poder trabajar la landing)
+// En desarrollo: también localhost / 127.0.0.1
+// Casos edge: hostnames sin punto (dev local sin dominio)
 // =============================================================
 
 export function isLandingDomain() {
   const h = window.location.hostname
-  return h === 'comunas.lat' || h === 'www.comunas.lat' || h === 'localhost'
+
+  // Casos explícitos de landing
+  const isLanding = h === 'comunas.lat' ||
+                    h === 'www.comunas.lat' ||
+                    h === 'localhost' ||
+                    h === '127.0.0.1' ||
+                    !h.includes('.')  // caso edge: hostname sin dominio
+
+  // Debug temporal (remover después de verificar en prod)
+  if (typeof window !== 'undefined' && window.location.pathname === '/') {
+    console.log('[isLandingDomain]', {
+      hostname: h,
+      isLanding,
+      pathname: window.location.pathname,
+    })
+  }
+
+  return isLanding
 }

@@ -8,6 +8,7 @@ import RoleGuard   from './components/guards/RoleGuard'
 import VecinoGuard from './components/guards/VecinoGuard'
 import AdminDomainGuard from './components/guards/AdminDomainGuard'
 import AdminDomainRedirect from './components/guards/AdminDomainRedirect'
+import LandingDomainGuard from './components/guards/LandingDomainGuard'
 import AppShell    from './components/layout/AppShell'
 import AdminLayout from './components/layout/AdminLayout'
 import ScrollToTop from './components/utils/ScrollToTop'
@@ -77,7 +78,23 @@ function RootLayout() {
 
 // Redirect raíz — landing vs portal según dominio
 function RootRedirect() {
-  if (isLandingDomain()) return <Landing />
+  const hostname = window.location.hostname
+  const shouldShowLanding = isLandingDomain()
+
+  // Debug temporal: logging para verificar detección del dominio
+  console.log('[RootRedirect]', {
+    hostname,
+    shouldShowLanding,
+    pathname: window.location.pathname,
+  })
+
+  // Si estamos en comunas.lat / www.comunas.lat / localhost → Landing
+  if (shouldShowLanding) {
+    return <Landing />
+  }
+
+  // Si estamos en un subdominio de municipio → Portal
+  // Si estamos en admin.comunas.lat → AdminDomainRedirect redirige a /login
   return (
     <AdminDomainRedirect>
       <Navigate to="/portal" replace />
@@ -99,32 +116,40 @@ const router = createBrowserRouter([
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
   { path: '/portal', element: (
-    <AdminDomainRedirect>
-      <PortalPublico />
-    </AdminDomainRedirect>
+    <LandingDomainGuard>
+      <AdminDomainRedirect>
+        <PortalPublico />
+      </AdminDomainRedirect>
+    </LandingDomainGuard>
   )},
   // OJO: /portal/noticias va ANTES de /portal/noticias/:id para que
   // el matcher prefiera la ruta estática sobre el segmento dinámico.
-  // Todas las rutas del portal redirigen a /login en admin.comunas.lat
-  { path: '/portal/noticias', element: <AdminDomainRedirect><NoticiasListado /></AdminDomainRedirect> },
-  { path: '/portal/noticias/:id', element: <AdminDomainRedirect><NoticiaDetalle /></AdminDomainRedirect> },
-  { path: '/portal/dependencia/:tipo', element: <AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect> },
-  { path: '/portal/turno', element: <AdminDomainRedirect><SacarTurno /></AdminDomainRedirect> },
-  { path: '/portal/mi-turno', element: <AdminDomainRedirect><MiTurno /></AdminDomainRedirect> },
-  { path: '/portal/mi-salud', element: <AdminDomainRedirect><MiSalud /></AdminDomainRedirect> },
-  { path: '/portal/videos', element: <AdminDomainRedirect><VideosPage /></AdminDomainRedirect> },
-  { path: '/portal/tramites', element: <AdminDomainRedirect><TramitesPortal /></AdminDomainRedirect> },
-  { path: '/portal/historia', element: <AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect> },
+  // Todas las rutas del portal:
+  //   - En comunas.lat → redirigen a / (landing)
+  //   - En admin.comunas.lat → redirigen a /login
+  //   - En subdominios municipales → muestran el portal
+  { path: '/portal/noticias', element: <LandingDomainGuard><AdminDomainRedirect><NoticiasListado /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/noticias/:id', element: <LandingDomainGuard><AdminDomainRedirect><NoticiaDetalle /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/dependencia/:tipo', element: <LandingDomainGuard><AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/turno', element: <LandingDomainGuard><AdminDomainRedirect><SacarTurno /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/mi-turno', element: <LandingDomainGuard><AdminDomainRedirect><MiTurno /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/mi-salud', element: <LandingDomainGuard><AdminDomainRedirect><MiSalud /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/videos', element: <LandingDomainGuard><AdminDomainRedirect><VideosPage /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/tramites', element: <LandingDomainGuard><AdminDomainRedirect><TramitesPortal /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/historia', element: <LandingDomainGuard><AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect></LandingDomainGuard> },
 
   // Portal del Vecino — área personal con sesión propia (DNI + tel)
   // independiente del auth de Supabase. La sesión vive en sessionStorage.
-  // También redirige a /login en admin.comunas.lat
-  { path: '/mi-cuenta/acceso', element: <AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect> },
+  // En comunas.lat → redirige a / (landing)
+  // En admin.comunas.lat → redirige a /login
+  { path: '/mi-cuenta/acceso', element: <LandingDomainGuard><AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect></LandingDomainGuard> },
   {
     element: (
-      <AdminDomainRedirect>
-        <VecinoGuard />
-      </AdminDomainRedirect>
+      <LandingDomainGuard>
+        <AdminDomainRedirect>
+          <VecinoGuard />
+        </AdminDomainRedirect>
+      </LandingDomainGuard>
     ),
     children: [
       { path: '/mi-cuenta', element: <VecinoDashboard /> },
