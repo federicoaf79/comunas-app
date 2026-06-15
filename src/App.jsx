@@ -52,6 +52,7 @@ import VecinoDashboard     from './pages/portal/VecinoDashboard'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
+import SuperadminDominios from './pages/superadmin/Dominios'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -164,6 +165,7 @@ const router = createBrowserRouter([
                   { path: '/superadmin',            element: <SuperadminDashboard /> },
                   { path: '/superadmin/municipios', element: <SuperadminMunicipios /> },
                   { path: '/superadmin/panel',      element: <SuperadminPanelGlobal /> },
+                  { path: '/superadmin/dominios',   element: <SuperadminDominios /> },
                 ],
               },
             ],

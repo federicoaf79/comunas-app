@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useSubdomainTenant } from './useSubdomainTenant'
 
 // =============================================================
 // useConfigPortal — settings (clave/valor jsonb) del Portal
@@ -88,11 +89,33 @@ const PORTAL_BUNDLE_CLAVES = [
   'fuentes_rss',
 ]
 
-async function fetchPortalConfigBundle() {
-  const { data, error } = await supabasePublic
+async function fetchPortalConfigBundle(slug) {
+  // Paso 1: Resolver slug a municipio_id
+  let municipio_id = null
+  if (slug) {
+    const { data: munData, error: munError } = await supabasePublic
+      .from('municipios')
+      .select('id')
+      .eq('slug', slug)
+      .eq('activo', true)
+      .maybeSingle()
+    if (munError) {
+      console.warn('[fetchPortalConfigBundle] municipios query error:', munError.message)
+    } else {
+      municipio_id = munData?.id ?? null
+    }
+  }
+
+  // Paso 2: Traer config del municipio resuelto
+  let q = supabasePublic
     .from('configuracion_portal')
     .select('clave, valor, municipio_id')
     .in('clave', PORTAL_BUNDLE_CLAVES)
+  if (municipio_id) {
+    q = q.eq('municipio_id', municipio_id)
+  }
+
+  const { data, error } = await q
   if (error) {
     if (!/permission|policy/i.test(error.message ?? '')) {
       console.warn('[usePortalConfigBundle] error:', error.message)
@@ -100,51 +123,25 @@ async function fetchPortalConfigBundle() {
     return { byClave: {}, municipio_id: null }
   }
 
-  // Multi-municipio defense — versión corregida.
-  //
-  // El bug anterior: si una fila (ej: identidad_visual) tenía un
-  // municipio_id distinto al de datos_municipio, se DESCARTABA por
-  // completo (`continue`) y la clave desaparecía del bundle — el
-  // logo del portal/admin nunca se mostraba aunque la URL estaba
-  // bien guardada en la DB. Pasaba seguido porque identidad_visual
-  // se guarda desde ConfigGeneral con el municipio efectivo del
-  // staff, que puede no coincidir exacto con el de datos_municipio
-  // (o datos_municipio puede no existir todavía).
-  //
-  // Criterio nuevo: agrupamos por clave. La primera fila de cada
-  // clave entra siempre. Si más adelante aparece otra fila de la
-  // MISMA clave que sí matchea el municipio ancla y la que teníamos
-  // no matcheaba, la pisamos. Resultado: ninguna clave se pierde,
-  // pero ante duplicados gana la del municipio del portal.
+  // Como ahora filtramos por municipio_id en la query, todas las
+  // filas ya son del mismo municipio — no hace falta el defense
+  // multi-municipio complejo. Simplemente armamos el mapa clave→valor.
   const rows = data ?? []
-  const datosRow = rows.find(r => r.clave === 'datos_municipio')
-  const municipio_id = datosRow?.municipio_id ?? rows[0]?.municipio_id ?? null
   const byClave = {}
-  const chosenMun = {}
   for (const r of rows) {
-    if (!(r.clave in byClave)) {
-      byClave[r.clave]   = r.valor
-      chosenMun[r.clave] = r.municipio_id ?? null
-      continue
-    }
-    if (
-      municipio_id &&
-      r.municipio_id === municipio_id &&
-      chosenMun[r.clave] !== municipio_id
-    ) {
-      byClave[r.clave]   = r.valor
-      chosenMun[r.clave] = r.municipio_id ?? null
-    }
+    byClave[r.clave] = r.valor
   }
   return { byClave, municipio_id }
 }
 
 // Hook centralizado — el resto de las lecturas públicas se derivan
 // de éste para que solo haya 1 query en vuelo.
+// Ahora recibe el slug del subdominio para filtrar por municipio.
 export function usePortalConfigBundle() {
+  const slug = useSubdomainTenant()
   return useQuery({
-    queryKey: ['portal-config-bundle'],
-    queryFn:  fetchPortalConfigBundle,
+    queryKey: ['portal-config-bundle', slug],
+    queryFn:  () => fetchPortalConfigBundle(slug),
     staleTime: 5 * 60 * 1000,
   })
 }
