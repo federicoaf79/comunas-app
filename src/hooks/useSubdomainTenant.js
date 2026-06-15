@@ -49,3 +49,16 @@ export function isAdminDomain() {
   const hostname = window.location.hostname
   return hostname === 'admin.comunas.lat' || hostname.startsWith('admin.')
 }
+
+// =============================================================
+// isLandingDomain — detecta si estamos en el dominio raíz
+// de ventas (comunas.lat o www.comunas.lat).
+//
+// En producción: solo comunas.lat y www.comunas.lat
+// En desarrollo: también localhost (para poder trabajar la landing)
+// =============================================================
+
+export function isLandingDomain() {
+  const h = window.location.hostname
+  return h === 'comunas.lat' || h === 'www.comunas.lat' || h === 'localhost'
+}

@@ -55,6 +55,8 @@ import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
 import SuperadminDominios from './pages/superadmin/Dominios'
+import Landing from './pages/Landing'
+import { isLandingDomain } from './hooks/useSubdomainTenant'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -73,19 +75,26 @@ function RootLayout() {
   )
 }
 
+// Redirect raíz — landing vs portal según dominio
+function RootRedirect() {
+  if (isLandingDomain()) return <Landing />
+  return (
+    <AdminDomainRedirect>
+      <Navigate to="/portal" replace />
+    </AdminDomainRedirect>
+  )
+}
+
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
     children: [
   // Rutas públicas — sin AuthGuard.
-  // La raíz redirige al Portal Ciudadano — la Landing legacy
-  // dejó de ser el primer punto de contacto.
-  // En admin.comunas.lat, redirige a /login en vez del portal.
-  { path: '/', element: (
-    <AdminDomainRedirect>
-      <Navigate to="/portal" replace />
-    </AdminDomainRedirect>
-  )},
+  // La raíz muestra:
+  //   - Landing de ventas en comunas.lat / www.comunas.lat / localhost
+  //   - Redirige a /portal en subdominios de municipio
+  //   - Redirige a /login en admin.comunas.lat
+  { path: '/', element: <RootRedirect /> },
   { path: '/acceso',   element: <Acceso /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
