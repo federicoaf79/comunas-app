@@ -6,6 +6,8 @@ import { VecinoProvider } from './context/VecinoContext'
 import AuthGuard   from './components/guards/AuthGuard'
 import RoleGuard   from './components/guards/RoleGuard'
 import VecinoGuard from './components/guards/VecinoGuard'
+import AdminDomainGuard from './components/guards/AdminDomainGuard'
+import AdminDomainRedirect from './components/guards/AdminDomainRedirect'
 import AppShell    from './components/layout/AppShell'
 import AdminLayout from './components/layout/AdminLayout'
 import ScrollToTop from './components/utils/ScrollToTop'
@@ -78,36 +80,56 @@ const router = createBrowserRouter([
   // Rutas públicas — sin AuthGuard.
   // La raíz redirige al Portal Ciudadano — la Landing legacy
   // dejó de ser el primer punto de contacto.
-  { path: '/',         element: <Navigate to="/portal" replace /> },
+  // En admin.comunas.lat, redirige a /login en vez del portal.
+  { path: '/', element: (
+    <AdminDomainRedirect>
+      <Navigate to="/portal" replace />
+    </AdminDomainRedirect>
+  )},
   { path: '/acceso',   element: <Acceso /> },
   { path: '/login',    element: <Login /> },
   { path: '/register', element: <Register /> },
-  { path: '/portal',                element: <PortalPublico /> },
+  { path: '/portal', element: (
+    <AdminDomainRedirect>
+      <PortalPublico />
+    </AdminDomainRedirect>
+  )},
   // OJO: /portal/noticias va ANTES de /portal/noticias/:id para que
   // el matcher prefiera la ruta estática sobre el segmento dinámico.
-  { path: '/portal/noticias',       element: <NoticiasListado /> },
-  { path: '/portal/noticias/:id',   element: <NoticiaDetalle /> },
-  { path: '/portal/dependencia/:tipo', element: <DependenciaPublica /> },
-  { path: '/portal/turno',          element: <SacarTurno /> },
-  { path: '/portal/mi-turno',       element: <MiTurno /> },
-  { path: '/portal/mi-salud',       element: <MiSalud /> },
-  { path: '/portal/videos',         element: <VideosPage /> },
-  { path: '/portal/tramites',       element: <TramitesPortal /> },
-  { path: '/portal/historia',       element: <HistoriaPage /> },
+  // Todas las rutas del portal redirigen a /login en admin.comunas.lat
+  { path: '/portal/noticias', element: <AdminDomainRedirect><NoticiasListado /></AdminDomainRedirect> },
+  { path: '/portal/noticias/:id', element: <AdminDomainRedirect><NoticiaDetalle /></AdminDomainRedirect> },
+  { path: '/portal/dependencia/:tipo', element: <AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect> },
+  { path: '/portal/turno', element: <AdminDomainRedirect><SacarTurno /></AdminDomainRedirect> },
+  { path: '/portal/mi-turno', element: <AdminDomainRedirect><MiTurno /></AdminDomainRedirect> },
+  { path: '/portal/mi-salud', element: <AdminDomainRedirect><MiSalud /></AdminDomainRedirect> },
+  { path: '/portal/videos', element: <AdminDomainRedirect><VideosPage /></AdminDomainRedirect> },
+  { path: '/portal/tramites', element: <AdminDomainRedirect><TramitesPortal /></AdminDomainRedirect> },
+  { path: '/portal/historia', element: <AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect> },
 
   // Portal del Vecino — área personal con sesión propia (DNI + tel)
   // independiente del auth de Supabase. La sesión vive en sessionStorage.
-  { path: '/mi-cuenta/acceso', element: <VecinoAcceso /> },
+  // También redirige a /login en admin.comunas.lat
+  { path: '/mi-cuenta/acceso', element: <AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect> },
   {
-    element: <VecinoGuard />,
+    element: (
+      <AdminDomainRedirect>
+        <VecinoGuard />
+      </AdminDomainRedirect>
+    ),
     children: [
       { path: '/mi-cuenta', element: <VecinoDashboard /> },
     ],
   },
 
   // Rutas protegidas.
+  // AdminDomainGuard: en admin.comunas.lat solo permite acceso a superadmin
   {
-    element: <AuthGuard />,
+    element: (
+      <AdminDomainGuard>
+        <AuthGuard />
+      </AdminDomainGuard>
+    ),
     children: [
       {
         element: <AppShell />,

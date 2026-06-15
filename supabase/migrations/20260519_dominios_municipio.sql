@@ -22,13 +22,22 @@
 
 CREATE TABLE IF NOT EXISTS public.dominios_municipio (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  municipio_id uuid NOT NULL REFERENCES public.municipios(id) ON DELETE CASCADE,
+  municipio_id uuid REFERENCES public.municipios(id) ON DELETE CASCADE,
   dominio text NOT NULL UNIQUE,
   tipo text NOT NULL DEFAULT 'subdominio'
     CHECK (tipo IN ('subdominio','dominio_propio','alias')),
   activo boolean NOT NULL DEFAULT true,
   verificado boolean NOT NULL DEFAULT false,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT dominio_municipio_check
+    CHECK (
+      -- admin.comunas.lat puede tener municipio_id NULL
+      -- (es el panel de superadmin, no pertenece a ningún municipio)
+      (dominio = 'admin.comunas.lat' AND municipio_id IS NULL)
+      OR
+      -- el resto de dominios DEBE tener municipio_id
+      (dominio != 'admin.comunas.lat' AND municipio_id IS NOT NULL)
+    )
 );
 
 CREATE INDEX IF NOT EXISTS idx_dominios_municipio_dominio
@@ -65,6 +74,11 @@ CREATE POLICY "dominios_public_read" ON public.dominios_municipio
 
 -- =============================================================
 -- Seed: dominios del municipio piloto Real Sayana
+--
+-- IMPORTANTE: admin.comunas.lat NO tiene municipio_id (es el
+-- panel de superadmin, no pertenece a ningún municipio).
+-- Se inserta solo para registrarlo en la tabla, pero NO se usa
+-- para resolución de tenant (AdminDomainGuard lo filtra antes).
 -- =============================================================
 
 INSERT INTO public.dominios_municipio
@@ -80,6 +94,13 @@ VALUES
   (
     (SELECT id FROM municipios WHERE slug = 'real-sayana'),
     'demo.comunas.lat',
+    'alias',
+    true,
+    true
+  ),
+  (
+    NULL, -- admin.comunas.lat NO pertenece a ningún municipio
+    'admin.comunas.lat',
     'alias',
     true,
     true

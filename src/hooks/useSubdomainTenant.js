@@ -5,6 +5,7 @@
 // Arquitectura multi-tenant:
 //   - demo.comunas.lat → slug 'real-sayana' (fallback default)
 //   - realsayana.comunas.lat → slug 'real-sayana'
+//   - admin.comunas.lat → NO resuelve municipio (panel superadmin)
 //   - localhost / 127.0.0.1 → slug 'real-sayana' (dev local)
 //
 // Conversión de slug:
@@ -25,8 +26,8 @@ export function useSubdomainTenant() {
     const parts = hostname.split('.')
     if (parts.length >= 3) {
       const sub = parts[0]
-      // Subdominio reservados caen al fallback (www, demo, app)
-      if (!['www', 'demo', 'app'].includes(sub)) {
+      // Subdominios reservados caen al fallback (www, demo, app, admin)
+      if (!['www', 'demo', 'app', 'admin'].includes(sub)) {
         // Conversión camelCase → kebab-case
         // realSayana → real-sayana
         slug = sub.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
@@ -34,4 +35,17 @@ export function useSubdomainTenant() {
     }
   }
   return slug
+}
+
+// =============================================================
+// isAdminDomain — detecta si estamos en el dominio del panel
+// de superadmin (admin.comunas.lat).
+//
+// Cuando es true, el router NO debe mostrar el portal ciudadano
+// y solo permite acceso a usuarios con rol superadmin.
+// =============================================================
+
+export function isAdminDomain() {
+  const hostname = window.location.hostname
+  return hostname === 'admin.comunas.lat' || hostname.startsWith('admin.')
 }
