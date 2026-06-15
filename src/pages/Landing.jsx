@@ -473,4 +473,339 @@ function Modulos() {
   )
 }
 
-// (Continuar con resto de secciones...)
+// =============================================================
+// PARA QUIÉN — target y municipio piloto
+// =============================================================
+
+function ParaQuien() {
+  return (
+    <section id="para-quien" className="bg-background py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <div className="mb-3 text-xs font-bold uppercase tracking-wider text-accent">
+              DISEÑADO PARA
+            </div>
+            <h2 className="mb-6 font-sora text-3xl font-bold text-primary sm:text-4xl">
+              Comisiones municipales del NOA y NEA
+            </h2>
+            <div className="space-y-3">
+              {[
+                'Municipios de 1.000 a 15.000 habitantes',
+                'Equipos de 5 a 30 empleados municipales',
+                'SGO del Estero, Jujuy, Tucumán, Salta, Chaco, Formosa, Corrientes',
+                'Compatible con Ley 6706, SARC y Tribunal de Cuentas',
+                'Sin infraestructura propia — 100% en la nube',
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <svg viewBox="0 0 20 20" className="mt-0.5 h-5 w-5 shrink-0 text-accent" fill="currentColor">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-primary-700">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-primary p-8 shadow-lg">
+            <div className="mb-6">
+              <div className="mb-2 text-sm font-medium text-accent">Municipio piloto activo</div>
+              <div className="text-2xl font-bold text-white">Real Sayana, Santiago del Estero</div>
+            </div>
+            <div className="mb-6 grid grid-cols-2 gap-4">
+              {[
+                { n: '55', l: 'Vecinos registrados' },
+                { n: '13', l: 'Dependencias activas' },
+                { n: '18', l: 'Noticias publicadas' },
+                { n: '✓', l: 'Portal ciudadano live' },
+              ].map((s, i) => (
+                <div key={i} className="rounded-lg bg-white/5 p-4">
+                  <div className="text-2xl font-bold text-accent">{s.n}</div>
+                  <div className="text-xs text-white/60">{s.l}</div>
+                </div>
+              ))}
+            </div>
+            <a
+              href="https://realsayana.comunas.lat"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent px-4 py-2.5 font-medium text-accent transition-colors hover:bg-accent hover:text-primary"
+            >
+              Ver portal ciudadano →
+            </a>
+            <p className="mt-4 text-center text-xs text-white/50">
+              Primer municipio del NOA con gestión 100% digital
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =============================================================
+// PROCESO — 4 pasos hasta producción
+// =============================================================
+
+function Proceso() {
+  const pasos = [
+    { num: 1, titulo: 'Relevamiento', desc: 'Reunión inicial para mapear dependencias, usuarios y flujos de tu comisión.' },
+    { num: 2, titulo: 'Configuración', desc: 'Cargamos tu municipio: dependencias, autoridades, contenido y usuarios.' },
+    { num: 3, titulo: 'Capacitación', desc: 'Sesión online con todo el equipo. Materiales y videos incluidos.' },
+    { num: 4, titulo: 'En producción', desc: 'Tu portal y panel admin activos. Soporte continuo incluido.' },
+  ]
+
+  return (
+    <section className="bg-primary py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <h2 className="mb-12 text-center font-sora text-3xl font-bold text-white sm:text-4xl">
+          De la firma al sistema activo en 72 horas
+        </h2>
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {pasos.map((paso, i) => (
+            <div key={i} className="relative">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full border-2 border-accent bg-accent/20 text-lg font-bold text-accent">
+                {paso.num}
+              </div>
+              {i < pasos.length - 1 && (
+                <div className="absolute left-14 top-6 hidden h-0.5 w-[calc(100%-3.5rem)] bg-accent/30 lg:block" />
+              )}
+              <h3 className="mb-2 text-lg font-bold text-white">{paso.titulo}</h3>
+              <p className="text-sm text-white/60">{paso.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =============================================================
+// CONTACTO — formulario + datos directos
+// =============================================================
+
+function Contacto() {
+  const [form, setForm] = useState({
+    nombre: '', municipio: '', provincia: '',
+    email: '', telefono: '', mensaje: '', confirmado: false,
+  })
+  const [enviando, setEnviando] = useState(false)
+  const [enviado, setEnviado] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.confirmado) {
+      setError('Por favor confirmá que representás a una comisión o municipio argentino.')
+      return
+    }
+    setEnviando(true)
+    setError(null)
+    try {
+      const { error: dbError } = await supabasePublic
+        .from('consultas_landing')
+        .insert({
+          nombre: form.nombre,
+          municipio: form.municipio,
+          provincia: form.provincia,
+          email: form.email,
+          telefono: form.telefono,
+          mensaje: form.mensaje || null,
+        })
+      if (dbError) throw dbError
+      setEnviado(true)
+    } catch (err) {
+      setError('Hubo un error al enviar. Por favor intentá nuevamente.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <section id="contacto" className="bg-background py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <div className="mb-3 text-xs font-bold uppercase tracking-wider text-accent">CONTACTO</div>
+            <h2 className="mb-6 font-sora text-3xl font-bold text-primary sm:text-4xl">
+              ¿Tu municipio es el próximo?
+            </h2>
+            <p className="mb-8 text-base text-primary-600">
+              Contanos de tu comisión y te preparamos una demo personalizada sin costo ni compromiso.
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📧</span>
+                <a href="mailto:info@comunas.lat" className="text-sm text-primary-700 hover:text-accent">
+                  info@comunas.lat
+                </a>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🌐</span>
+                <a href="https://realsayana.comunas.lat" target="_blank" rel="noopener noreferrer"
+                  className="text-sm text-primary-700 hover:text-accent">
+                  realsayana.comunas.lat — ver demo en vivo
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-white p-6 shadow-lg sm:p-8">
+            {enviado ? (
+              <div className="py-8 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-accent">
+                  <svg viewBox="0 0 24 24" className="h-8 w-8 text-accent" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="mb-2 text-xl font-bold text-primary">¡Consulta recibida!</h3>
+                <p className="text-sm text-primary-600">
+                  Nos ponemos en contacto dentro de las 24 horas hábiles.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {[
+                  { label: 'Nombre completo', key: 'nombre', type: 'text' },
+                  { label: 'Municipio / Comisión', key: 'municipio', type: 'text' },
+                  { label: 'Email institucional', key: 'email', type: 'email' },
+                  { label: 'Teléfono / WhatsApp', key: 'telefono', type: 'tel' },
+                ].map(({ label, key, type }) => (
+                  <div key={key}>
+                    <label className="mb-1 block text-sm font-medium text-primary-700">
+                      {label} <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type={type}
+                      value={form[key]}
+                      onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                      className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                      required
+                    />
+                  </div>
+                ))}
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-primary-700">
+                    Provincia <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    value={form.provincia}
+                    onChange={(e) => setForm({ ...form, provincia: e.target.value })}
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                    required
+                  >
+                    <option value="">Seleccionar...</option>
+                    {['Santiago del Estero','Jujuy','Tucumán','Salta','Chaco','Formosa','Corrientes','Otra'].map(p => (
+                      <option key={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-primary-700">Mensaje (opcional)</label>
+                  <textarea
+                    value={form.mensaje}
+                    onChange={(e) => setForm({ ...form, mensaje: e.target.value })}
+                    rows="3"
+                    placeholder="Contanos brevemente cuántos empleados tienen y qué módulos les interesan..."
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                  />
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, confirmado: !form.confirmado })}
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                      form.confirmado ? 'border-primary bg-primary' : 'border-primary bg-white'
+                    }`}
+                  >
+                    {form.confirmado && (
+                      <svg viewBox="0 0 12 12" className="h-3 w-3 text-accent" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" d="M2 6l3 3 5-5" />
+                      </svg>
+                    )}
+                  </button>
+                  <span className="text-xs text-primary-600">
+                    Confirmo que represento a una comisión o municipio argentino.
+                  </span>
+                </div>
+
+                {error && (
+                  <p className="text-sm text-danger">{error}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={enviando}
+                  className="w-full rounded-md bg-primary px-4 py-3 font-bold text-accent transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {enviando ? 'Enviando...' : 'Enviar consulta →'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// =============================================================
+// FOOTER — 3 columnas
+// =============================================================
+
+function Footer() {
+  return (
+    <footer className="border-t border-white/10 bg-primary py-12">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <svg viewBox="0 0 40 40" className="h-8 w-8" fill="none">
+                <path d="M20 4L8 12v16l12 8 12-8V12L20 4z" stroke="#C9A84C" strokeWidth="2" />
+                <circle cx="20" cy="20" r="4" fill="#C9A84C" />
+              </svg>
+              <span className="text-lg font-bold text-accent">COMUNAS</span>
+            </div>
+            <p className="mb-4 text-sm text-white/70">
+              Plataforma SaaS para comisiones municipales de Argentina
+            </p>
+            <p className="text-xs text-white/40">
+              © 2026 COMUNAS · Todos los derechos reservados
+            </p>
+          </div>
+
+          <div>
+            <div className="mb-3 text-xs font-bold uppercase tracking-wider text-white/50">PRODUCTO</div>
+            <div className="space-y-2">
+              {['#modulos','#para-quien','#contacto'].map((href, i) => (
+                <a key={i} href={href} className="block text-sm text-white/70 transition-colors hover:text-accent">
+                  {['Módulos','Para quién','Contacto'][i]}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-3 text-xs font-bold uppercase tracking-wider text-white/50">ACCESO</div>
+            <div className="space-y-2">
+              <a href="https://realsayana.comunas.lat" target="_blank" rel="noopener noreferrer"
+                className="block text-sm text-white/70 transition-colors hover:text-accent">
+                Ver demo en vivo
+              </a>
+              <span className="block text-sm text-white/40">
+                [municipio].comunas.lat/login
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10 border-t border-accent/20 pt-6 text-center text-xs text-white/30">
+          Desarrollado para las comisiones municipales del interior argentino
+        </div>
+      </div>
+    </footer>
+  )
+}
