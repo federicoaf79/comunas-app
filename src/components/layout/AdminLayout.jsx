@@ -724,7 +724,7 @@ export default function AdminLayout() {
             vertical con scroll-y propio acotado al alto del viewport.
             Los rótulos de sección se ocultan en mobile (degradación
             consciente — mobile usa chips compactos). */}
-        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
+        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
           <SuperadminSection />
           {navTopFiltrado.map(item => (
             <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
