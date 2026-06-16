@@ -94,8 +94,9 @@ export default function AppShell() {
         className="flex flex-1"
         style={{
           display: 'flex',
-          height: '100vh',
+          flex: 1,
           overflow: 'hidden',
+          minHeight: 0,
         }}
       >
         <Outlet />

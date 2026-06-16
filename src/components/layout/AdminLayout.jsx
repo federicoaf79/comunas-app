@@ -719,16 +719,15 @@ export default function AdminLayout() {
 
   return (
     <>
-      {/* Sidebar — scroll independiente, altura completa del viewport disponible */}
+      {/* Sidebar — scroll independiente, altura completa del contenedor padre */}
       <aside
         className="w-full shrink-0 overflow-x-auto border-b border-border bg-white lg:w-64 lg:border-b-0 lg:border-r"
         style={{
-          height: '100vh',
+          width: '256px',
+          flexShrink: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
-          position: 'sticky',
-          top: 0,
-          flexShrink: 0,
+          height: '100%',
         }}
       >
         <nav className="flex gap-1 p-2 lg:flex-col lg:p-4">
@@ -785,7 +784,8 @@ export default function AdminLayout() {
         style={{
           flex: 1,
           overflowY: 'auto',
-          height: '100vh',
+          minWidth: 0,
+          height: '100%',
         }}
       >
         <div className="p-4 lg:p-6">
