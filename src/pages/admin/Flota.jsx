@@ -7,7 +7,6 @@ import {
   TIPOS_VEHICULO, ESTADOS_VEHICULO, TIPOS_COMBUSTIBLE, TIPOS_SERVICE,
   diasParaVencer,
 } from '../../hooks/useFlota'
-import { useInventario } from '../../hooks/useInventario'
 import Tabs from '../../components/ui/Tabs'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
@@ -644,97 +643,86 @@ function ServiceFormModal({ vehiculos, onClose }) {
 // ─────────────────────────────────────────────────────────────────
 
 function AlertasTab({ municipioId }) {
-  const { data: vehiculos = [], isLoading: lv } = useVehiculos({}, { municipioIdOverride: municipioId })
-  const ids = vehiculos.map(v => v.id)
-  const { data: services = [],  isLoading: ls } = useServiceVehiculos({ vehiculoIds: ids, limit: 200 })
-  const { data: items = [],     isLoading: li } = useInventario({}, { municipioIdOverride: municipioId })
+  const { data: vehiculos = [], isLoading } = useVehiculos({}, { municipioIdOverride: municipioId })
 
   const alertas = useMemo(() => {
-    const out = []
+    const hoy = new Date()
+    const en30dias = new Date(hoy.getTime() + 30 * 24 * 60 * 60 * 1000)
 
-    // Seguro y VTV
-    for (const v of vehiculos) {
-      const segDias = diasParaVencer(v.seguro_vencimiento)
-      if (segDias != null && segDias <= 30) {
-        out.push({
-          severity: segDias < 0 ? 'danger' : 'accent',
-          icon:     '🛡',
-          titulo:   segDias < 0 ? 'Seguro vencido' : `Seguro vence en ${segDias}d`,
-          detalle:  `${v.patente || 'S/P'} · ${[v.marca, v.modelo].filter(Boolean).join(' ')}`,
-          fecha:    v.seguro_vencimiento,
+    return vehiculos.flatMap(v => {
+      const alertasVehiculo = []
+
+      // Seguro vencido o próximo a vencer
+      if (v.seguro_vencimiento) {
+        const venc = new Date(v.seguro_vencimiento)
+        if (venc <= en30dias) {
+          alertasVehiculo.push({
+            tipo: venc < hoy ? 'Seguro VENCIDO' : 'Seguro por vencer',
+            vehiculo: `${v.marca} ${v.modelo} (${v.patente})`,
+            detalle: `Vence: ${venc.toLocaleDateString('es-AR')}`,
+            urgente: venc < hoy,
+            icon: '🛡',
+          })
+        }
+      }
+
+      // VTV vencida o próxima a vencer
+      if (v.vtv_vencimiento) {
+        const venc = new Date(v.vtv_vencimiento)
+        if (venc <= en30dias) {
+          alertasVehiculo.push({
+            tipo: venc < hoy ? 'VTV VENCIDA' : 'VTV por vencer',
+            vehiculo: `${v.marca} ${v.modelo} (${v.patente})`,
+            detalle: `Vence: ${venc.toLocaleDateString('es-AR')}`,
+            urgente: venc < hoy,
+            icon: '🪪',
+          })
+        }
+      }
+
+      // Vehículo en mantenimiento
+      if (v.estado === 'mantenimiento') {
+        alertasVehiculo.push({
+          tipo: 'En mantenimiento',
+          vehiculo: `${v.marca} ${v.modelo} (${v.patente})`,
+          detalle: v.observaciones ?? 'Sin detalles',
+          urgente: false,
+          icon: '🔧',
         })
       }
-      const vtvDias = diasParaVencer(v.vtv_vencimiento)
-      if (vtvDias != null && vtvDias <= 30) {
-        out.push({
-          severity: vtvDias < 0 ? 'danger' : 'accent',
-          icon:     '🪪',
-          titulo:   vtvDias < 0 ? 'VTV vencida' : `VTV vence en ${vtvDias}d`,
-          detalle:  `${v.patente || 'S/P'} · ${[v.marca, v.modelo].filter(Boolean).join(' ')}`,
-          fecha:    v.vtv_vencimiento,
+
+      // Kilometraje alto (> 200.000 km)
+      if (v.km_actuales && Number(v.km_actuales) > 200000) {
+        alertasVehiculo.push({
+          tipo: 'Kilometraje alto',
+          vehiculo: `${v.marca} ${v.modelo} (${v.patente})`,
+          detalle: `${fmtNum.format(v.km_actuales)} km`,
+          urgente: false,
+          icon: '📊',
         })
       }
-    }
 
-    // Service próximo: para cada vehículo, tomamos el último service
-    // con proximo_service_km definido y comparamos con km_actuales.
-    const ultimoServPorVeh = new Map()
-    for (const s of services) {
-      if (!s.proximo_service_km) continue
-      const prev = ultimoServPorVeh.get(s.vehiculo_id)
-      if (!prev || (s.fecha ?? '') > (prev.fecha ?? '')) {
-        ultimoServPorVeh.set(s.vehiculo_id, s)
-      }
-    }
-    for (const v of vehiculos) {
-      const s = ultimoServPorVeh.get(v.id)
-      if (!s) continue
-      const km     = Number(v.km_actuales ?? 0)
-      const target = Number(s.proximo_service_km)
-      if (km >= target - 500) {
-        out.push({
-          severity: km >= target ? 'danger' : 'accent',
-          icon:     '🔧',
-          titulo:   km >= target ? 'Service vencido' : 'Service próximo',
-          detalle:  `${v.patente || 'S/P'} · ${km}/${target} km`,
-        })
-      }
-    }
-
-    // Stock crítico
-    for (const i of items) {
-      if (Number(i.stock_actual ?? 0) <= Number(i.stock_minimo ?? 0)) {
-        out.push({
-          severity: 'danger',
-          icon:     '📦',
-          titulo:   'Stock crítico',
-          detalle:  `${i.nombre} · ${i.dependencia?.nombre ?? '—'} · ${i.stock_actual}/${i.stock_minimo} ${i.unidad ?? ''}`,
-        })
-      }
-    }
-
-    return out
-  }, [vehiculos, services, items])
-
-  const isLoading = lv || ls || li
+      return alertasVehiculo
+    })
+  }, [vehiculos])
 
   return (
     <div className="space-y-5">
       <header className="flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-primary">Alertas activas</h2>
+          <h2 className="text-lg font-bold text-primary">Alertas de flota</h2>
           <p className="text-sm text-primary-400">
-            Seguros / VTV próximos a vencer, service pendiente y stock crítico.
+            Vencimientos de seguro/VTV, vehículos en mantenimiento y kilometraje alto.
           </p>
         </div>
-        <span className="badge-neutral">{alertas.length} alertas</span>
+        <span className="badge-neutral">{alertas.length} {alertas.length === 1 ? 'alerta' : 'alertas'}</span>
       </header>
 
       {isLoading ? (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       ) : alertas.length === 0 ? (
         <div className="card p-10 text-center text-sm text-primary-400">
-          Todo en orden — no hay alertas activas.
+          ✅ Sin alertas activas — todos los vehículos al día
         </div>
       ) : (
         <ul className="space-y-2">
@@ -743,15 +731,16 @@ function AlertasTab({ municipioId }) {
               key={idx}
               className={
                 'flex items-start gap-3 rounded-lg border-l-4 bg-white p-4 shadow-card ' +
-                (a.severity === 'danger' ? 'border-l-danger' : 'border-l-accent')
+                (a.urgente ? 'border-l-danger' : 'border-l-accent')
               }
             >
               <span className="text-2xl leading-none" aria-hidden="true">{a.icon}</span>
               <div className="min-w-0 flex-1">
-                <div className={'font-sora text-sm font-bold ' + (a.severity === 'danger' ? 'text-danger' : 'text-accent-700')}>
-                  {a.titulo}
+                <div className={'font-sora text-sm font-bold ' + (a.urgente ? 'text-danger' : 'text-accent-700')}>
+                  {a.tipo}
                 </div>
-                <div className="text-sm text-primary-700">{a.detalle}</div>
+                <div className="text-sm font-medium text-primary">{a.vehiculo}</div>
+                <div className="text-xs text-primary-500">{a.detalle}</div>
               </div>
             </li>
           ))}
