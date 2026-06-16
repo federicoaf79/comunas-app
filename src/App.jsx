@@ -78,18 +78,7 @@ function RootLayout() {
 
 // Redirect raíz — landing vs portal según dominio
 function RootRedirect() {
-  const hostname = window.location.hostname
-  const shouldShowLanding = isLandingDomain()
-
-  // Debug temporal: logging para verificar detección del dominio
-  console.log('[RootRedirect]', {
-    hostname,
-    shouldShowLanding,
-    pathname: window.location.pathname,
-  })
-
-  // Si estamos en comunas.lat / www.comunas.lat / localhost → Landing
-  if (shouldShowLanding) {
+  if (isLandingDomain()) {
     return <Landing />
   }
 

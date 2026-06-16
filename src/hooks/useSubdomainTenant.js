@@ -62,21 +62,9 @@ export function isAdminDomain() {
 export function isLandingDomain() {
   const h = window.location.hostname
 
-  // Casos explícitos de landing
-  const isLanding = h === 'comunas.lat' ||
-                    h === 'www.comunas.lat' ||
-                    h === 'localhost' ||
-                    h === '127.0.0.1' ||
-                    !h.includes('.')  // caso edge: hostname sin dominio
-
-  // Debug temporal (remover después de verificar en prod)
-  if (typeof window !== 'undefined' && window.location.pathname === '/') {
-    console.log('[isLandingDomain]', {
-      hostname: h,
-      isLanding,
-      pathname: window.location.pathname,
-    })
-  }
-
-  return isLanding
+  return h === 'comunas.lat' ||
+         h === 'www.comunas.lat' ||
+         h === 'localhost' ||
+         h === '127.0.0.1' ||
+         !h.includes('.')  // caso edge: hostname sin dominio
 }

@@ -346,7 +346,7 @@ export default function DependenciaPublica() {
                   </p>
                 ) : (
                   <p className="mt-4 text-sm text-primary-400">
-                    Próximamente vas a poder ver el detalle de los servicios.
+                    Información disponible próximamente.
                   </p>
                 )}
               </section>
@@ -443,7 +443,7 @@ export default function DependenciaPublica() {
                   )}
                   {!horario && !telefono && !dep.email_contacto && !waUrl && !canal && (
                     <p className="text-sm text-primary-400">
-                      Próximamente vas a poder contactarnos por más canales.
+                      Información disponible próximamente.
                     </p>
                   )}
                 </dl>

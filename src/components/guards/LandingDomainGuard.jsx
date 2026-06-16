@@ -12,7 +12,6 @@ import { isLandingDomain } from '../../hooks/useSubdomainTenant'
 
 export default function LandingDomainGuard({ children }) {
   if (isLandingDomain() && window.location.pathname !== '/') {
-    console.log('[LandingDomainGuard] Redirigiendo a landing desde:', window.location.pathname)
     return <Navigate to="/" replace />
   }
   return children
