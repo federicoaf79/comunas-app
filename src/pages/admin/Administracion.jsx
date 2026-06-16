@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import {
@@ -111,7 +111,7 @@ function aggregateByMonth(rows, months) {
 }
 
 // Gráfico SVG inline — barras pareadas por mes (ingresos navy, gastos gold).
-function BarChart({ ingresos, gastos, height = 240, compact = false }) {
+function BarChart({ ingresos, gastos, height = 240, compact = false, onClick }) {
   const months = ingresos.map((m, i) => ({
     label:    m.label,
     ingresos: m.total,
@@ -157,7 +157,7 @@ function BarChart({ ingresos, gastos, height = 240, compact = false }) {
   }
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div onClick={onClick} className={`card overflow-hidden p-0 ${onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg' : ''}`}>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
         <div>
           <h3 className="text-sm font-semibold text-primary">Ingresos vs gastos</h3>
@@ -272,7 +272,7 @@ const CANAL_INGRESO_META = [
   { key: 'otros',           label: 'Otros',                  hint: 'Sin clasificar' },
 ]
 
-function TopDependenciasGasto({ gastosMes }) {
+function TopDependenciasGasto({ gastosMes, onClick }) {
   const ranking = useMemo(() => {
     const map = new Map()
     for (const g of gastosMes ?? []) {
@@ -292,7 +292,7 @@ function TopDependenciasGasto({ gastosMes }) {
   const total = ranking.reduce((a, r) => a + r.total, 0)
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div onClick={onClick} className={`card overflow-hidden p-0 ${onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg' : ''}`}>
       <header className="border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-primary">Mayor gasto por área</h3>
         <p className="text-xs text-primary-400">
@@ -339,7 +339,7 @@ function TopDependenciasGasto({ gastosMes }) {
   )
 }
 
-function TopInsumos({ municipioId }) {
+function TopInsumos({ municipioId, onClick }) {
   const today = new Date()
   const ymd   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
   // movimientos_inventario NO tiene municipio_id propio — el filtro
@@ -402,7 +402,7 @@ function TopInsumos({ municipioId }) {
   const items = insumosQ.data ?? []
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div onClick={onClick} className={`card overflow-hidden p-0 ${onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg' : ''}`}>
       <header className="border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-primary">Insumos más usados</h3>
         <p className="text-xs text-primary-400">
@@ -436,7 +436,7 @@ function TopInsumos({ municipioId }) {
   )
 }
 
-function IngresosPorCanal({ ingresosMes }) {
+function IngresosPorCanal({ ingresosMes, onClick }) {
   const totales = useMemo(() => {
     const out = { coparticipacion: 0, tasas: 0, aportes: 0, otros: 0 }
     for (const r of ingresosMes ?? []) {
@@ -446,14 +446,14 @@ function IngresosPorCanal({ ingresosMes }) {
   }, [ingresosMes])
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div onClick={onClick} className={`card overflow-hidden p-0 ${onClick ? 'cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg' : ''}`}>
       <header className="border-b border-border px-5 py-3">
         <h3 className="text-sm font-semibold text-primary">Resumen de ingresos por canal</h3>
         <p className="text-xs text-primary-400">Mes corriente</p>
       </header>
       <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
         {CANAL_INGRESO_META.map(c => (
-          <div key={c.key} className="rounded-lg border border-border bg-primary-50/40 p-3">
+          <div key={c.key} className="rounded-lg border border-border bg-primary-50/40 p-3 transition-colors hover:border-accent">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-accent-700">
               {c.label}
             </p>
@@ -469,6 +469,7 @@ function IngresosPorCanal({ ingresosMes }) {
 }
 
 function DashboardTab({ municipioId }) {
+  const navigate = useNavigate()
   const today = useMemo(() => new Date(), [])
   const months = useMemo(() => last6Months(today), [today])
   const anio   = currentYear(today)
@@ -531,30 +532,38 @@ function DashboardTab({ municipioId }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Ingresos del mes"
-          value={fmtMoney.format(totalIngMes)}
-          hint={`${ingresosMes.length} registro${ingresosMes.length === 1 ? '' : 's'}`}
-          accent="ok"
-        />
-        <StatCard
-          label="Gastos del mes"
-          value={fmtMoney.format(totalGasMes)}
-          hint={`${gastosMes.length} registro${gastosMes.length === 1 ? '' : 's'}`}
-          accent="accent"
-        />
-        <StatCard
-          label="Saldo del mes"
-          value={fmtMoney.format(saldoMes)}
-          hint={saldoMes >= 0 ? 'Superávit' : 'Déficit'}
-          accent={saldoMes >= 0 ? 'primary' : 'danger'}
-        />
-        <StatCard
-          label="% ejecución anual"
-          value={`${pctEjecucion}%`}
-          hint={`${fmtMoney.format(gastadoYTD)} / ${fmtMoney.format(presupuestoTotal)}`}
-          accent={pctEjecucion > 90 ? 'danger' : pctEjecucion > 70 ? 'accent' : 'primary'}
-        />
+        <div onClick={() => navigate('/admin/administracion?tab=ingresos')} className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <StatCard
+            label="Ingresos del mes"
+            value={fmtMoney.format(totalIngMes)}
+            hint={`${ingresosMes.length} registro${ingresosMes.length === 1 ? '' : 's'}`}
+            accent="ok"
+          />
+        </div>
+        <div onClick={() => navigate('/admin/administracion?tab=gastos')} className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <StatCard
+            label="Gastos del mes"
+            value={fmtMoney.format(totalGasMes)}
+            hint={`${gastosMes.length} registro${gastosMes.length === 1 ? '' : 's'}`}
+            accent="accent"
+          />
+        </div>
+        <div onClick={() => navigate('/admin/administracion?tab=gastos')} className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <StatCard
+            label="Saldo del mes"
+            value={fmtMoney.format(saldoMes)}
+            hint={saldoMes >= 0 ? 'Superávit' : 'Déficit'}
+            accent={saldoMes >= 0 ? 'primary' : 'danger'}
+          />
+        </div>
+        <div onClick={() => navigate('/admin/administracion?tab=presupuesto')} className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg">
+          <StatCard
+            label="% ejecución anual"
+            value={`${pctEjecucion}%`}
+            hint={`${fmtMoney.format(gastadoYTD)} / ${fmtMoney.format(presupuestoTotal)}`}
+            accent={pctEjecucion > 90 ? 'danger' : pctEjecucion > 70 ? 'accent' : 'primary'}
+          />
+        </div>
       </div>
 
       {showAlerta && (
@@ -581,17 +590,32 @@ function DashboardTab({ municipioId }) {
           insumos 30%. En mobile cada bloque se apila. */}
       <div className="grid gap-4 lg:grid-cols-10">
         <div className="lg:col-span-4">
-          <BarChart ingresos={ingPorMes} gastos={gasPorMes} height={200} compact />
+          <BarChart
+            ingresos={ingPorMes}
+            gastos={gasPorMes}
+            height={200}
+            compact
+            onClick={() => navigate('/admin/administracion?tab=ingresos')}
+          />
         </div>
         <div className="lg:col-span-3">
-          <TopDependenciasGasto gastosMes={gastosMes} />
+          <TopDependenciasGasto
+            gastosMes={gastosMes}
+            onClick={() => navigate('/admin/administracion?tab=gastos')}
+          />
         </div>
         <div className="lg:col-span-3">
-          <TopInsumos municipioId={municipioId} />
+          <TopInsumos
+            municipioId={municipioId}
+            onClick={() => navigate('/admin/inventario')}
+          />
         </div>
       </div>
 
-      <IngresosPorCanal ingresosMes={ingresosMes} />
+      <IngresosPorCanal
+        ingresosMes={ingresosMes}
+        onClick={() => navigate('/admin/administracion?tab=ingresos')}
+      />
     </div>
   )
 }
