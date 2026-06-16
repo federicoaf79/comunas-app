@@ -90,7 +90,14 @@ export default function AppShell() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div
+        className="flex flex-1"
+        style={{
+          display: 'flex',
+          height: '100vh',
+          overflow: 'hidden',
+        }}
+      >
         <Outlet />
       </div>
     </div>

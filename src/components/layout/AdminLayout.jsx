@@ -720,7 +720,17 @@ export default function AdminLayout() {
   return (
     <>
       {/* Sidebar — scroll independiente, altura completa del viewport disponible */}
-      <aside className="w-full shrink-0 overflow-x-auto border-b border-border bg-white lg:h-screen lg:w-64 lg:overflow-y-auto lg:overflow-x-hidden lg:border-b-0 lg:border-r">
+      <aside
+        className="w-full shrink-0 overflow-x-auto border-b border-border bg-white lg:w-64 lg:border-b-0 lg:border-r"
+        style={{
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          position: 'sticky',
+          top: 0,
+          flexShrink: 0,
+        }}
+      >
         <nav className="flex gap-1 p-2 lg:flex-col lg:p-4">
           <SuperadminSection />
           {navTopFiltrado.map(item => (
@@ -770,7 +780,14 @@ export default function AdminLayout() {
       </aside>
 
       {/* Contenido principal — scroll independiente, altura completa */}
-      <main className="min-w-0 flex-1 overflow-y-auto lg:h-screen">
+      <main
+        className="min-w-0 flex-1"
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          height: '100vh',
+        }}
+      >
         <div className="p-4 lg:p-6">
           <Outlet />
         </div>
