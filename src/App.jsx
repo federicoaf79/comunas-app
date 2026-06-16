@@ -34,6 +34,7 @@ import Inventario          from './pages/admin/Inventario'
 import Flota               from './pages/admin/Flota'
 import Patrimonio          from './pages/admin/Patrimonio'
 import ObrasPublicas       from './pages/admin/ObrasPublicas'
+import AyudaSocial         from './pages/admin/AyudaSocial'
 import Noticias            from './pages/admin/Noticias'
 import Administracion      from './pages/admin/Administracion'
 import Auditoria           from './pages/admin/Auditoria'
@@ -191,6 +192,7 @@ const router = createBrowserRouter([
                   { path: '/admin/administracion', element: <Administracion /> },
                   { path: '/admin/auditoria',      element: <Auditoria /> },
                   { path: '/admin/rendicion',      element: <Rendicion /> },
+                  { path: '/admin/ayuda-social',   element: <AyudaSocial /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
                 ],
