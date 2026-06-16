@@ -16,23 +16,34 @@ const TIPO_META = {
   alias:          { label: 'Alias', cls: 'bg-gray-100 text-gray-700' },
 }
 
-const INSTRUCCIONES_DNS = `Instrucciones para conectar el dominio de su municipio:
+const INSTRUCCIONES_DNS = `OPCIÓN A — Subdominio propio
+(ej: app.realsayana.gob.ar)
 
-1. Ingresá al panel de DNS de su proveedor de dominio (NIC Argentina, otros).
+Agregá este registro en su proveedor DNS:
 
-2. Agregá este registro DNS:
+  Tipo:   CNAME
+  Host:   app  (o el subdominio que prefieran)
+  Valor:  comunas.lat
+  TTL:    3600
 
-   Tipo:   CNAME
-   Host:   app  (o el subdominio que prefieran)
-   Valor:  comunas.lat
-   TTL:    3600
+─────────────────────────────────────
 
-3. Una vez propagado (24-48hs), su portal estará disponible en:
-   https://app.sudominio.gob.ar
+OPCIÓN B — Dominio raíz
+(ej: realsayana.gob.ar)
 
-4. Avisanos cuando el DNS esté configurado y lo activamos desde este panel.
+Agregá este registro en su proveedor DNS:
 
-Nota: Si tienen dudas técnicas, contactanos a soporte@comunas.lat`
+  Tipo:   A
+  Host:   @
+  Valor:  76.76.21.21
+  TTL:    3600
+
+─────────────────────────────────────
+
+Una vez configurado el DNS (puede tardar hasta 48hs):
+1. Avisanos por WhatsApp o email
+2. Nosotros lo activamos desde este panel
+3. Su portal queda disponible en su dominio`
 
 export default function Dominios() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -72,6 +83,7 @@ function TablaDominios() {
   const { data: dominios, isLoading } = useDominios()
   const updateMut = useUpdateDominio()
   const deleteMut = useDeleteDominio()
+  const [instruccionesOpen, setInstruccionesOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -114,81 +126,97 @@ function TablaDominios() {
   }
 
   return (
-    <Card className="overflow-hidden p-0">
-      <Table>
-        <THead>
-          <Tr>
-            <Th>Municipio</Th>
-            <Th>Dominio</Th>
-            <Th>Tipo</Th>
-            <Th className="text-center">Verificado</Th>
-            <Th className="text-center">Activo</Th>
-            <Th className="text-right">Acciones</Th>
-          </Tr>
-        </THead>
-        <tbody className="divide-y divide-border">
-          {dominios.map(d => (
-            <Tr key={d.id}>
-              <Td>
-                <div>
-                  <p className="text-sm font-medium text-primary">
-                    {d.municipio?.nombre ?? 'Sin municipio'}
-                  </p>
-                  <p className="text-xs text-primary-400">
-                    {d.municipio?.slug ?? '—'}
-                  </p>
-                </div>
-              </Td>
-              <Td>
-                <code className="text-sm text-primary-600">{d.dominio}</code>
-              </Td>
-              <Td>
-                <Badge className={TIPO_META[d.tipo]?.cls ?? ''}>
-                  {TIPO_META[d.tipo]?.label ?? d.tipo}
-                </Badge>
-              </Td>
-              <Td className="text-center">
-                <button
-                  onClick={() => handleToggleVerificado(d)}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded text-sm transition-colors hover:bg-primary-50"
-                  disabled={updateMut.isPending}
-                >
-                  {d.verificado ? (
-                    <span className="text-ok-600">✓</span>
-                  ) : (
-                    <span className="text-primary-300">✗</span>
-                  )}
-                </button>
-              </Td>
-              <Td className="text-center">
-                <button
-                  onClick={() => handleToggleActivo(d)}
-                  className={`inline-flex h-6 w-12 items-center rounded-full px-1 transition-colors ${
-                    d.activo ? 'bg-ok-600' : 'bg-gray-300'
-                  }`}
-                  disabled={updateMut.isPending}
-                >
-                  <span
-                    className={`block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                      d.activo ? 'translate-x-6' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </Td>
-              <Td className="text-right">
-                <button
-                  onClick={() => handleDelete(d.id)}
-                  className="text-xs text-danger hover:underline"
-                  disabled={deleteMut.isPending}
-                >
-                  Eliminar
-                </button>
-              </Td>
+    <>
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Municipio</Th>
+              <Th>Dominio</Th>
+              <Th>Tipo</Th>
+              <Th className="text-center">Verificado</Th>
+              <Th className="text-center">Activo</Th>
+              <Th className="text-right">Acciones</Th>
             </Tr>
-          ))}
-        </tbody>
-      </Table>
-    </Card>
+          </THead>
+          <tbody className="divide-y divide-border">
+            {dominios.map(d => (
+              <Tr key={d.id}>
+                <Td>
+                  <div>
+                    <p className="text-sm font-medium text-primary">
+                      {d.municipio?.nombre ?? 'Sin municipio'}
+                    </p>
+                    <p className="text-xs text-primary-400">
+                      {d.municipio?.slug ?? '—'}
+                    </p>
+                  </div>
+                </Td>
+                <Td>
+                  <code className="text-sm text-primary-600">{d.dominio}</code>
+                </Td>
+                <Td>
+                  <Badge className={TIPO_META[d.tipo]?.cls ?? ''}>
+                    {TIPO_META[d.tipo]?.label ?? d.tipo}
+                  </Badge>
+                </Td>
+                <Td className="text-center">
+                  <button
+                    onClick={() => handleToggleVerificado(d)}
+                    className="inline-flex h-6 w-6 items-center justify-center rounded text-sm transition-colors hover:bg-primary-50"
+                    disabled={updateMut.isPending}
+                  >
+                    {d.verificado ? (
+                      <span className="text-ok-600">✓</span>
+                    ) : (
+                      <span className="text-primary-300">✗</span>
+                    )}
+                  </button>
+                </Td>
+                <Td className="text-center">
+                  <button
+                    onClick={() => handleToggleActivo(d)}
+                    className={`inline-flex h-6 w-12 items-center rounded-full px-1 transition-colors ${
+                      d.activo ? 'bg-ok-600' : 'bg-gray-300'
+                    }`}
+                    disabled={updateMut.isPending}
+                  >
+                    <span
+                      className={`block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                        d.activo ? 'translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </Td>
+                <Td className="text-right">
+                  <div className="flex items-center justify-end gap-3">
+                    {d.tipo === 'dominio_propio' && (
+                      <button
+                        onClick={() => setInstruccionesOpen(true)}
+                        className="text-xs text-accent hover:underline"
+                      >
+                        Ver instrucciones DNS
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(d.id)}
+                      className="text-xs text-danger hover:underline"
+                      disabled={deleteMut.isPending}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card>
+
+      {instruccionesOpen && (
+        <InstruccionesDNSModal onClose={() => setInstruccionesOpen(false)} />
+      )}
+    </>
   )
 }
 
@@ -308,7 +336,7 @@ function InstruccionesDNSModal({ onClose }) {
     <Modal
       open
       onClose={onClose}
-      title="Instrucciones DNS"
+      title="Instrucciones para conectar su dominio"
       actions={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -320,11 +348,11 @@ function InstruccionesDNSModal({ onClose }) {
         </>
       }
     >
-      <Card className="border-2 border-primary-200 bg-primary-50">
-        <pre className="whitespace-pre-wrap font-sora text-sm leading-relaxed text-accent-700">
-          {INSTRUCCIONES_DNS}
+      <div className="rounded-xl bg-primary p-6 text-white shadow-lg">
+        <pre className="whitespace-pre-wrap font-sora text-sm leading-relaxed">
+          <span className="text-accent">{INSTRUCCIONES_DNS}</span>
         </pre>
-      </Card>
+      </div>
     </Modal>
   )
 }
