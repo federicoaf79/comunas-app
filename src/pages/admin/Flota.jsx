@@ -113,26 +113,148 @@ function estadoLabel(estado) {
   return ESTADOS_VEHICULO.find(e => e.value === estado)?.label ?? estado
 }
 
+// Helper para obtener dominio del logo de marca
+function marcaDomain(marca) {
+  const dominios = {
+    'Toyota': 'toyota.com',
+    'Ford': 'ford.com',
+    'Mercedes Benz': 'mercedes-benz.com',
+    'Volkswagen': 'volkswagen.com',
+    'Renault': 'renault.com',
+    'Fiat': 'fiat.com',
+    'Honda': 'honda.com',
+    'New Holland': 'newholland.com',
+    'Chevrolet': 'chevrolet.com',
+    'Peugeot': 'peugeot.com',
+    'Nissan': 'nissan.com',
+  }
+  return dominios[marca] ?? `${(marca || '').toLowerCase().replace(/ /g, '-')}.com`
+}
+
 function VehiculosTab({ municipioId, dependencias }) {
   const { data: vehiculos = [], isLoading } = useVehiculos({}, { municipioIdOverride: municipioId })
   const [modalNew, setModalNew] = useState(false)
-  const [detalle, setDetalle]   = useState(null)
+  const [detalle, setDetalle] = useState(null)
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+
+  const filtrados = useMemo(() => {
+    return vehiculos.filter(v => {
+      if (filtroEstado && v.estado !== filtroEstado) return false
+      if (filtroTipo && v.tipo !== filtroTipo) return false
+      return true
+    })
+  }, [vehiculos, filtroEstado, filtroTipo])
 
   return (
-    <div className="space-y-5">
-      <div className="flex justify-end">
+    <div className="space-y-4">
+      {/* Header con filtros y contador */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-primary">
+            {filtrados.length} vehículo{filtrados.length === 1 ? '' : 's'}
+          </span>
+          <div className="h-4 w-px bg-border" />
+          <Select
+            value={filtroEstado}
+            onChange={setFiltroEstado}
+            placeholder="Todos los estados"
+            options={ESTADOS_VEHICULO}
+            className="min-w-[160px]"
+          />
+          <Select
+            value={filtroTipo}
+            onChange={setFiltroTipo}
+            placeholder="Todos los tipos"
+            options={TIPOS_VEHICULO}
+            className="min-w-[160px]"
+          />
+        </div>
         <Button onClick={() => setModalNew(true)}>+ Registrar vehículo</Button>
       </div>
 
+      {/* Lista compacta */}
       {isLoading ? (
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
-      ) : vehiculos.length === 0 ? (
+      ) : filtrados.length === 0 ? (
         <div className="card p-10 text-center text-sm text-primary-400">
-          No hay vehículos cargados. Apretá <b>+ Registrar vehículo</b>.
+          {vehiculos.length === 0
+            ? 'No hay vehículos cargados. Apretá + Registrar vehículo.'
+            : 'No hay vehículos que coincidan con los filtros.'}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {vehiculos.map(v => <VehiculoCard key={v.id} v={v} onOpen={() => setDetalle(v)} />)}
+        <div className="space-y-2">
+          {filtrados.map(v => (
+            <div
+              key={v.id}
+              className="flex items-center gap-4 rounded-lg border border-border bg-white px-4 py-3 hover:shadow-sm transition-shadow"
+            >
+              {/* Logo marca con fallback */}
+              <div className="h-10 w-10 shrink-0 rounded-lg border border-border bg-gray-50 flex items-center justify-center overflow-hidden">
+                <img
+                  src={`https://logo.clearbit.com/${marcaDomain(v.marca)}`}
+                  alt={v.marca || 'Logo'}
+                  className="h-8 w-8 object-contain"
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                    const fallback = e.target.nextSibling
+                    if (fallback) fallback.style.display = 'flex'
+                  }}
+                />
+                <span className="hidden text-xs font-bold text-primary-400">
+                  {v.marca?.[0] ?? '?'}
+                </span>
+              </div>
+
+              {/* Info principal */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm text-primary truncate">
+                    {v.marca} {v.modelo}
+                  </span>
+                  {v.anio && <span className="text-xs text-primary-400">{v.anio}</span>}
+                  {v.patente && (
+                    <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded text-primary-500">
+                      {v.patente}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-xs text-primary-400">
+                    {v.tipo} · {v.dependencia?.nombre ?? 'Sin asignar'}
+                  </span>
+                  {v.km_actuales != null && (
+                    <span className="text-xs text-primary-400">
+                      {Number(v.km_actuales).toLocaleString('es-AR')} km
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Estado badge */}
+              <span
+                className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${
+                  v.estado === 'activo'
+                    ? 'bg-ok-50 text-ok-700'
+                    : v.estado === 'mantenimiento'
+                    ? 'bg-amber-50 text-amber-700'
+                    : v.estado === 'baja'
+                    ? 'bg-danger/10 text-danger'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {v.estado}
+              </span>
+
+              {/* Ver detalle */}
+              <button
+                onClick={() => setDetalle(v)}
+                className="shrink-0 text-xs text-accent hover:underline font-medium"
+              >
+                Ver →
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -149,55 +271,6 @@ function VehiculosTab({ municipioId, dependencias }) {
           onClose={() => setDetalle(null)}
         />
       )}
-    </div>
-  )
-}
-
-function VehiculoCard({ v, onOpen }) {
-  const seguroDias = diasParaVencer(v.seguro_vencimiento)
-  const vtvDias    = diasParaVencer(v.vtv_vencimiento)
-  const seguroAlerta = seguroDias != null && seguroDias <= 30
-  const vtvAlerta    = vtvDias    != null && vtvDias    <= 30
-
-  return (
-    <div className="card flex flex-col gap-3 p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-50 text-primary">
-          <VehicleIcon tipo={v.tipo} />
-        </div>
-        <span className={estadoCls(v.estado)}>{estadoLabel(v.estado)}</span>
-      </div>
-
-      <div>
-        <div className="font-mono text-base font-bold text-primary">{v.patente || 'S/P'}</div>
-        <div className="text-sm text-primary-700">
-          {[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}
-          {v.anio && <span className="text-primary-400"> · {v.anio}</span>}
-        </div>
-      </div>
-
-      <div className="space-y-1 text-xs">
-        {v.dependencia?.nombre && (
-          <div><span className="badge-neutral">{v.dependencia.nombre}</span></div>
-        )}
-        <div className="text-primary-500">
-          KM: <b className="tabular-nums text-primary">{fmtNum.format(v.km_actuales ?? 0)}</b>
-        </div>
-        {seguroAlerta && (
-          <div className={seguroDias < 0 ? 'text-danger' : 'text-accent-700'}>
-            ⚠ Seguro {seguroDias < 0 ? 'vencido' : `vence en ${seguroDias}d`} ({dateOf(v.seguro_vencimiento)})
-          </div>
-        )}
-        {vtvAlerta && (
-          <div className={vtvDias < 0 ? 'text-danger' : 'text-accent-700'}>
-            ⚠ VTV {vtvDias < 0 ? 'vencida' : `vence en ${vtvDias}d`} ({dateOf(v.vtv_vencimiento)})
-          </div>
-        )}
-      </div>
-
-      <button onClick={onOpen} className="mt-auto text-left text-sm font-semibold text-accent hover:underline">
-        Ver detalle →
-      </button>
     </div>
   )
 }
