@@ -27,7 +27,8 @@ import { dateTimeOf } from '../../lib/datetime'
 // =============================================================
 
 const TABS = [
-  { value: 'info',      label: 'Información' },
+  { value: 'info',      label: 'Información pública' },
+  { value: 'equipo',    label: 'Equipo' },
   { value: 'turnos',    label: 'Turnos' },
   { value: 'historial', label: 'Historial' },
 ]
@@ -137,7 +138,21 @@ function TabInformacion({ dep, dependenciaId }) {
   }
 
   return (
-    <div className="card space-y-4 p-5 sm:p-6">
+    <div className="space-y-4">
+      {/* Aviso de información pública */}
+      <div className="rounded-lg border border-ok-200 bg-ok-50 p-4">
+        <div className="flex items-start gap-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 shrink-0 text-ok-700">
+            <circle cx="12" cy="12" r="10" />
+            <path strokeLinecap="round" d="M12 16v-4M12 8h.01" />
+          </svg>
+          <p className="text-sm leading-relaxed text-ok-800">
+            Esta información es pública y aparece en el portal ciudadano cuando los vecinos buscan esta dependencia.
+          </p>
+        </div>
+      </div>
+
+      <div className="card space-y-4 p-5 sm:p-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Nombre *"
@@ -205,12 +220,95 @@ function TabInformacion({ dep, dependenciaId }) {
       <div className="flex justify-end">
         <Button onClick={handleSave} loading={saving}>Guardar cambios</Button>
       </div>
+      </div>
     </div>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 2 · Turnos
+// TAB 2 · Equipo
+// ─────────────────────────────────────────────────────────────────
+
+function TabEquipo({ dep }) {
+  const { data: usuarios = [], isLoading } = useQuery({
+    queryKey: ['dependencia-equipo', dep.municipio_id],
+    queryFn:  async () => {
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('id, nombre, email, roles')
+        .eq('municipio_id', dep.municipio_id)
+        .order('nombre', { ascending: true })
+      if (error) {
+        console.warn('[DependenciaGestion] equipo:', error.message)
+        return []
+      }
+      return data ?? []
+    },
+  })
+
+  if (isLoading) {
+    return <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+  }
+
+  // Si no hay usuarios o el campo dependencias no existe, mostrar card informativa
+  if (usuarios.length === 0) {
+    return (
+      <div className="card border-ok-200 bg-ok-50 p-8">
+        <div className="flex items-start gap-3">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 shrink-0 text-ok-700">
+            <circle cx="12" cy="12" r="10" />
+            <path strokeLinecap="round" d="M12 16v-4M12 8h.01" />
+          </svg>
+          <div>
+            <h3 className="font-sora text-base font-semibold text-ok-800">
+              Próximamente podrás asignar responsables a esta dependencia
+            </h3>
+            <p className="mt-1 text-sm text-ok-700">
+              Para configurar el equipo de trabajo, creá usuarios desde el módulo Usuarios y asignalos a esta dependencia.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card border-ok-200 bg-ok-50 p-4">
+        <p className="text-sm text-ok-800">
+          Mostrando todos los usuarios del municipio. Para asignar responsables específicos a esta dependencia, configurá los roles desde <Link to="/admin/usuarios" className="font-semibold underline">Usuarios</Link>.
+        </p>
+      </div>
+
+      <Table>
+        <THead>
+          <Tr>
+            <Th>Nombre</Th>
+            <Th>Email</Th>
+            <Th>Rol principal</Th>
+          </Tr>
+        </THead>
+        <tbody>
+          {usuarios.map(u => {
+            const rolPrincipal = u.roles?.[0] ?? '—'
+            return (
+              <Tr key={u.id}>
+                <Td className="font-medium text-primary">{u.nombre ?? '—'}</Td>
+                <Td className="text-sm text-primary-500">{u.email ?? '—'}</Td>
+                <Td>
+                  <span className="badge-neutral">{rolPrincipal}</span>
+                </Td>
+              </Tr>
+            )
+          })}
+        </tbody>
+      </Table>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TAB 3 · Turnos
 // ─────────────────────────────────────────────────────────────────
 
 const TURNOS_COLS = `
@@ -295,7 +393,7 @@ function TabTurnos({ dep, dependenciaId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 3 · Historial (audit_log)
+// TAB 4 · Historial (audit_log)
 // ─────────────────────────────────────────────────────────────────
 
 function TabHistorial({ dependenciaId }) {
@@ -393,22 +491,27 @@ export default function DependenciaGestion() {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="flex-1">
           <h1 className="font-sora text-2xl font-bold text-primary">{dep.nombre}</h1>
-          <p className="mt-1 text-sm text-primary-400">
-            Gestión de dependencia municipal
+          <p className="mt-1 text-sm text-primary-500">
+            Configurá la información pública y el equipo de esta dependencia.
           </p>
         </div>
-        <span
-          className={
-            'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ring-inset ' +
-            (activa
-              ? 'bg-ok-50 text-ok-700 ring-ok-100'
-              : 'bg-gray-100 text-gray-600 ring-gray-200')
-          }
-        >
-          {activa ? 'Activa' : 'Inactiva'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-md bg-ok-50 px-2.5 py-1 text-xs font-medium text-ok-700 ring-1 ring-inset ring-ok-100">
+            Visible en portal ciudadano
+          </span>
+          <span
+            className={
+              'inline-flex items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ring-1 ring-inset ' +
+              (activa
+                ? 'bg-ok-50 text-ok-700 ring-ok-100'
+                : 'bg-gray-100 text-gray-600 ring-gray-200')
+            }
+          >
+            {activa ? 'Activa' : 'Inactiva'}
+          </span>
+        </div>
       </header>
 
       {/* Tabs — mismo patrón que ObrasPublicas / AtencionDetalle */}
@@ -436,6 +539,7 @@ export default function DependenciaGestion() {
 
       <div key={tab} className="animate-fade-in">
         {tab === 'info'      && <TabInformacion dep={dep} dependenciaId={dependenciaId} />}
+        {tab === 'equipo'    && <TabEquipo dep={dep} />}
         {tab === 'turnos'    && <TabTurnos dep={dep} dependenciaId={dependenciaId} />}
         {tab === 'historial' && <TabHistorial dependenciaId={dependenciaId} />}
       </div>
