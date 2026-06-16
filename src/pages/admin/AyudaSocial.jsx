@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useDependencias } from '../../hooks/useTurnos'
@@ -7,7 +9,6 @@ import {
   useBeneficiarios, useCreateBeneficiario, useUpdateBeneficiarioEstado,
   usePagos, useCreatePago,
 } from '../../hooks/useBeneficiarios'
-import { useVecinoPorDNI } from '../../hooks/useVecinos'
 import Tabs from '../../components/ui/Tabs'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -514,7 +515,22 @@ function BeneficiarioFormModal({ municipioId, onClose }) {
   })
   const [error, setError] = useState('')
 
-  const vecinoQ = useVecinoPorDNI(dni)
+  // useVecinoPorDNI no existe en useVecinos.js — implementación inline
+  const vecinoQ = useQuery({
+    queryKey: ['vecino-por-dni', municipioId ?? '__ALL__', dni],
+    queryFn: async () => {
+      if (!dni || dni.length < 7) return null
+      const { data, error } = await supabase
+        .from('vecinos')
+        .select('id, nombre_completo, dni, telefono')
+        .eq('dni', dni)
+        .eq('municipio_id', municipioId)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!dni && dni.length >= 7 && !!municipioId,
+  })
   const vecino = vecinoQ.data
 
   function set(k, v) {
