@@ -78,6 +78,25 @@ function sum(rows, key = 'monto') {
   return rows.reduce((a, r) => a + Number(r[key] ?? 0), 0)
 }
 
+// Exportación genérica a CSV con BOM UTF-8 para Excel
+function exportarCSV(datos, nombreArchivo, columnas) {
+  const headers = columnas.map(c => c.label).join(',')
+  const filas = datos.map(row =>
+    columnas.map(c => {
+      const val = c.key.split('.').reduce((o, k) => o?.[k], row) ?? ''
+      return `"${String(val).replace(/"/g, '""')}"`
+    }).join(',')
+  )
+  const csv = [headers, ...filas].join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${nombreArchivo}-${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ─────────────────────────────────────────────────────────────────
 // TAB 1 · Dashboard financiero
 // ─────────────────────────────────────────────────────────────────
@@ -717,13 +736,33 @@ function GastosTab({ municipioId, dependencias, canApprove }) {
             options={ESTADOS_GASTOS.map(e => ({ value: e.value, label: e.label }))}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="btn-primary self-end"
-        >
-          + Cargar gasto
-        </button>
+        <div className="flex gap-2 self-end">
+          <button
+            type="button"
+            onClick={() => exportarCSV(gastos, 'gastos', [
+              { label: 'Fecha', key: 'fecha' },
+              { label: 'Dependencia', key: 'dependencias.nombre' },
+              { label: 'Descripción', key: 'descripcion' },
+              { label: 'Categoría', key: 'categoria' },
+              { label: 'Monto', key: 'monto' },
+              { label: 'Estado', key: 'estado' },
+            ])}
+            className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={gastos.length === 0}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Exportar CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="btn-primary"
+          >
+            + Cargar gasto
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-primary-50 px-4 py-3 text-sm">
@@ -864,13 +903,31 @@ function IngresosTab({ municipioId }) {
           onChange={e => setMes(e.target.value)}
           className="min-w-[150px]"
         />
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="btn-primary self-end"
-        >
-          + Registrar ingreso
-        </button>
+        <div className="flex gap-2 self-end">
+          <button
+            type="button"
+            onClick={() => exportarCSV(ingresos, 'ingresos', [
+              { label: 'Fecha', key: 'fecha' },
+              { label: 'Origen', key: 'origen' },
+              { label: 'Descripción', key: 'descripcion' },
+              { label: 'Monto', key: 'monto' },
+            ])}
+            className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={ingresos.length === 0}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Exportar CSV
+          </button>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="btn-primary"
+          >
+            + Registrar ingreso
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-ok-100 bg-ok-50 px-4 py-3 text-sm">

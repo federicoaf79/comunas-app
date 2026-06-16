@@ -52,6 +52,25 @@ function actorLabel(row) {
   return u?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
 }
 
+// Exportación genérica a CSV con BOM UTF-8 para Excel
+function exportarCSV(datos, nombreArchivo, columnas) {
+  const headers = columnas.map(c => c.label).join(',')
+  const filas = datos.map(row =>
+    columnas.map(c => {
+      const val = c.key.split('.').reduce((o, k) => o?.[k], row) ?? ''
+      return `"${String(val).replace(/"/g, '""')}"`
+    }).join(',')
+  )
+  const csv = [headers, ...filas].join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${nombreArchivo}-${new Date().toISOString().split('T')[0]}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function AccionBadge({ accion }) {
   const def = ACCION_BADGE[accion] ?? { label: accion ?? '—', cls: 'bg-gray-100 text-gray-700 ring-gray-200' }
   return (
@@ -113,7 +132,27 @@ function AccesosTab({ municipioId }) {
     return <div className="card p-10 text-center text-sm text-primary-400">Sin accesos registrados.</div>
   }
   return (
-    <Table>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => exportarCSV(rows, 'auditoria-accesos', [
+            { label: 'Fecha', key: 'created_at' },
+            { label: 'Usuario', key: 'usuarios.nombre' },
+            { label: 'Email', key: 'usuarios.email' },
+            { label: 'Acción', key: 'accion' },
+            { label: 'Descripción', key: 'descripcion' },
+          ])}
+          className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={rows.length === 0}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          Exportar CSV
+        </button>
+      </div>
+      <Table>
       <THead>
         <Tr>
           <Th>Fecha / hora</Th>
@@ -133,6 +172,7 @@ function AccesosTab({ municipioId }) {
         ))}
       </tbody>
     </Table>
+    </div>
   )
 }
 
@@ -164,16 +204,37 @@ function CambiosTab({ municipioId }) {
     return <div className="card p-10 text-center text-sm text-primary-400">Sin cambios registrados.</div>
   }
   return (
-    <Table>
-      <THead>
-        <Tr>
-          <Th>Fecha / hora</Th>
-          <Th>Usuario</Th>
-          <Th>Acción</Th>
-          <Th>Entidad</Th>
-          <Th>Descripción</Th>
-        </Tr>
-      </THead>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => exportarCSV(rows, 'auditoria-cambios', [
+            { label: 'Fecha', key: 'created_at' },
+            { label: 'Usuario', key: 'usuarios.nombre' },
+            { label: 'Email', key: 'usuarios.email' },
+            { label: 'Acción', key: 'accion' },
+            { label: 'Entidad', key: 'entidad' },
+            { label: 'Descripción', key: 'descripcion' },
+          ])}
+          className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={rows.length === 0}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          Exportar CSV
+        </button>
+      </div>
+      <Table>
+        <THead>
+          <Tr>
+            <Th>Fecha / hora</Th>
+            <Th>Usuario</Th>
+            <Th>Acción</Th>
+            <Th>Entidad</Th>
+            <Th>Descripción</Th>
+          </Tr>
+        </THead>
       <tbody>
         {rows.map(r => (
           <Tr key={r.id}>
@@ -186,6 +247,7 @@ function CambiosTab({ municipioId }) {
         ))}
       </tbody>
     </Table>
+    </div>
   )
 }
 
