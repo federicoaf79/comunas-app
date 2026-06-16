@@ -531,6 +531,18 @@ function DashboardTab({ municipioId }) {
 
   return (
     <div className="space-y-6">
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <h1 className="font-sora text-2xl font-bold text-primary">
+          Dashboard
+        </h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Vista general de gastos, ingresos y presupuesto
+        </p>
+      </header>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div onClick={() => navigate('/admin/administracion?tab=ingresos')} className="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg">
           <StatCard
@@ -662,6 +674,18 @@ function GastosTab({ municipioId, dependencias, canApprove }) {
 
   return (
     <div className="space-y-5">
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <h1 className="font-sora text-2xl font-bold text-primary">
+          Gastos
+        </h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Egresos por dependencia y categoría
+        </p>
+      </header>
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
@@ -820,6 +844,18 @@ function IngresosTab({ municipioId }) {
 
   return (
     <div className="space-y-5">
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <h1 className="font-sora text-2xl font-bold text-primary">
+          Ingresos
+        </h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Registro de ingresos del municipio por canal y período
+        </p>
+      </header>
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Input
           label="Mes"
@@ -949,10 +985,15 @@ function PresupuestoTab({ municipioId }) {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h2 className="text-lg font-bold text-primary">Presupuesto {anio}</h2>
-        <p className="text-sm text-primary-400">
-          El "gastado" se calcula en tiempo real desde los gastos en estado <strong>aprobado</strong>.
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <h1 className="font-sora text-2xl font-bold text-primary">
+          Presupuesto {anio}
+        </h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Ejecución presupuestaria anual
         </p>
       </header>
 
@@ -1077,14 +1118,21 @@ function PartidasTab({ municipioId, dependencias }) {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-primary">Presupuesto por partidas {anio}</h2>
-          <p className="text-sm text-primary-400">
-            Asignación fina de partidas por dependencia y fuente — alineado con la rendición provincial (SARC).
-          </p>
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-sora text-2xl font-bold text-primary">
+              Presupuesto por partidas {anio}
+            </h1>
+            <p className="mt-1 text-sm text-primary-500">
+              Asignación fina de partidas por dependencia y fuente — alineado con la rendición provincial (SARC)
+            </p>
+          </div>
+          <Button onClick={() => setModalNew(true)}>+ Asignar partida</Button>
         </div>
-        <Button onClick={() => setModalNew(true)}>+ Asignar partida</Button>
       </header>
 
       {isLoading ? (
@@ -1273,16 +1321,16 @@ function SolicitudesTab({ municipioId, dependencias, canApprove }) {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-primary">
-            Solicitudes de las dependencias
-          </h2>
-          <p className="text-sm text-primary-400">
-            Las solicitudes enviadas por cada dependencia llegan acá. Al aprobar,
-            el gasto se crea (o se promueve) automáticamente.
-          </p>
-        </div>
+      <header className="mb-6">
+        <p className="mb-1 text-xs text-primary-400">
+          Administración municipal
+        </p>
+        <h1 className="font-sora text-2xl font-bold text-primary">
+          Solicitudes
+        </h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Órdenes de compra y solicitudes de las dependencias
+        </p>
       </header>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -1411,15 +1459,6 @@ export default function Administracion() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="font-sora text-2xl font-bold text-primary">Administración municipal</h1>
-        <p className="mt-1 text-sm text-primary-500">
-          <span className="text-primary-400">Administración municipal</span>
-          <span className="mx-1.5 text-primary-300">›</span>
-          <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
-        </p>
-      </header>
-
       {!municipioId && (
         <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
           No encontramos un municipio asignado ni un municipio activo de fallback.
