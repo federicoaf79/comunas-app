@@ -718,13 +718,10 @@ export default function AdminLayout() {
   }).filter(Boolean), [tieneModulo])
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <aside className="lg:w-56 lg:shrink-0">
-        {/* En mobile: nav horizontal con scroll-x. En desktop: nav
-            vertical con scroll-y propio acotado al alto del viewport.
-            Los rótulos de sección se ocultan en mobile (degradación
-            consciente — mobile usa chips compactos). */}
-        <nav className="sticky top-4 flex gap-1 overflow-x-auto rounded-xl border border-border bg-white p-2 shadow-card lg:flex-col lg:h-[calc(100vh-2rem)] lg:overflow-y-auto lg:overflow-x-hidden">
+    <>
+      {/* Sidebar — scroll independiente, altura completa del viewport disponible */}
+      <aside className="w-full shrink-0 overflow-x-auto border-b border-border bg-white lg:h-screen lg:w-64 lg:overflow-y-auto lg:overflow-x-hidden lg:border-b-0 lg:border-r">
+        <nav className="flex gap-1 p-2 lg:flex-col lg:p-4">
           <SuperadminSection />
           {navTopFiltrado.map(item => (
             <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} end={item.end} />
@@ -772,9 +769,12 @@ export default function AdminLayout() {
         </nav>
       </aside>
 
-      <main className="min-w-0 flex-1">
-        <Outlet />
+      {/* Contenido principal — scroll independiente, altura completa */}
+      <main className="min-w-0 flex-1 overflow-y-auto lg:h-screen">
+        <div className="p-4 lg:p-6">
+          <Outlet />
+        </div>
       </main>
-    </div>
+    </>
   )
 }

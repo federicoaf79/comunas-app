@@ -42,8 +42,8 @@ export default function AppShell() {
   }
 
   return (
-    <div className="flex h-svh flex-col bg-background">
-      <header className="flex items-center justify-between border-b border-border bg-white px-6 py-3 shadow-card">
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center justify-between border-b border-border bg-white px-6 py-3 shadow-card">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2.5">
             {logoUrl && (
@@ -90,16 +90,9 @@ export default function AppShell() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        {/* Sin max-w fijo — el sidebar de AdminLayout queda en 224px
-            (lg:w-56) y el contenido principal usa flex-1 + min-w-0
-            para ocupar todo el ancho disponible. Los breakpoints muy
-            anchos (>1600px) ahora aprovechan el viewport en lugar de
-            dejar dos franjas grises a los costados. */}
-        <div className="w-full p-4 lg:p-6">
-          <Outlet />
-        </div>
-      </main>
+      <div className="flex flex-1 overflow-hidden">
+        <Outlet />
+      </div>
     </div>
   )
 }
