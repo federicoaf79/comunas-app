@@ -137,8 +137,32 @@ function TabInformacion({ dep, dependenciaId }) {
     }
   }
 
+  // Detección de información incompleta
+  const informacionIncompleta = !form.nombre.trim() || !form.descripcion_larga.trim() || !form.horario_atencion.trim()
+
   return (
     <div className="space-y-4">
+      {/* Banner de información incompleta */}
+      {informacionIncompleta && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600">⚠️</span>
+              <p className="text-sm text-amber-800">
+                Esta dependencia tiene información incompleta. Los vecinos no podrán encontrar sus datos en el portal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => document.getElementById('info-form')?.scrollIntoView({ behavior: 'smooth' })}
+              className="shrink-0 text-xs font-semibold text-amber-700 hover:underline"
+            >
+              Completar ahora →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Aviso de información pública */}
       <div className="rounded-lg border border-ok-200 bg-ok-50 p-4">
         <div className="flex items-start gap-3">
@@ -152,12 +176,13 @@ function TabInformacion({ dep, dependenciaId }) {
         </div>
       </div>
 
-      <div className="card space-y-4 p-5 sm:p-6">
+      <div id="info-form" className="card space-y-4 p-5 sm:p-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Nombre *"
           value={form.nombre}
           onChange={e => set('nombre', e.target.value)}
+          placeholder="Ej: Espacios Verdes y Jardines"
         />
         <Input
           label="Responsable"
@@ -169,23 +194,26 @@ function TabInformacion({ dep, dependenciaId }) {
           label="Horario de atención"
           value={form.horario_atencion}
           onChange={e => set('horario_atencion', e.target.value)}
-          placeholder="Lun a Vie 7:00 – 13:00"
+          placeholder="Ej: Lunes a Viernes 8:00 – 13:00"
         />
         <Input
           label="Teléfono"
           value={form.telefono}
           onChange={e => set('telefono', e.target.value)}
+          placeholder="Ej: 0385 4-000000"
         />
         <Input
           label="Email"
           type="email"
           value={form.email_contacto}
           onChange={e => set('email_contacto', e.target.value)}
+          placeholder="Ej: area@municipio.gob.ar"
         />
         <Input
           label="Dirección"
           value={form.direccion}
           onChange={e => set('direccion', e.target.value)}
+          placeholder="Ej: Av. Principal 123"
         />
         <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-primary-700">
@@ -196,7 +224,7 @@ function TabInformacion({ dep, dependenciaId }) {
             value={form.descripcion_larga}
             onChange={e => set('descripcion_larga', e.target.value)}
             className="input-field resize-y"
-            placeholder="Qué hace esta dependencia, servicios que ofrece…"
+            placeholder="Agregá una descripción para que los vecinos sepan qué hace esta dependencia, qué servicios ofrece y cómo pueden acceder"
           />
         </div>
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-primary-700">
