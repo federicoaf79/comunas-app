@@ -32,15 +32,28 @@ import { dateOf } from '../../lib/datetime'
 //   - Otros roles: AccessDenied.
 // =============================================================
 
+const ROLES_INFO = {
+  superadmin: 'Acceso total a todos los municipios. Solo Frey Consulting.',
+  admin_comuna: 'Administrador del municipio. Acceso completo a todos los módulos.',
+  admin_portal_web: 'Gestiona el portal ciudadano: noticias, trámites, historia.',
+  admin_portal: 'Gestiona el portal ciudadano: noticias, trámites, historia.',
+  usuario_admin: 'Acceso a operaciones administrativas cross-dependencias.',
+  subadmin: 'Administrador de una dependencia específica.',
+  usuario_subadmin: 'Operador de una dependencia. Carga turnos y datos.',
+  usuario_sub: 'Operador de una dependencia. Carga turnos y datos.',
+  reporting: 'Solo lectura. Puede ver reportes y exportar datos.',
+  vecino: 'Ciudadano registrado. Acceso al portal y sus turnos.',
+}
+
 const ROLES = [
-  { value: 'superadmin',    label: 'Superadmin',             desc: 'Acceso total al sistema (Federico Frey).' },
-  { value: 'admin_comuna',  label: 'Admin Comuna',           desc: 'Presidente de la Comisión.' },
-  { value: 'admin_portal',  label: 'Admin Portal',           desc: 'Gestión de noticias y portal.' },
-  { value: 'usuario_admin', label: 'Usuario Admin',          desc: 'Delegación cross-área.' },
-  { value: 'subadmin',      label: 'Subadmin de dependencia', desc: 'Encargado de UNA dependencia.' },
-  { value: 'usuario_sub',   label: 'Usuario de dependencia',  desc: 'Trabaja en UNA dependencia.' },
-  { value: 'reporting',     label: 'Reporting',              desc: 'Solo lectura.' },
-  { value: 'vecino',        label: 'Vecino',                 desc: 'Ciudadano registrado.' },
+  { value: 'superadmin',    label: 'Superadmin',             desc: ROLES_INFO.superadmin },
+  { value: 'admin_comuna',  label: 'Admin Comuna',           desc: ROLES_INFO.admin_comuna },
+  { value: 'admin_portal',  label: 'Admin Portal',           desc: ROLES_INFO.admin_portal },
+  { value: 'usuario_admin', label: 'Usuario Admin',          desc: ROLES_INFO.usuario_admin },
+  { value: 'subadmin',      label: 'Subadmin de dependencia', desc: ROLES_INFO.subadmin },
+  { value: 'usuario_sub',   label: 'Usuario de dependencia',  desc: ROLES_INFO.usuario_sub },
+  { value: 'reporting',     label: 'Reporting',              desc: ROLES_INFO.reporting },
+  { value: 'vecino',        label: 'Vecino',                 desc: ROLES_INFO.vecino },
 ]
 const ROLE_LABEL = Object.fromEntries(ROLES.map(r => [r.value, r.label]))
 
@@ -410,7 +423,10 @@ export default function Usuarios() {
                         className="min-w-[160px]"
                       />
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-100">
+                      <span
+                        title={ROLES_INFO[rolActual] ?? rolActual}
+                        className="inline-flex cursor-help items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-100"
+                      >
                         {ROLE_LABEL[rolActual] ?? rolActual ?? 'Sin rol'}
                       </span>
                     )}
@@ -897,11 +913,14 @@ function PermisosPorPersona({
                     <p className="truncate font-medium text-primary">{u.nombre || u.email || 'Sin nombre'}</p>
                     <p className="truncate text-xs text-primary-400">{u.email || '—'}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${
-                        isDirector
-                          ? 'bg-accent-50 text-accent-700 ring-accent-100'
-                          : 'bg-primary-50 text-primary-700 ring-primary-100'
-                      }`}>
+                      <span
+                        title={ROLES_INFO[rol] ?? rol}
+                        className={`inline-flex cursor-help items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ring-inset ${
+                          isDirector
+                            ? 'bg-accent-50 text-accent-700 ring-accent-100'
+                            : 'bg-primary-50 text-primary-700 ring-primary-100'
+                        }`}
+                      >
                         {ROLE_LABEL[rol] ?? rol ?? 'Sin rol'}
                       </span>
                       <EstadoBadge activo={!!u.activo} />

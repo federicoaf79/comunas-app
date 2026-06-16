@@ -11,6 +11,19 @@ import Button from '../ui/Button'
 // del formulario.
 // =============================================================
 
+const ROLES_INFO = {
+  superadmin: 'Acceso total a todos los municipios. Solo Frey Consulting.',
+  admin_comuna: 'Administrador del municipio. Acceso completo a todos los módulos.',
+  admin_portal_web: 'Gestiona el portal ciudadano: noticias, trámites, historia.',
+  admin_portal: 'Gestiona el portal ciudadano: noticias, trámites, historia.',
+  usuario_admin: 'Acceso a operaciones administrativas cross-dependencias.',
+  subadmin: 'Administrador de una dependencia específica.',
+  usuario_subadmin: 'Operador de una dependencia. Carga turnos y datos.',
+  usuario_sub: 'Operador de una dependencia. Carga turnos y datos.',
+  reporting: 'Solo lectura. Puede ver reportes y exportar datos.',
+  vecino: 'Ciudadano registrado. Acceso al portal y sus turnos.',
+}
+
 const ROLES_SUB_DEPENDENCIA = new Set(['subadmin', 'usuario_sub'])
 
 function emptyForm() {
@@ -98,13 +111,20 @@ export default function UsuarioInvitarModal({
           required
           autoComplete="off"
         />
-        <Select
-          label="Rol"
-          value={form.rol}
-          onChange={v => set('rol', v)}
-          placeholder="Seleccionar..."
-          options={rolesOpts}
-        />
+        <div>
+          <Select
+            label="Rol"
+            value={form.rol}
+            onChange={v => set('rol', v)}
+            placeholder="Seleccionar..."
+            options={rolesOpts}
+          />
+          {form.rol && ROLES_INFO[form.rol] && (
+            <p className="mt-1 text-xs text-primary-400">
+              {ROLES_INFO[form.rol]}
+            </p>
+          )}
+        </div>
         {necesitaDep && (
           <Select
             label="Dependencia asignada"
