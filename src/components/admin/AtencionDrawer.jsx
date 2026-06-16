@@ -119,8 +119,32 @@ export default function AtencionDrawer({ turno, dependenciaSaludId, municipioId,
                 {edad != null && <span>· {edad} años</span>}
                 {turno.fecha_hora && <span>· Turno: {dateTimeOf(turno.fecha_hora)}</span>}
               </div>
-              {/* TODO alergias: cuando exista hook real para alergias
-                  del vecino, mostrar AlergiaBadge en rojo acá. */}
+
+              {/* Alergias — alerta visual prominente en contexto médico */}
+              {vecino?.alergias?.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0 text-danger">
+                    <circle cx="12" cy="12" r="10" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4M12 16h.01" />
+                  </svg>
+                  <span className="text-sm font-semibold text-danger">
+                    ALERGIAS: {vecino.alergias.join(', ')}
+                  </span>
+                </div>
+              )}
+
+              {vecino?.sin_alergias_conocidas && !vecino?.alergias?.length && (
+                <div className="mt-2 text-xs text-white/60">
+                  Sin alergias conocidas (confirmado)
+                </div>
+              )}
+
+              {!vecino?.alergias?.length && !vecino?.sin_alergias_conocidas && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-300">
+                  <span>⚠️</span>
+                  <span>Alergias no registradas</span>
+                </div>
+              )}
             </div>
             <button
               type="button"
