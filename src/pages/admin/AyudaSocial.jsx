@@ -16,12 +16,15 @@ import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import StatCard from '../../components/ui/StatCard'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
-import { dateOf, todayArgYMD, currentMonthYYYYMM } from '../../lib/datetime'
+import { dateOf, todayArgYMD } from '../../lib/datetime'
 
 // =============================================================
 // /admin/ayuda-social — módulo Ayuda Social.
 // 3 tabs: Beneficiarios | Pagos y entregas | Resumen
 // =============================================================
+
+// currentMonthYYYYMM no existe en datetime.js — implementación inline
+const currentMonthYYYYMM = () => new Date().toISOString().slice(0, 7)
 
 const fmtMoney = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
