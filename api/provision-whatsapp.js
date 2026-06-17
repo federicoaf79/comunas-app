@@ -59,11 +59,11 @@ export default async function handler(req, res) {
       await provisionRes.json()
 
     const configs = [
-      { clave: 'plan_b_org_id',   valor: org_id,         publico: false },
-      { clave: 'plan_b_api_key',  valor: api_key,         publico: false },
-      { clave: 'plan_b_webhook',  valor: wb,              publico: false },
-      { clave: 'whatsapp_numero', valor: numero_asignado, publico: true  },
-      { clave: 'whatsapp_modo',   valor: 'sandbox',       publico: false },
+      { clave: 'plan_b_org_id',   valor: org_id         },
+      { clave: 'plan_b_api_key',  valor: api_key         },
+      { clave: 'plan_b_webhook',  valor: wb              },
+      { clave: 'whatsapp_numero', valor: numero_asignado },
+      { clave: 'whatsapp_modo',   valor: 'sandbox'       },
     ]
 
     for (const config of configs) {
