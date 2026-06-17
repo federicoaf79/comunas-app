@@ -38,7 +38,7 @@ export default async function handler(req, res) {
           'X-Partner-Key': PLANB_PARTNER_KEY,
         },
         body: JSON.stringify({
-          municipio_slug,
+          tenant_slug: municipio_slug,
           nombre: nombre ?? municipio_slug,
           provincia: provincia ?? '',
           webhook_url,
