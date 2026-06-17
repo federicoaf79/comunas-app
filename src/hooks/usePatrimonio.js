@@ -92,6 +92,7 @@ function withTimeout() {
 // - El campo `activo` puede no existir todavía; si la query falla
 //   con 42703 reintentamos sin el filtro.
 async function fetchBienes({ municipioId, tipo, dependenciaId } = {}) {
+  console.log('[usePatrimonio] fetchBienes params:', { tipo, municipioId, dependenciaId })
   const { signal, clear } = withTimeout()
   try {
     const run = (withActivo) => {
@@ -110,6 +111,7 @@ async function fetchBienes({ municipioId, tipo, dependenciaId } = {}) {
       ;({ data, error } = await run(false))
     }
     clear()
+    console.log('[usePatrimonio] fetchBienes result:', { data, error })
     if (error) {
       console.error('[usePatrimonio] fetchBienes error:', {
         message: error.message,

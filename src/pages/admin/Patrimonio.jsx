@@ -177,10 +177,11 @@ function KpisInmuebles({ municipioId }) {
 // ─────────────────────────────────────────────────────────────────
 
 function InmueblesTab({ municipioId, dependencias }) {
-  const { data: bienes = [], isLoading } = useBienesPatrimonio(
+  const { data: bienes = [], isLoading, error } = useBienesPatrimonio(
     { tipo: 'inmueble' },
     { municipioIdOverride: municipioId },
   )
+  console.log('[Patrimonio InmueblesTab] bienes:', bienes, 'error:', error, 'municipioId:', municipioId)
   const [modalNew, setModalNew] = useState(false)
   const [detalle, setDetalle]   = useState(null)
 
