@@ -794,27 +794,21 @@ Siempre respondé en español argentino.
 Si no podés resolver algo, indicá que se comuniquen
 directamente con el municipio.`
 
-        // TODO: Mover esta llamada a una Vercel Function /api/update-bot-config
-        // para no exponer PLANB_PARTNER_KEY en el frontend.
-        // Por ahora se hace directo para avanzar rápido.
-        const PLANB_BASE = 'https://plan-b-backend-production.up.railway.app'
-        const PLANB_PARTNER_KEY = 'comunas-planb-2026' // ⚠️ HARDCODED — mover a backend
-
-        await fetch(
-          `${PLANB_BASE}/api/v1/orgs/${orgId}/bot-config`,
-          {
-            method: 'PATCH',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Partner-Key': PLANB_PARTNER_KEY,
-            },
-            body: JSON.stringify({
-              system_prompt: systemPrompt,
-              knowledge_base: [],
-              modo: form.whatsapp_modo ?? 'sandbox',
-            }),
-          }
-        )
+        // Actualizar bot-config en Plan-B via proxy seguro
+        const botConfigRes = await fetch('/api/update-bot-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            org_id: orgId,
+            system_prompt: systemPrompt,
+            knowledge_base: [],
+            modo: form.whatsapp_modo ?? 'sandbox',
+          }),
+        })
+        if (!botConfigRes.ok) {
+          const err = await botConfigRes.json()
+          throw new Error(err.error ?? 'Error al actualizar bot en Plan-B')
+        }
       }
 
       setGuardado(true)
