@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   useConfigClaveAdmin, useUpsertConfigClave,
   useSalaPaConfigAdmin, useUpsertSalaPaConfig, DEFAULT_SALA_PA_CONFIG,
@@ -615,7 +616,391 @@ function PlanBSection({ disabled, municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Sección 4 — Sala PA (duración estándar de turno)
+// Sección 4 — WhatsApp & Bot
+// ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_BOT_CONFIG = {
+  bot_nombre: '',
+  bot_bienvenida: '',
+  bot_tono: 'amigable',
+  bot_dependencias: [],
+  bot_horario: 'Lunes a Viernes de 8:00 a 13:00',
+  whatsapp_numero: '',
+  whatsapp_modo: 'sandbox',
+}
+
+const TONOS_BOT = [
+  { value: 'formal', label: 'Formal', desc: 'Usted, lenguaje institucional' },
+  { value: 'amigable', label: 'Amigable', desc: 'Vos, cercano pero respetuoso (recomendado)' },
+  { value: 'neutro', label: 'Neutro', desc: 'Tú, estándar' },
+]
+
+function WhatsAppBotForm({ municipioId, disabled }) {
+  const { perfil } = useAuth()
+  const [form, setForm] = useState(DEFAULT_BOT_CONFIG)
+  const [guardando, setGuardando] = useState(false)
+  const [guardado, setGuardado] = useState(false)
+  const [provisionando, setProvisionando] = useState(false)
+  const [configurado, setConfigurado] = useState(false)
+  const [error, setError] = useState('')
+  const [orgId, setOrgId] = useState(null)
+
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+
+  // Cargar configuración actual
+  useEffect(() => {
+    if (!municipioId) return
+    supabase
+      .from('configuracion_portal')
+      .select('clave, valor')
+      .eq('municipio_id', municipioId)
+      .in('clave', [
+        'bot_nombre', 'bot_bienvenida', 'bot_tono',
+        'bot_dependencias', 'bot_horario',
+        'whatsapp_numero', 'whatsapp_modo', 'plan_b_org_id'
+      ])
+      .then(({ data }) => {
+        if (!data) return
+        const cfg = {}
+        data.forEach(r => {
+          let valor = r.valor
+          if (typeof valor === 'string') {
+            valor = valor.replace(/^"|"$/g, '')
+            if (r.clave === 'bot_dependencias') {
+              try {
+                valor = JSON.parse(r.valor)
+              } catch {
+                valor = []
+              }
+            }
+          }
+          cfg[r.clave] = valor
+        })
+        setConfigurado(!!cfg.plan_b_org_id)
+        setOrgId(cfg.plan_b_org_id || null)
+        setForm(prev => ({ ...prev, ...cfg }))
+      })
+  }, [municipioId])
+
+  // Cargar dependencias del municipio
+  const { data: deps = [] } = useQuery({
+    queryKey: ['dependencias-wa', municipioId],
+    queryFn: async () => {
+      if (!municipioId) return []
+      const { data } = await supabase
+        .from('dependencias')
+        .select('id, nombre, tipo')
+        .eq('municipio_id', municipioId)
+        .eq('activa', true)
+        .order('nombre')
+      return data ?? []
+    },
+    enabled: !!municipioId && configurado,
+  })
+
+  async function handleConectar() {
+    if (!perfil?.municipio?.slug) {
+      setError('No se encontró el slug del municipio')
+      return
+    }
+    setProvisionando(true)
+    setError('')
+    try {
+      const res = await fetch('/api/provision-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          municipio_id: municipioId,
+          municipio_slug: perfil.municipio.slug,
+          nombre: perfil.municipio.nombre,
+          provincia: perfil.municipio.provincia,
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al provisionar WhatsApp')
+      }
+      if (data.ok) {
+        setConfigurado(true)
+        setOrgId(data.org_id)
+        setForm(prev => ({
+          ...prev,
+          whatsapp_numero: data.numero_asignado,
+          whatsapp_modo: 'sandbox'
+        }))
+      }
+    } catch (e) {
+      setError(e.message || 'No pudimos conectar WhatsApp')
+    } finally {
+      setProvisionando(false)
+    }
+  }
+
+  async function handleGuardar() {
+    setGuardando(true)
+    setGuardado(false)
+    setError('')
+    try {
+      // 1. Guardar config en configuracion_portal
+      const configs = [
+        { clave: 'bot_nombre', valor: `"${form.bot_nombre}"` },
+        { clave: 'bot_bienvenida', valor: `"${form.bot_bienvenida}"` },
+        { clave: 'bot_tono', valor: `"${form.bot_tono}"` },
+        { clave: 'bot_horario', valor: `"${form.bot_horario}"` },
+        { clave: 'bot_dependencias', valor: JSON.stringify(form.bot_dependencias) },
+      ]
+
+      for (const { clave, valor } of configs) {
+        const { error: err } = await supabase
+          .from('configuracion_portal')
+          .upsert(
+            { municipio_id: municipioId, clave, valor },
+            { onConflict: 'municipio_id,clave' }
+          )
+        if (err) throw err
+      }
+
+      // 2. Actualizar system prompt en Plan-B
+      if (orgId) {
+        const tono = form.bot_tono === 'formal'
+          ? 'Tratá al vecino de "usted" y usá lenguaje institucional.'
+          : form.bot_tono === 'neutro'
+          ? 'Tratá al vecino de "tú" con lenguaje estándar.'
+          : 'Tratá al vecino de "vos" con lenguaje cercano y amigable.'
+
+        const depsHabilitadas = deps
+          .filter(d => form.bot_dependencias?.includes(d.id))
+          .map(d => d.nombre)
+          .join(', ')
+
+        const systemPrompt =
+`Tu nombre es ${form.bot_nombre || 'Asistente Municipal'}.
+Sos el asistente oficial de la Comisión Municipal.
+${tono}
+
+Horario de atención: ${form.bot_horario}
+
+Podés tomar turnos para: ${depsHabilitadas || 'consultar disponibilidad'}.
+
+Cuando el vecino pide un turno:
+1. Preguntá para qué dependencia
+2. Informá los horarios disponibles
+3. Pedí nombre completo y DNI
+4. Confirmá el turno
+
+Mensaje de bienvenida: ${form.bot_bienvenida}
+
+Siempre respondé en español argentino.
+Si no podés resolver algo, indicá que se comuniquen
+directamente con el municipio.`
+
+        // TODO: Mover esta llamada a una Vercel Function /api/update-bot-config
+        // para no exponer PLANB_PARTNER_KEY en el frontend.
+        // Por ahora se hace directo para avanzar rápido.
+        const PLANB_BASE = 'https://plan-b-backend-production.up.railway.app'
+        const PLANB_PARTNER_KEY = 'comunas-planb-2026' // ⚠️ HARDCODED — mover a backend
+
+        await fetch(
+          `${PLANB_BASE}/api/v1/orgs/${orgId}/bot-config`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Partner-Key': PLANB_PARTNER_KEY,
+            },
+            body: JSON.stringify({
+              system_prompt: systemPrompt,
+              knowledge_base: [],
+              modo: form.whatsapp_modo ?? 'sandbox',
+            }),
+          }
+        )
+      }
+
+      setGuardado(true)
+      setTimeout(() => setGuardado(false), 3000)
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos guardar la configuración del bot')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <SectionShell
+      title="WhatsApp & Bot"
+      desc="Configuración del asistente de WhatsApp para turnos y consultas. Powered by Plan-B."
+      error={error}
+      ok={guardado ? 'Configuración guardada y bot actualizado.' : ''}
+    >
+      {/* Estado de conexión */}
+      <div className={
+        'mb-5 rounded-lg border-2 p-4 ' +
+        (configurado
+          ? 'border-ok bg-ok-50/50'
+          : 'border-accent bg-accent-50/50')
+      }>
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 text-2xl">
+            {configurado ? '✅' : '⚠️'}
+          </div>
+          <div className="min-w-0 flex-1">
+            {configurado ? (
+              <>
+                <p className="font-semibold text-primary">
+                  WhatsApp conectado · Número: {form.whatsapp_numero || '—'}
+                </p>
+                <span className={
+                  'mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold uppercase tracking-wider ' +
+                  (form.whatsapp_modo === 'produccion'
+                    ? 'bg-ok text-ok-900'
+                    : 'bg-accent/20 text-accent-700')
+                }>
+                  {form.whatsapp_modo === 'produccion' ? 'Producción' : 'Sandbox'}
+                </span>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold text-primary">
+                  WhatsApp no configurado para este municipio
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleConectar}
+                  loading={provisionando}
+                  disabled={disabled}
+                  className="mt-2"
+                >
+                  Conectar WhatsApp
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Configuración del bot (solo si está conectado) */}
+      {configurado && (
+        <div className="space-y-5">
+          {/* Personalización del bot */}
+          <div>
+            <h3 className="mb-3 text-sm font-bold text-primary">Personalización del bot</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Nombre del asistente"
+                value={form.bot_nombre}
+                onChange={e => set('bot_nombre', e.target.value)}
+                placeholder="Ej: Asistente Municipal Real Sayana"
+                hint="Este nombre aparece en los mensajes de WhatsApp"
+              />
+              <Input
+                label="Horario de atención"
+                value={form.bot_horario}
+                onChange={e => set('bot_horario', e.target.value)}
+                placeholder="Ej: Lunes a Viernes de 8:00 a 13:00"
+                hint="El bot informa este horario cuando le preguntan"
+              />
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-primary-700">
+                  Mensaje de bienvenida
+                </label>
+                <textarea
+                  value={form.bot_bienvenida}
+                  onChange={e => set('bot_bienvenida', e.target.value)}
+                  rows={3}
+                  className="input-field resize-y"
+                  placeholder="Ej: Hola! Soy el asistente de la Comisión Municipal. Puedo ayudarte a sacar turnos y responder consultas. ¿En qué te puedo ayudar?"
+                />
+                <p className="mt-1 text-xs text-primary-400">
+                  Se envía cuando el vecino escribe por primera vez
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Tono del bot */}
+          <div>
+            <label className="mb-2 block text-sm font-medium text-primary-700">
+              Tono de comunicación
+            </label>
+            <div className="space-y-2">
+              {TONOS_BOT.map(t => (
+                <label key={t.value} className="flex items-start gap-3 rounded-md border border-border bg-white p-3 cursor-pointer hover:bg-primary-50">
+                  <input
+                    type="radio"
+                    name="bot_tono"
+                    value={t.value}
+                    checked={form.bot_tono === t.value}
+                    onChange={e => set('bot_tono', e.target.value)}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-primary">{t.label}</p>
+                    <p className="text-xs text-primary-500">{t.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Dependencias con turnos */}
+          <div>
+            <h3 className="mb-1 text-sm font-bold text-primary">
+              ¿En qué dependencias se pueden sacar turnos?
+            </h3>
+            <p className="mb-3 text-xs text-primary-500">
+              El bot solo ofrecerá turnos en las dependencias que actives acá.
+            </p>
+            {deps.length === 0 ? (
+              <p className="text-xs text-primary-400">
+                No hay dependencias activas para este municipio.
+              </p>
+            ) : (
+              <div className="divide-y divide-border rounded-lg border border-border bg-white">
+                {deps.map(dep => (
+                  <label key={dep.id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-primary-50">
+                    <input
+                      type="checkbox"
+                      checked={form.bot_dependencias?.includes(dep.id)}
+                      onChange={e => {
+                        const arr = form.bot_dependencias ?? []
+                        set('bot_dependencias', e.target.checked
+                          ? [...arr, dep.id]
+                          : arr.filter(id => id !== dep.id)
+                        )
+                      }}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    <span className="text-sm text-primary">{dep.nombre}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Botón guardar */}
+          <div className="flex justify-end">
+            <Button
+              onClick={handleGuardar}
+              loading={guardando}
+              disabled={disabled}
+            >
+              Guardar y actualizar bot
+            </Button>
+          </div>
+        </div>
+      )}
+    </SectionShell>
+  )
+}
+
+function WhatsAppBotSection({ disabled, municipioId }) {
+  return <WhatsAppBotForm municipioId={municipioId} disabled={disabled} />
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sección 5 — Sala PA (duración estándar de turno)
 // ─────────────────────────────────────────────────────────────────
 
 const DURACION_MIN = 10
@@ -855,6 +1240,7 @@ export default function ConfigGeneral() {
           <RedesSocialesSection   disabled={sinMunicipio} municipioId={municipioId} />
           <DatosMunicipioSection  disabled={sinMunicipio} municipioId={municipioId} />
           <PlanBSection           disabled={sinMunicipio} municipioId={municipioId} />
+          <WhatsAppBotSection     disabled={sinMunicipio} municipioId={municipioId} />
           <SalaPaSection          disabled={sinMunicipio} municipioId={municipioId} />
         </div>
       )}
