@@ -23,12 +23,31 @@ export default async function handler(req, res) {
   console.log('[webhook-whatsapp]', { from, org_id, intent })
 
   try {
-    const { data: config } = await supabase
-      .from('configuracion_portal')
-      .select('municipio_id')
-      .eq('clave', 'plan_b_org_id')
-      .eq('valor', org_id)
-      .single()
+    // Buscar municipio por org_id O por webhook slug
+    const webhookSlug = req.headers['x-webhook-slug']
+
+    let config = null
+
+    // Intentar por org_id primero
+    if (org_id) {
+      const { data } = await supabase
+        .from('configuracion_portal')
+        .select('municipio_id')
+        .eq('clave', 'plan_b_org_id')
+        .eq('valor', org_id)
+        .single()
+      config = data
+    }
+
+    // Fallback por webhook slug
+    if (!config && webhookSlug) {
+      const { data: muni } = await supabase
+        .from('municipios')
+        .select('id')
+        .eq('slug', webhookSlug)
+        .single()
+      if (muni) config = { municipio_id: muni.id }
+    }
 
     if (!config) {
       return res.status(404).json({ error: 'Municipio no encontrado' })
