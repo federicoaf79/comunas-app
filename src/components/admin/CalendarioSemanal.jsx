@@ -99,6 +99,15 @@ function colorDeEvento(ev, colorPorTipo) {
   return '#64748B' // slate-500
 }
 
+function borderDeCanal(canal) {
+  switch ((canal ?? '').toLowerCase()) {
+    case 'whatsapp':   return '4px solid #7C3AED'
+    case 'online':     return '4px solid #64748B'
+    case 'presencial': return '4px solid #C9A84C'
+    default:           return '4px solid #0F1C35'
+  }
+}
+
 function CalendarioBloque({ evento, top, height, bg, fg, onClick }) {
   const estado = (evento.estado ?? '').toLowerCase()
   const isPendiente = estado === 'pendiente' || estado === 'reservado'
@@ -106,18 +115,21 @@ function CalendarioBloque({ evento, top, height, bg, fg, onClick }) {
 
   // Pendiente: fondo blanco con borde punteado del color del tipo.
   // Sólido: bg del tipo + texto auto. Cancelado: opacidad + tachado.
+  const canal = evento.canal ?? ''
   const style = isPendiente
     ? {
         top, height,
         backgroundColor: '#FFFFFF',
         color: bg,
         border: `2px dashed ${bg}`,
+        borderLeft: borderDeCanal(canal),
       }
     : {
         top, height,
         backgroundColor: bg,
         color: fg,
         border: '1px solid rgba(0,0,0,0.05)',
+        borderLeft: borderDeCanal(canal),
       }
 
   const cls =
