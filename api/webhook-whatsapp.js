@@ -18,7 +18,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  const { from, message, org_id, intent, entities } = req.body
+  const from = req.body.from ?? req.body.telefono ?? 'desconocido'
+  const { message, org_id, intent, entities } = req.body
 
   console.log('[webhook-whatsapp]', { from, org_id, intent })
 
@@ -105,13 +106,17 @@ export default async function handler(req, res) {
     }
 
     // Guardar en historial (ignorar si tabla no existe)
-    await supabase.from('mensajes_whatsapp').insert({
-      municipio_id,
-      from_numero: from,
-      mensaje: message,
-      intent: intent ?? 'desconocido',
-      org_id,
-    }).throwOnError().catch(() => {})
+    try {
+      await supabase.from('mensajes_whatsapp').insert({
+        municipio_id,
+        from_numero: from ?? 'desconocido',
+        mensaje: message ?? '',
+        intent: intent ?? 'desconocido',
+        org_id,
+      })
+    } catch (e) {
+      // ignorar error de historial
+    }
 
     return res.status(200).json({ ok: true })
 
