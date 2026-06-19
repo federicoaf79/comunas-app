@@ -533,6 +533,7 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
           subtitulo:   t.dependencia?.nombre ?? t.dependencia_nombre ?? 'Turno',
           estado:      t.estado,
           numero:      t.numero_turno,
+          canal:       t.canal ?? '',
           duracion_min: 30,
           color:       colorPorTipoDep(t.dependencia?.tipo),
         })
@@ -724,8 +725,8 @@ export default function TablazoCross() {
         </div>
       </div>
 
-      {/* Leyenda — turnos (navy) vs reservas (gold). Sin verde. */}
-      <div className="flex flex-wrap items-center gap-4 rounded-md border border-border bg-white px-3 py-2 text-xs text-primary-600">
+      {/* Leyenda — tipos de evento + canal de origen */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-md border border-border bg-white px-3 py-2 text-xs text-primary-600">
         <span className="inline-flex items-center gap-2">
           <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-primary bg-white" aria-hidden="true" />
           Turno médico / judicial
@@ -733,6 +734,24 @@ export default function TablazoCross() {
         <span className="inline-flex items-center gap-2">
           <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-[#C9A84C] bg-[#C9A84C]/15" aria-hidden="true" />
           Reserva de espacio (SUM)
+        </span>
+        <span className="mx-1 h-4 w-px bg-border" aria-hidden="true" />
+        <span className="font-semibold text-primary-400 uppercase tracking-wide text-[10px]">Canal</span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-[#7C3AED] bg-white" aria-hidden="true" />
+          WhatsApp
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-[#64748B] bg-white" aria-hidden="true" />
+          Online
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-[#C9A84C] bg-white" aria-hidden="true" />
+          Presencial
+        </span>
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-block h-3 w-4 rounded-sm border-l-4 border-[#0F1C35] bg-white" aria-hidden="true" />
+          Sin canal
         </span>
       </div>
 
