@@ -41,10 +41,10 @@ const TIMEOUT_MS = 8000
 
 const BIEN_COLS = `
   id, municipio_id, dependencia_id, tipo, numero_inventario,
-  nombre, descripcion, estado, valor_fiscal, fecha_adquisicion,
-  seguro_compania, seguro_poliza, seguro_vencimiento,
-  ubicacion, observaciones, created_at,
-  dependencia:dependencia_id ( id, nombre, tipo )
+  nombre, descripcion, estado, valor_fiscal, fecha_alta, fecha_baja,
+  seguro_poliza, seguro_vencimiento,
+  responsable_id, observaciones, fotos, activo, created_at, updated_at,
+  dependencia:dependencias!dependencia_id ( id, nombre, tipo )
 `
 
 const MANT_COLS = `
