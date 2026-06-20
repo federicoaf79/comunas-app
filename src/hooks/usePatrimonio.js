@@ -48,7 +48,7 @@ const BIEN_COLS = `
 `
 
 const MANT_COLS = `
-  id, bien_id, fecha, tipo, descripcion, costo, responsable, created_at
+  id, bien_id, municipio_id, tipo, descripcion, costo, proveedor, fecha, gasto_id, created_at
 `
 
 // Los valores deben coincidir con la columna `tipo` de
