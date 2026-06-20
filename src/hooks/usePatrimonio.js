@@ -95,21 +95,16 @@ async function fetchBienes({ municipioId, tipo, dependenciaId } = {}) {
   console.log('[usePatrimonio] fetchBienes params:', { tipo, municipioId, dependenciaId })
   const { signal, clear } = withTimeout()
   try {
-    const run = (withActivo) => {
+    const run = () => {
       let q = supabase.from('bienes_patrimonio').select(BIEN_COLS)
         .order('numero_inventario', { ascending: true, nullsFirst: false })
         .abortSignal(signal)
       if (municipioId)   q = q.eq('municipio_id',   municipioId)
       if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
-      if (withActivo)    q = q.eq('activo',         true)
       return q
     }
 
-    let { data, error } = await run(true)
-    if (error && /column .* does not exist|42703/i.test(error.message ?? '')) {
-      console.warn('[usePatrimonio] fetchBienes — sin columna `activo`, reintento sin filtro:', error.message)
-      ;({ data, error } = await run(false))
-    }
+    let { data, error } = await run()
     clear()
     console.log('[usePatrimonio] fetchBienes result:', { data, error })
     if (error) {
