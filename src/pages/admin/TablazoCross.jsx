@@ -397,8 +397,39 @@ function VistaDia({
   }, [turnos, reservas, skipTurnos])
 
   async function handleConfirmar(id) {
-    try { await updateEstado.mutateAsync({ id, estado: 'confirmado' }) }
-    catch (e) { alert(`No se pudo confirmar: ${e.message}`) }
+    try {
+      await updateEstado.mutateAsync({ id, estado: 'confirmado' })
+
+      // Notificación WA — solo si el turno vino por WhatsApp o el vecino tiene teléfono
+      const turno = (turnos ?? []).find(t => t.id === id)
+      const telefono = turno?.vecino?.telefono
+      if (telefono) {
+        const nombre    = turno.vecino?.nombre ?? turno.vecino?.nombre_completo ?? 'Vecino'
+        const dep       = turno.dependencia?.nombre ?? turno.dependencia_nombre ?? 'la dependencia'
+        const fechaHora = turno.fecha_hora
+          ? new Date(turno.fecha_hora).toLocaleString('es-AR', {
+              timeZone: 'America/Argentina/Buenos_Aires',
+              weekday: 'long', day: 'numeric', month: 'long',
+              hour: '2-digit', minute: '2-digit',
+            })
+          : ''
+        const message = `✅ Hola ${nombre}, tu turno en *${dep}* fue *confirmado*${fechaHora ? ` para el ${fechaHora}` : ''}. Si necesitás cancelarlo, respondé este mensaje. — Comisión Municipal`
+
+        // Fire-and-forget — no bloqueamos la UI si falla
+        fetch('/api/send-whatsapp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            municipio_id: municipioId,
+            to: telefono,
+            message,
+            tipo: 'confirmacion_turno',
+          }),
+        }).catch(err => console.warn('[WA] Error enviando notificación:', err))
+      }
+    } catch (e) {
+      alert(`No se pudo confirmar: ${e.message}`)
+    }
   }
   async function handleCancelar(id) {
     if (!confirm('¿Cancelar este turno?')) return
