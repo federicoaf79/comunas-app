@@ -627,6 +627,7 @@ const DEFAULT_BOT_CONFIG = {
   bot_horario: 'Lunes a Viernes de 8:00 a 13:00',
   whatsapp_numero: '',
   whatsapp_modo: 'sandbox',
+  municipio_nombre: '',
 }
 
 const TONOS_BOT = [
@@ -657,7 +658,8 @@ function WhatsAppBotForm({ municipioId, disabled }) {
       .in('clave', [
         'bot_nombre', 'bot_bienvenida', 'bot_tono',
         'bot_dependencias', 'bot_horario',
-        'whatsapp_numero', 'whatsapp_modo', 'plan_b_org_id'
+        'whatsapp_numero', 'whatsapp_modo', 'plan_b_org_id',
+        'datos_municipio'
       ])
       .then(({ data }) => {
         if (!data) return
@@ -674,7 +676,14 @@ function WhatsAppBotForm({ municipioId, disabled }) {
               }
             }
           }
-          cfg[r.clave] = valor
+          if (r.clave === 'datos_municipio') {
+            try {
+              const datos = JSON.parse(r.valor)
+              cfg.municipio_nombre = datos.nombre_oficial || ''
+            } catch {}
+          } else {
+            cfg[r.clave] = valor
+          }
         })
         setConfigurado(!!cfg.plan_b_org_id)
         setOrgId(cfg.plan_b_org_id || null)
@@ -775,7 +784,7 @@ function WhatsAppBotForm({ municipioId, disabled }) {
 
         const systemPrompt =
 `Tu nombre es ${form.bot_nombre || 'Asistente Municipal'}.
-Sos el asistente oficial de la Comisión Municipal.
+Sos el asistente oficial de ${form.municipio_nombre || 'la Comisión Municipal'}.
 ${tono}
 
 Horario de atención: ${form.bot_horario}
@@ -904,7 +913,7 @@ directamente con el municipio.`
                   onChange={e => set('bot_bienvenida', e.target.value)}
                   rows={3}
                   className="input-field resize-y"
-                  placeholder="Ej: Hola! Soy el asistente de la Comisión Municipal. Puedo ayudarte a sacar turnos y responder consultas. ¿En qué te puedo ayudar?"
+                  placeholder={`Ej: Hola! Soy el asistente de ${form.municipio_nombre || 'la Comisión Municipal'}. Puedo ayudarte a sacar turnos y responder consultas. ¿En qué te puedo ayudar?`}
                 />
                 <p className="mt-1 text-xs text-primary-400">
                   Se envía cuando el vecino escribe por primera vez
