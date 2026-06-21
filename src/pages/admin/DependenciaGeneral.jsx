@@ -699,61 +699,93 @@ function LandingTab({ dep, municipioId }) {
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-primary-400">
           Vista previa del layout — {LANDING_TEMPLATES.find(t => t.value === form.landing_template)?.label}
         </p>
-        <div className="space-y-2">
-          {/* Bloque Hero — siempre presente */}
-          <div className="flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-white">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><rect x="3" y="3" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M3 9h18"/></svg>
-            <span className="text-xs font-semibold">Hero — Nombre + descripción + foto</span>
+        <div className="space-y-1.5">
+          {/* Hero — siempre */}
+          <div className="flex items-center gap-3 rounded-md bg-primary px-3 py-2.5 text-white">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><rect x="3" y="3" width="18" height="18" rx="2"/><path strokeLinecap="round" d="M3 9h18"/></svg>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold leading-tight">Hero</p>
+              <p className="text-[10px] opacity-60 leading-tight">Nombre · descripción · foto de portada</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold">Siempre</span>
           </div>
 
           {/* Galería — solo espacio_fisico */}
           {form.landing_template === 'espacio_fisico' && (
-            <div className="flex items-center gap-2 rounded-md bg-[#64748B] px-3 py-2 text-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-              <span className="text-xs font-semibold">Galería de fotos</span>
+            <div className="flex items-center gap-3 rounded-md bg-[#64748B] px-3 py-2.5 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold leading-tight">Galería de fotos</p>
+                <p className="text-[10px] opacity-60 leading-tight">Imágenes del espacio físico en grilla</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold">Este template</span>
             </div>
           )}
 
           {/* Servicios — estándar y espacio_fisico */}
           {(form.landing_template === 'estandar' || form.landing_template === 'espacio_fisico') && (
-            <div className="flex items-center gap-2 rounded-md bg-[#1D4ED8] px-3 py-2 text-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-              <span className="text-xs font-semibold">Servicios que ofrecemos</span>
+            <div className="flex items-center gap-3 rounded-md bg-[#1D4ED8] px-3 py-2.5 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold leading-tight">Servicios que ofrecemos</p>
+                <p className="text-[10px] opacity-60 leading-tight">Lista de servicios disponibles para el vecino</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold">Este template</span>
             </div>
           )}
 
           {/* Trámites — solo administrativa */}
           {form.landing_template === 'administrativa' && (
-            <div className="flex items-center gap-2 rounded-md bg-[#1D4ED8] px-3 py-2 text-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
-              <span className="text-xs font-semibold">Trámites y requisitos</span>
+            <div className="flex items-center gap-3 rounded-md bg-[#1D4ED8] px-3 py-2.5 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 16h6M17 21H7a2 2 0 01-2-2V5a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"/></svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold leading-tight">Trámites y requisitos</p>
+                <p className="text-[10px] opacity-60 leading-tight">Pasos y documentación necesaria por trámite</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold">Este template</span>
             </div>
           )}
 
           {/* Archivos — solo administrativa */}
           {form.landing_template === 'administrativa' && (
-            <div className="flex items-center gap-2 rounded-md bg-[#64748B] px-3 py-2 text-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              <span className="text-xs font-semibold">Archivos descargables</span>
+            <div className="flex items-center gap-3 rounded-md bg-[#64748B] px-3 py-2.5 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold leading-tight">Archivos descargables</p>
+                <p className="text-[10px] opacity-60 leading-tight">Formularios y documentos para descargar</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px] font-semibold">Este template</span>
             </div>
           )}
 
-          {/* Contacto — siempre presente */}
-          <div className="flex items-center gap-2 rounded-md bg-[#C9A84C] px-3 py-2 text-primary-900">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 014 4.18 2 2 0 016.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L10.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
-            <span className="text-xs font-semibold">Cómo contactarnos</span>
+          {/* Contacto — siempre */}
+          <div className="flex items-center gap-3 rounded-md bg-[#C9A84C] px-3 py-2.5 text-primary-900">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 014 4.18 2 2 0 016.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L10.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold leading-tight">Cómo contactarnos</p>
+              <p className="text-[10px] opacity-60 leading-tight">Horario · teléfono · email · WhatsApp</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] font-semibold">Siempre</span>
           </div>
 
-          {/* Mapa — siempre presente */}
-          <div className="flex items-center gap-2 rounded-md bg-[#C9A84C]/60 px-3 py-2 text-primary-900">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <span className="text-xs font-semibold">Dónde encontrarnos + mapa</span>
+          {/* Mapa — siempre */}
+          <div className="flex items-center gap-3 rounded-md bg-[#C9A84C]/70 px-3 py-2.5 text-primary-900">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0 opacity-70"><path strokeLinecap="round" strokeLinejoin="round" d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold leading-tight">Dónde encontrarnos</p>
+              <p className="text-[10px] opacity-60 leading-tight">Dirección · mapa interactivo de Google Maps</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] font-semibold">Siempre</span>
           </div>
 
-          {/* Botón turno — si tiene módulo activo */}
-          <div className="flex items-center gap-2 rounded-md border-2 border-dashed border-primary-300 px-3 py-2 text-primary-400">
+          {/* Botón turno */}
+          <div className="flex items-center gap-3 rounded-md border-2 border-dashed border-primary-300 px-3 py-2 text-primary-400">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0"><rect x="3" y="5" width="18" height="16" rx="2"/><path strokeLinecap="round" d="M3 9h18M8 3v4M16 3v4"/></svg>
-            <span className="text-xs">Botón "Sacar turno" (si módulo Turnos activo)</span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold leading-tight">Botón "Sacar turno"</p>
+              <p className="text-[10px] leading-tight">Se muestra solo si el módulo Turnos está activo para esta dependencia</p>
+            </div>
+            <span className="shrink-0 rounded-full border border-primary-300 px-1.5 py-0.5 text-[9px] font-semibold">Condicional</span>
           </div>
         </div>
       </div>
