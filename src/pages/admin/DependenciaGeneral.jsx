@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -15,6 +15,7 @@ import {
 } from '../../hooks/useInventario'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import {
   Paginacion, ItemFormModal, MovimientoFormModal,
 } from './Inventario'
@@ -49,8 +50,9 @@ import { todayArgYMD, dateOf, timeOf, dateTimeOf } from '../../lib/datetime'
 //   public  → siempre visible (info / contacto)
 const SECCIONES_BASE = [
   { value: 'info',           label: 'Información',     kind: 'public'  },
+  { value: 'landing',        label: 'Landing pública', kind: 'public'  },
   { value: 'turnos',         label: 'Turnos',          kind: 'gestion' },
-  { value: 'administracion', label: 'Administración', kind: 'admin'   },
+  { value: 'administracion', label: 'Administración',  kind: 'admin'   },
   { value: 'inventario',     label: 'Inventario',      kind: 'gestion' },
   { value: 'contacto',       label: 'Contacto',        kind: 'public'  },
 ]
@@ -480,6 +482,250 @@ function InventarioTab({ dep, municipioId, canEdit }) {
 
 
 // ─────────────────────────────────────────────────────────────────
+// Tab: Landing pública — CMS simple con 3 templates
+// ─────────────────────────────────────────────────────────────────
+
+const LANDING_TEMPLATES = [
+  {
+    value: 'estandar',
+    label: 'Estándar',
+    desc: 'Hero + Servicios + Contacto + Mapa. Para la mayoría de dependencias.',
+    icon: '📋',
+  },
+  {
+    value: 'espacio_fisico',
+    label: 'Espacio físico',
+    desc: 'Hero + Galería + Info + Contacto + Mapa. Para cementerio, polideportivo, SUM.',
+    icon: '🏛️',
+  },
+  {
+    value: 'administrativa',
+    label: 'Administrativa',
+    desc: 'Hero + Trámites + Requisitos + Archivos + Mapa. Para Juez de Paz, Registro Civil.',
+    icon: '📁',
+  },
+]
+
+function LandingTab({ dep, municipioId }) {
+  const [form, setForm] = useState({
+    landing_template:        dep.landing_template        ?? 'estandar',
+    landing_hero_descripcion: dep.landing_hero_descripcion ?? '',
+    descripcion_larga:       dep.descripcion_larga       ?? '',
+    horario_atencion:        dep.horario_atencion        ?? '',
+    telefono:                dep.telefono                ?? '',
+    email_contacto:          dep.email_contacto          ?? '',
+    direccion:               dep.direccion               ?? '',
+    responsable:             dep.responsable             ?? '',
+    servicios:               Array.isArray(dep.servicios) ? dep.servicios.join('\n') : '',
+    landing_tramites:        Array.isArray(dep.landing_tramites) ? dep.landing_tramites.join('\n') : '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [ok, setOk] = useState(false)
+  const [error, setError] = useState('')
+
+  function set(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }))
+    setOk(false)
+  }
+
+  async function handleGuardar() {
+    setSaving(true)
+    setError('')
+    setOk(false)
+    try {
+      const serviciosArr = form.servicios
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean)
+      const tramitesArr = form.landing_tramites
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean)
+
+      const { error: err } = await supabase
+        .from('dependencias')
+        .update({
+          landing_template:         form.landing_template,
+          landing_hero_descripcion: form.landing_hero_descripcion || null,
+          descripcion_larga:        form.descripcion_larga || null,
+          horario_atencion:         form.horario_atencion || null,
+          telefono:                 form.telefono || null,
+          email_contacto:           form.email_contacto || null,
+          direccion:                form.direccion || null,
+          responsable:              form.responsable || null,
+          servicios:                serviciosArr,
+          landing_tramites:         tramitesArr,
+        })
+        .eq('id', dep.id)
+
+      if (err) throw err
+      setOk(true)
+    } catch (e) {
+      setError(e.message || 'No pudimos guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+
+      {/* Selector de template */}
+      <div className="card p-5">
+        <h3 className="mb-3 font-sora text-sm font-bold text-primary">Template de landing</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {LANDING_TEMPLATES.map(t => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => set('landing_template', t.value)}
+              className={`rounded-lg border-2 p-4 text-left transition-all ${
+                form.landing_template === t.value
+                  ? 'border-[#1D4ED8] bg-[#1D4ED8]/5'
+                  : 'border-border hover:border-primary-300'
+              }`}
+            >
+              <span className="text-2xl">{t.icon}</span>
+              <p className="mt-2 font-sora text-sm font-bold text-primary">{t.label}</p>
+              <p className="mt-1 text-xs text-primary-500">{t.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Info pública — siempre visible */}
+      <div className="card p-5 space-y-4">
+        <h3 className="font-sora text-sm font-bold text-primary">Información pública</h3>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Descripción corta (hero)</label>
+          <input
+            type="text"
+            value={form.landing_hero_descripcion}
+            onChange={e => set('landing_hero_descripcion', e.target.value)}
+            placeholder="Ej: Atención médica y primeros auxilios para vecinos de Real Sayana"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Descripción larga</label>
+          <textarea
+            rows={4}
+            value={form.descripcion_larga}
+            onChange={e => set('descripcion_larga', e.target.value)}
+            placeholder="Descripción completa de la dependencia para el portal ciudadano..."
+            className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Horario de atención</label>
+            <input type="text" value={form.horario_atencion} onChange={e => set('horario_atencion', e.target.value)}
+              placeholder="Lun a Vie · 8:00 – 13:00"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Teléfono</label>
+            <input type="text" value={form.telefono} onChange={e => set('telefono', e.target.value)}
+              placeholder="+54 9 385 XXX-XXXX"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Email de contacto</label>
+            <input type="email" value={form.email_contacto} onChange={e => set('email_contacto', e.target.value)}
+              placeholder="dependencia@realsayana.gob.ar"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Dirección</label>
+            <input type="text" value={form.direccion} onChange={e => set('direccion', e.target.value)}
+              placeholder="Av. San Martín s/n"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Responsable</label>
+            <input type="text" value={form.responsable} onChange={e => set('responsable', e.target.value)}
+              placeholder="Nombre del responsable"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent" />
+          </div>
+        </div>
+
+        {/* Servicios */}
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">
+            Servicios (uno por línea)
+          </label>
+          <textarea
+            rows={5}
+            value={form.servicios}
+            onChange={e => set('servicios', e.target.value)}
+            placeholder={"Consultas médicas sin turno\nVacunación\nControl de presión arterial"}
+            className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <p className="mt-1 text-[11px] text-primary-400">Cada línea es un servicio separado</p>
+        </div>
+      </div>
+
+      {/* Trámites — solo template administrativa */}
+      {form.landing_template === 'administrativa' && (
+        <div className="card p-5">
+          <h3 className="mb-3 font-sora text-sm font-bold text-primary">Trámites y requisitos</h3>
+          <textarea
+            rows={6}
+            value={form.landing_tramites}
+            onChange={e => set('landing_tramites', e.target.value)}
+            placeholder={"Certificación de firmas: DNI original\nSucesión simple: DNI + documentación del bien"}
+            className="w-full rounded-md border border-border px-3 py-2 text-sm text-primary font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <p className="mt-1 text-[11px] text-primary-400">Formato: Nombre del trámite: requisitos</p>
+        </div>
+      )}
+
+      {/* Preview link */}
+      <div className="card p-4 flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-primary">Vista pública</p>
+          <p className="text-xs text-primary-500">Así ve el vecino esta dependencia en el portal</p>
+        </div>
+        <a
+          href={`/portal/dependencia/${dep.tipo}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary text-xs flex items-center gap-1.5"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Ver en portal
+        </a>
+      </div>
+
+      {/* Feedback + guardar */}
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>
+      )}
+      {ok && (
+        <div className="rounded-md border border-ok-100 bg-ok-50 p-3 text-sm text-ok-700">Landing guardada correctamente.</div>
+      )}
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={handleGuardar}
+          className="btn-primary flex items-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <Spinner size="sm" /> : null}
+          {saving ? 'Guardando...' : 'Guardar landing'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Tab: Contacto
 // ─────────────────────────────────────────────────────────────────
 
@@ -895,6 +1141,7 @@ export default function DependenciaGeneral() {
         <>
           <div>
             {seccion === 'info'           && <InformacionTab dep={dep} />}
+            {seccion === 'landing'        && <LandingTab dep={dep} municipioId={municipioId} />}
             {seccion === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
             {seccion === 'administracion' && (
               <AdministracionTab
