@@ -21,7 +21,7 @@ import { useAuth } from '../context/AuthContext'
 // se incluyen en el SELECT — si el municipio todavía no corrió la
 // migration 20260513_dependencias_portal_extras, PostgREST las
 // ignora con un error y caemos al SELECT base sin esos campos.
-const COLUMNS_BASE   = 'id, municipio_id, nombre, tipo, capa, activo, descripcion_larga, servicios, fotos, canal_atencion, email_contacto, whatsapp'
+const COLUMNS_BASE   = 'id, municipio_id, nombre, tipo, capa, activa, descripcion_larga, servicios, fotos, canal_atencion, email_contacto, whatsapp'
 const COLUMNS_EXTRA  = 'horario_atencion, telefono, direccion, slug'
 const COLUMNS        = `${COLUMNS_BASE}, ${COLUMNS_EXTRA}`
 
@@ -42,14 +42,14 @@ async function fetchDependenciasPublicas(municipioId) {
   let q = supabaseAnon
     .from('dependencias')
     .select(COLUMNS)
-    .eq('activo', true)
+    .eq('activa', true)
   if (municipioId) q = q.eq('municipio_id', municipioId)
   let { data, error } = await q
   if (error && /column.*does not exist|42703/i.test(error.message ?? '')) {
     q = supabaseAnon
       .from('dependencias')
       .select(COLUMNS_BASE)
-      .eq('activo', true)
+      .eq('activa', true)
     if (municipioId) q = q.eq('municipio_id', municipioId)
     ;({ data, error } = await q)
   }
