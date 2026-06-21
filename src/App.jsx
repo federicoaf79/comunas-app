@@ -41,6 +41,7 @@ import Auditoria           from './pages/admin/Auditoria'
 import Rendicion           from './pages/admin/Rendicion'
 import ConfigPortal        from './pages/admin/ConfigPortal'
 import ConfigGeneral       from './pages/admin/ConfigGeneral'
+import GestionDependencias from './pages/admin/GestionDependencias'
 import PortalPublico       from './pages/portal/PortalPublico'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
@@ -195,6 +196,7 @@ const router = createBrowserRouter([
                   { path: '/admin/ayuda-social',   element: <AyudaSocial /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
+                  { path: '/admin/dependencias',   element: <GestionDependencias /> },
                 ],
               },
             ],
