@@ -284,6 +284,15 @@ const NAV_GESTION = [
       </svg>
     ),
   },
+  {
+    to: '/admin/importador',
+    label: 'Importador',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+      </svg>
+    ),
+  },
 ]
 
 // Ícono por tipo de dependencia para el sidebar. Cada tipo tiene su
