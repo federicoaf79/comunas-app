@@ -573,23 +573,125 @@ function LandingTab({ dep, municipioId }) {
       {/* Selector de template */}
       <div className="card p-5">
         <h3 className="mb-3 font-sora text-sm font-bold text-primary">Template de landing</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {LANDING_TEMPLATES.map(t => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => set('landing_template', t.value)}
-              className={`rounded-lg border-2 p-4 text-left transition-all ${
-                form.landing_template === t.value
-                  ? 'border-[#1D4ED8] bg-[#1D4ED8]/5'
-                  : 'border-border hover:border-primary-300'
-              }`}
-            >
-              <span className="text-2xl">{t.icon}</span>
-              <p className="mt-2 font-sora text-sm font-bold text-primary">{t.label}</p>
-              <p className="mt-1 text-xs text-primary-500">{t.desc}</p>
-            </button>
-          ))}
+        {/* Selector de template — wireframe visual */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {LANDING_TEMPLATES.map(t => {
+            const isActive = form.landing_template === t.value
+            const isSaved  = dep.landing_template === t.value || (!dep.landing_template && t.value === 'estandar')
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => set('landing_template', t.value)}
+                className={`relative rounded-xl border-2 text-left transition-all overflow-hidden ${
+                  isActive
+                    ? 'border-[#1D4ED8] shadow-md'
+                    : 'border-border hover:border-primary-300'
+                }`}
+              >
+                {/* Badge "Activo" — template guardado en DB */}
+                {isSaved && (
+                  <span className="absolute top-2 right-2 z-10 rounded-full bg-[#C9A84C] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary-900">
+                    Activo
+                  </span>
+                )}
+                {/* Badge "Seleccionado" — template elegido pero no guardado */}
+                {isActive && !isSaved && (
+                  <span className="absolute top-2 right-2 z-10 rounded-full bg-[#1D4ED8] px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                    Seleccionado
+                  </span>
+                )}
+
+                {/* Mini wireframe visual */}
+                <div className="bg-primary-50 p-2">
+                  {/* Header mini */}
+                  <div className="mb-1 flex items-center gap-1 rounded bg-primary px-1.5 py-1">
+                    <div className="h-2 w-2 rounded bg-accent" />
+                    <div className="h-1.5 flex-1 rounded bg-white/30" />
+                    <div className="h-1 w-6 rounded bg-white/20" />
+                  </div>
+                  {/* Hero mini */}
+                  <div className="mb-1 rounded bg-primary-700 px-2 py-1.5">
+                    <div className="mb-1 h-2 w-3/4 rounded bg-white/50" />
+                    <div className="h-1 w-1/2 rounded bg-white/30" />
+                  </div>
+                  {/* Secciones según template */}
+                  {t.value === 'estandar' && (
+                    <>
+                      <div className="mb-1 rounded border border-border bg-white px-2 py-1">
+                        <div className="mb-0.5 h-1.5 w-1/3 rounded bg-primary-300" />
+                        <div className="flex flex-col gap-0.5">
+                          <div className="h-1 w-2/3 rounded bg-border" />
+                          <div className="h-1 w-1/2 rounded bg-border" />
+                        </div>
+                      </div>
+                      <div className="mb-1 grid grid-cols-2 gap-1">
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                      </div>
+                      <div className="rounded border border-border bg-primary-100 px-2 py-1.5">
+                        <div className="mx-auto h-1 w-1/3 rounded bg-primary-300" />
+                      </div>
+                    </>
+                  )}
+                  {t.value === 'espacio_fisico' && (
+                    <>
+                      <div className="mb-1 grid grid-cols-3 gap-0.5">
+                        {[1,2,3].map(i => <div key={i} className="aspect-video rounded bg-primary-200 border border-border" />)}
+                      </div>
+                      <div className="mb-1 rounded border border-border bg-white px-2 py-1">
+                        <div className="mb-0.5 h-1.5 w-1/3 rounded bg-primary-300" />
+                        <div className="flex flex-col gap-0.5">
+                          <div className="h-1 w-2/3 rounded bg-border" />
+                          <div className="h-1 w-1/2 rounded bg-border" />
+                        </div>
+                      </div>
+                      <div className="mb-1 grid grid-cols-2 gap-1">
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                      </div>
+                      <div className="rounded border border-border bg-primary-100 px-2 py-1.5">
+                        <div className="mx-auto h-1 w-1/3 rounded bg-primary-300" />
+                      </div>
+                    </>
+                  )}
+                  {t.value === 'administrativa' && (
+                    <>
+                      <div className="mb-1 rounded border border-border bg-white px-2 py-1">
+                        <div className="mb-0.5 h-1.5 w-1/3 rounded bg-primary-300" />
+                        <div className="mb-0.5 flex items-center gap-1"><div className="h-2 w-2 rounded bg-[#1D4ED8]/30" /><div className="h-1 flex-1 rounded bg-border" /></div>
+                        <div className="flex items-center gap-1"><div className="h-2 w-2 rounded bg-[#1D4ED8]/30" /><div className="h-1 flex-1 rounded bg-border" /></div>
+                      </div>
+                      <div className="mb-1 rounded border border-border bg-white px-2 py-1">
+                        <div className="mb-0.5 h-1.5 w-1/3 rounded bg-primary-300" />
+                        <div className="flex items-center gap-1 rounded bg-primary-50 p-0.5"><div className="h-2 w-2 rounded bg-primary-200" /><div className="h-1 flex-1 rounded bg-border" /></div>
+                      </div>
+                      <div className="mb-1 grid grid-cols-2 gap-1">
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                        <div className="rounded border border-border bg-white p-1"><div className="h-1 rounded bg-border" /><div className="mt-0.5 h-1.5 rounded bg-primary-200" /></div>
+                      </div>
+                      <div className="rounded border border-border bg-primary-100 px-2 py-1.5">
+                        <div className="mx-auto h-1 w-1/3 rounded bg-primary-300" />
+                      </div>
+                    </>
+                  )}
+                  {/* Footer mini */}
+                  <div className="mt-1 rounded bg-primary-800 px-1.5 py-1">
+                    <div className="flex gap-1">
+                      <div className="h-1 w-1/3 rounded bg-white/20" />
+                      <div className="h-1 w-1/4 rounded bg-white/20" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Label */}
+                <div className={`px-3 py-2 ${isActive ? 'bg-[#1D4ED8]/5' : 'bg-white'}`}>
+                  <p className="font-sora text-xs font-bold text-primary">{t.icon} {t.label}</p>
+                  <p className="mt-0.5 text-[10px] text-primary-400 leading-tight">{t.desc}</p>
+                </div>
+              </button>
+            )
+          })}
         </div>
 
       {/* Preview del template seleccionado */}
