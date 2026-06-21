@@ -180,25 +180,29 @@ function subitemsParaTipo(tipo, basePath) {
     return [
       { to: basePath,                            label: 'Gestión',         kind: 'gestion' },
       { to: `${basePath}?tab=expedientes`,       label: 'Expedientes',     kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,             label: 'Administración', kind: 'admin' },
+      { to: `${basePath}?tab=landing`,           label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,             label: 'Administración',  kind: 'admin' },
     ]
   }
   if (t === 'sum') {
     return [
-      { to: basePath,                  label: 'Reservas',        kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+      { to: basePath,                        label: 'Reservas',        kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
     ]
   }
   if (t === 'social' || t === 'ayuda_social') {
     return [
-      { to: basePath,                  label: 'Beneficiarios',   kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+      { to: basePath,                        label: 'Beneficiarios',   kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
     ]
   }
   // Dependencias dinámicas genéricas
   return [
-    { to: basePath,                    label: 'Gestión',         kind: 'gestion' },
-    { to: `${basePath}?tab=admin`,     label: 'Administración', kind: 'admin' },
+    { to: basePath,                        label: 'Gestión',         kind: 'gestion' },
+    { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+    { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
   ]
 }
 
