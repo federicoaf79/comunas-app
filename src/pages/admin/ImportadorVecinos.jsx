@@ -540,7 +540,7 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ImportadorVecinos({ existingVecinos = [], onClose, onDone }) {
+export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
   const municipioId = useEffectiveMunicipioId()
 
   // step: 'upload' | 'sheet' | 'confirm'
@@ -636,28 +636,14 @@ export default function ImportadorVecinos({ existingVecinos = [], onClose, onDon
     : ['upload', 'confirm']
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg rounded-2xl border border-border bg-white shadow-2xl">
-
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <div className="flex items-center gap-3">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 text-[#1D4ED8]">
-              <circle cx="9" cy="8" r="3.5" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 20a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6M21.5 20a4.5 4.5 0 0 0-4-4.45" />
-            </svg>
-            <div>
-              <p className="font-semibold text-primary">Importar vecinos</p>
-              <p className="text-xs text-primary-500">{STEP_LABELS[step]}</p>
-            </div>
-          </div>
-          <button onClick={onClose}
-            className="rounded-md p-1.5 text-primary-500 hover:bg-primary-50 hover:text-primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <div className="space-y-5">
+      <header>
+        <h1 className="font-sora text-2xl font-bold text-primary">Importador de datos</h1>
+        <p className="mt-1 text-sm text-primary-500">
+          Importá vecinos al padrón desde Excel o CSV. La IA mapea las columnas automáticamente.
+        </p>
+      </header>
+      <div className="card p-6">
 
         {/* Progress tabs */}
         <div className="flex border-b border-border">
@@ -671,7 +657,7 @@ export default function ImportadorVecinos({ existingVecinos = [], onClose, onDon
 
         {/* Loader overlay cuando analiza IA */}
         {analyzing && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-2xl bg-white/95">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 rounded-xl bg-white/95">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#1D4ED8]/10">
               <Spinner size="lg" />
             </div>
@@ -708,11 +694,6 @@ export default function ImportadorVecinos({ existingVecinos = [], onClose, onDon
                 onBack={() => setStep('upload')}
                 municipioId={municipioId}
               />
-              {importResult && (
-                <div className="mt-4">
-                  <button onClick={onClose} className="btn-primary w-full">Cerrar</button>
-                </div>
-              )}
             </>
           )}
         </div>
