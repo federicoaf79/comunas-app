@@ -49,6 +49,20 @@ function firstName(vecino) {
 // ─────────────────────────────────────────────────────────────────
 const ACCESOS_RAPIDOS = [
   {
+    to:    '/portal/agenda',
+    label: 'Agenda de servicios',
+    desc:  'Turnos médicos y especialistas',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-8 w-8">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path strokeLinecap="round" d="M3 9h18M8 2v4M16 2v4"/>
+        <circle cx="8" cy="14" r="1" fill="currentColor"/>
+        <circle cx="12" cy="14" r="1" fill="currentColor"/>
+        <circle cx="16" cy="14" r="1" fill="currentColor"/>
+      </svg>
+    ),
+  },
+  {
     to:    '/portal/turno',
     label: 'Sacar turno',
     desc:  'Sala PA, Juez de Paz, SUM, Administración',
@@ -635,7 +649,7 @@ function AccesosRapidos() {
     <section aria-labelledby="accesos-h2" className="border-b border-border bg-white">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <h2 id="accesos-h2" className="sr-only">Accesos rápidos</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           {ACCESOS_RAPIDOS.map(a => {
             const inner = (
               <>
