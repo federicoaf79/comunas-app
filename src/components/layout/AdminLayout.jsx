@@ -5,6 +5,8 @@ import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useModulosActivos } from '../../hooks/useModulos'
 import { useDependenciasAdmin } from '../../hooks/useDependenciaPublica'
+import OnboardingChecklist from '../admin/OnboardingChecklist'
+import { useOnboardingProgress } from '../../hooks/useOnboardingProgress'
 
 // Tipos de dependencia que tienen su propio módulo top-level —
 // se EXCLUYEN de la lista "Otras dependencias" para no duplicar
@@ -606,6 +608,7 @@ export default function AdminLayout() {
   const { data: modulos } = useModulosActivos(municipioId)
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
+  const { progress, pct, completedCount, totalCount } = useOnboardingProgress(municipioId)
   const tieneModulo = useMemo(() => {
     const set = new Set((modulos ?? []).map(m => m.modulo))
     return (mod) => {
@@ -781,6 +784,13 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
+
+      <OnboardingChecklist
+        progress={progress}
+        pct={pct}
+        completedCount={completedCount}
+        totalCount={totalCount}
+      />
     </>
   )
 }
