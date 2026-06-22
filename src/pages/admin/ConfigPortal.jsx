@@ -569,7 +569,7 @@ function TabDependencias({ municipioId, sinMunicipio }) {
   // el listado y todavía no hay selección.
   useEffect(() => {
     if (!selectedId && deps.length > 0) {
-      const first = deps.find(d => d.activo !== false) ?? deps[0]
+      const first = deps.find(d => d.activa !== false) ?? deps[0]
       setSelectedId(first.id)
       return
     }
@@ -650,7 +650,7 @@ function TabDependencias({ municipioId, sinMunicipio }) {
 
   const depOptions = deps.map(d => ({
     value: d.id,
-    label: `${d.nombre}${d.activo === false ? ' (inactiva)' : ''}`,
+    label: `${d.nombre}${d.activa === false ? ' (inactiva)' : ''}`,
   }))
 
   return (

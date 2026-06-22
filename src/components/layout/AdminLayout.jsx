@@ -579,7 +579,7 @@ function DependenciasGestionNav() {
   const { data: deps = [] } = useDependenciasAdmin({ municipioIdOverride: municipioId })
 
   const items = (deps ?? [])
-    .filter(d => d?.activo !== false)
+    .filter(d => d?.activa !== false)
     .filter(d => !TIPOS_GESTION_EXCLUIDOS.has((d.tipo ?? '').toLowerCase()))
     .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
 

@@ -38,9 +38,9 @@ const TABS = [
 // responsable). `responsable` puede no existir si ese migration no
 // se aplicó → retry defensivo sin esa columna.
 const DEP_COLS_FULL =
-  'id, municipio_id, nombre, tipo, activo, descripcion_larga, horario_atencion, telefono, email_contacto, direccion, responsable'
+  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion, responsable'
 const DEP_COLS_BASE =
-  'id, municipio_id, nombre, tipo, activo, descripcion_larga, horario_atencion, telefono, email_contacto, direccion'
+  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion'
 
 async function fetchDependencia(id) {
   let { data, error } = await supabase
@@ -96,7 +96,7 @@ function TabInformacion({ dep, dependenciaId }) {
     email_contacto:   dep.email_contacto ?? '',
     direccion:        dep.direccion ?? '',
     responsable:      dep.responsable ?? '',
-    activo:           dep.activo !== false,
+    activa:           dep.activa !== false,
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
@@ -115,7 +115,7 @@ function TabInformacion({ dep, dependenciaId }) {
       email_contacto:    form.email_contacto.trim() || null,
       direccion:         form.direccion.trim() || null,
       responsable:       form.responsable.trim() || null,
-      activo:            !!form.activo,
+      activa:            !!form.activa,
     }
     try {
       let { error } = await supabase
@@ -230,8 +230,8 @@ function TabInformacion({ dep, dependenciaId }) {
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-primary-700">
           <input
             type="checkbox"
-            checked={form.activo}
-            onChange={e => set('activo', e.target.checked)}
+            checked={form.activa}
+            onChange={e => set('activa', e.target.checked)}
             className="h-4 w-4 rounded border-border accent-primary"
           />
           Dependencia activa
@@ -514,7 +514,7 @@ export default function DependenciaGestion() {
     )
   }
 
-  const activa = dep.activo !== false
+  const activa = dep.activa !== false
 
   return (
     <div className="space-y-5">
