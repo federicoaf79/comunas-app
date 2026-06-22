@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
 import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
+import { useProfesionales } from '../../hooks/useProfesionales'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -207,6 +208,15 @@ export default function DependenciaPublica() {
   const fotos     = Array.isArray(dep?.fotos)     ? dep.fotos.filter(Boolean)     : []
   const horario   = dep?.horario_atencion || HORARIO_FALLBACK[tipoMatch] || null
   const direccion = dep?.direccion || null
+
+  const TIPOS_CON_PROFESIONALES = new Set(['caps', 'salud', 'sala'])
+  const { data: profesionales = [] } = useProfesionales(
+    municipioId ?? null,
+    dep?.id ?? null
+  )
+  const profActivos = TIPOS_CON_PROFESIONALES.has(tipoMatch)
+    ? profesionales.filter(p => p.activo)
+    : []
   const telefono  = telLink(dep?.telefono)
   const waUrl     = whatsappLink(dep?.whatsapp)
   const canal     = canalLabel(dep?.canal_atencion)
@@ -350,6 +360,61 @@ export default function DependenciaPublica() {
                   </p>
                 )}
               </section>
+
+              {/* ===== 2.5. Profesionales ===== */}
+              {profActivos.length > 0 && (
+                <section className="mt-6 rounded-2xl border border-border bg-white p-6 shadow-card sm:p-8">
+                  <h2 className="mb-5 font-sora text-lg font-bold text-primary">
+                    Profesionales que atienden
+                  </h2>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {profActivos.map(p => {
+                      const diasLabel = Array.isArray(p.dias_atencion) && p.dias_atencion.length > 0
+                        ? p.dias_atencion.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ')
+                        : null
+                      const horarioProf = p.hora_desde && p.hora_hasta
+                        ? `${p.hora_desde} – ${p.hora_hasta}`
+                        : null
+                      const ESPEC_LABEL = {
+                        general: 'Medicina general', obstetra: 'Obstetricia',
+                        ecografia: 'Ecografía', pediatria: 'Pediatría',
+                        odontologia: 'Odontología', posta_rural: 'Posta sanitaria rural',
+                        otro: 'Otro'
+                      }
+                      return (
+                        <div key={p.id} className="flex items-start gap-4 rounded-xl border border-border p-4">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                            {p.nombre.split(' ').filter(w => /^[A-ZÁÉÍÓÚÜ]/.test(w)).slice(0,2).map(w=>w[0]).join('')}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-sora text-sm font-bold text-primary">{p.nombre}</p>
+                            <p className="text-xs text-primary-500">
+                              {ESPEC_LABEL[p.especialidad] ?? p.especialidad}
+                              {p.matricula ? ` · ${p.matricula}` : ''}
+                            </p>
+                            {(diasLabel || horarioProf) && (
+                              <p className="mt-1.5 text-xs text-primary-600">
+                                📅 {[diasLabel, horarioProf].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                            {p.frecuencia_nota && (
+                              <p className="mt-0.5 text-xs italic text-primary-400">{p.frecuencia_nota}</p>
+                            )}
+                            {p.telefono && (
+                              <a href={`tel:${p.telefono}`} className="mt-1 inline-flex items-center gap-1 text-xs text-[#1D4ED8] hover:underline">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 014 4.18 2 2 0 016.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L10.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>
+                                </svg>
+                                {p.telefono}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              )}
 
               {/* ===== 3. Contacto ===== */}
               <section className="rounded-xl border border-border bg-white p-6 shadow-card">
