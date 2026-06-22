@@ -2,36 +2,24 @@
 
 CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centraliza padrón de vecinos, Historia Clínica del CAPS, turnos online, mensajería SMS/WhatsApp, administración financiera, portal web público y Bot IA por dependencia.
 
-> **AUTO-MANTENIMIENTO:** Al completar un módulo, cambiar una regla de negocio, agregar una tabla, o resolver un riesgo listado abajo — actualizá la sección correspondiente en el mismo commit. No registres cambios de código rutinarios acá.
+> **AUTO-MANTENIMIENTO:** Al completar un módulo, cambiar una regla de negocio, agregar una tabla, o resolver un riesgo — actualizá la sección correspondiente en el mismo commit.
 
 ---
 
-## ⚠️ Riesgos abiertos (resolver antes de deploy a prod real)
+## ⚠️ Riesgos abiertos
 
-**CRÍTICO — RLS helpers pueden no existir en prod:**
-Si las funciones `is_superadmin()`, `has_role()`, `current_usuario_municipio()`, `current_vecino_id()`, `is_admin_comuna()`, `is_staff()`, `in_dep()`, `current_vecino_municipio()` no están creadas en la DB, todas las queries timeout sin error explícito.
-- `is_staff()` fue reparada en junio 2026 — estaba vacía. Ahora matchea roles `admin_comuna` y `operador`.
-**Verificar:**
-```sql
-SELECT proname FROM pg_proc
-WHERE pronamespace='public'::regnamespace
-  AND proname IN ('is_superadmin','has_role','current_usuario_municipio',
-                  'current_vecino_id','is_admin_comuna','is_staff','in_dep',
-                  'current_vecino_municipio');
-```
+**CRÍTICO — Columna `activa` en tabla `dependencias`:**
+La columna es `activa` (NO `activo`). Bug corregido en junio 2026 en 9 archivos:
+`AdminLayout.jsx`, `ConfigPortal.jsx`, `DependenciaGestion.jsx`, `useDependenciaPublica.js`
+Si aparece error `column dependencias.activo does not exist` → buscar y reemplazar `.eq('activo'` por `.eq('activa'` en el archivo afectado.
 
-**CRÍTICO — Migraciones post-base sin verificar en prod:**
-Las 13 migraciones de mayo 2026 tienen estado desconocido en prod. Más críticas:
-- `20260514_vecinos_hc_obligatorios.sql`
-- `20260514_obras.sql` + `20260514_obras_historial.sql`
-- `20260514_audit_log.sql`
-- `20260517_dependencias_responsable.sql`
+**CRÍTICO — `useMunicipios.js:199`:** al insertar deps nuevas usa `activo: true` → pendiente cambiar a `activa: true`.
 
-**MEDIO — Buckets de Storage sin verificar:**
-Buckets `noticias-imagenes`, `recursos`, `avatares`, `documentos-hc` deben estar creados con policies configuradas.
+**CRÍTICO — RLS helpers:** si `is_staff()` está vacía → queries timeout. Fue reparada en junio 2026.
 
-**BAJO — Mensajería SMS: UI completa, backend pendiente:**
-`/admin/mensajeria` consume `mockData.js` — no hay integración Twilio real.
+**CRÍTICO — Migraciones post-base:** 13 migraciones de mayo 2026 con estado desconocido en prod.
+
+**BAJO — Mensajería SMS:** `/admin/mensajeria` consume `mockData.js` — no hay Twilio real.
 
 ---
 
@@ -43,72 +31,86 @@ Buckets `noticias-imagenes`, `recursos`, `avatares`, `documentos-hc` deben estar
 - **Local:** `C:\Users\ffrey\comunas-app`
 - **Hosting:** Vercel · **Producción:** `realsayana.comunas.lat`
 - **Bot IA / WhatsApp:** Plan-B (`plan-b-backend-production.up.railway.app`) — org Real Sayana: `bebe0b78-0cd9-4c5d-9ba0-956559ae2a34`
-- **Integraciones activas:** Plan-B (WhatsApp + Bot IA) · Anthropic Claude (sync KB) · Google Maps embed
 
 ---
 
 ## Reglas LOCKEADAS (no romper)
 
-### Paleta — CERO verde en ninguna forma
+### Paleta — CERO verde
 - **Primary:** `#0F1C35` (navy) · **Accent:** `#C9A84C` (gold) · **BG:** `#F5F4EF` (cream)
 - **OK / activo / éxito:** `#1D4ED8` (azul) — **NUNCA verde**
 - **Fuente:** Sora (Google Fonts)
-- **PROHIBIDO:** `green-*`, `emerald-*`, `teal-*`, `lime-*` en cualquier archivo JSX/CSS
-- Canal WhatsApp → violeta `#7C3AED` · Canal Online → `#64748B` · Canal Presencial → `#C9A84C`
+- Canal WhatsApp → `#7C3AED` · Online → `#64748B` · Presencial → `#C9A84C`
 
-### Columnas críticas de DB — errores frecuentes
-- **`dependencias.activa`** (NO `activo`) — boolean. Bug corregido en 9 archivos en junio 2026.
-  Archivos corregidos: `AdminLayout.jsx`, `ConfigPortal.jsx`, `DependenciaGestion.jsx`, `useDependenciaPublica.js`
-- **`bienes_patrimonio`** — columnas reales: `fecha_alta`, `seguro_poliza`, `proveedor` (NO `fecha_adquisicion`, `responsable`)
-- **`useMunicipios.js:199`** — al insertar deps nuevas usa `activo: true` — pendiente cambiar a `activa: true`
+### Columnas críticas de DB
+- **`dependencias.activa`** (NO `activo`) — boolean
+- **`bienes_patrimonio`** — columnas reales: `fecha_alta`, `seguro_poliza`, `proveedor`
+- **`dependencias`** columnas de módulos: `modulo_turnos`, `modulo_erp`, `modulo_bot`, `landing_template`, `bot_descripcion`, `bot_faq`, `bot_restricciones`, `capa`
 
-### Roles y flujo de autenticación
+### Roles
 - `superadmin` → `/superadmin` · `admin_comuna` → `/admin` · `operador` → `/admin` · `vecino` → `/portal`
-- `supabase` (con auth) → admin panel · `supabaseAnon` (sin auth) → portal público
-- Staff: `useAuth()` · Vecinos sin cuenta: `useVecino()` — NO mezclar
+- `supabase` (con auth) → admin · `supabaseAnon` (sin auth) → portal público — NO mezclar
 
-### Datos intocables de prod
-- Municipio piloto **Real Sayana** `654d0e86-255d-4498-b5c9-80d91793d318` — no eliminar
+### Datos intocables
+- Municipio piloto **Real Sayana** `654d0e86-255d-4498-b5c9-80d91793d318`
 - `audit_log` y `obras_historial` son **append-only**
 
-### Módulos gated por dependencia
-Tabla `dependencias` columnas: `modulo_turnos`, `modulo_erp`, `modulo_bot`, `landing_template`, `bot_descripcion`, `bot_faq`, `bot_restricciones`.
-- Panel `/admin/dependencias` (GestionDependencias.jsx) — toggles + selector template
-- `landing_template` values: `'estandar'` | `'espacio_fisico'` | `'administrativa'`
+---
+
+## Arquitectura de componentes — dos vistas de dependencia
+
+### `DependenciaGestion.jsx` → `/admin/dependencia-gestion/:id` (por UUID) ← VISTA PRINCIPAL
+Tabs navegados via `useSearchParams` (`?tab=`):
+- `info` (default) → Información pública / Equipo / Turnos / Historial (tabs internos)
+- `?tab=landing` → DepLandingTab
+- `?tab=bot_ia` → DepBotIATab
+- `?tab=administracion` → AdministracionTab
+- `?tab=historial` → TabHistorial
+
+### `DependenciaGeneral.jsx` → `/admin/dependencia/:tipo` (por tipo string)
+Para CIC (Sala PA, Juez, SUM, Ayuda Social) y deps con módulos especiales.
+Usa `useSearchParams` para `?tab=landing`, `?tab=bot_ia`, `?tab=admin`, etc.
+
+### Componentes compartidos (reutilizables en ambas vistas)
+- `src/components/admin/DepLandingTab.jsx` — CMS Landing pública (3 templates)
+- `src/components/admin/DepBotIATab.jsx` — Config Bot IA por dependencia
+- `src/components/admin/AdministracionTab.jsx` — ERP gastos/ingresos
 
 ---
 
-## Arquitectura de rutas y componentes
+## Sidebar (AdminLayout.jsx)
 
-### Dos componentes de dependencia — NO confundir
+**UN SOLO bloque "DEPENDENCIAS"** — la duplicación fue eliminada en junio 2026.
 
-**`DependenciaGestion.jsx`** → ruta `/admin/dependencia-gestion/:id` (por UUID)
-- Es la vista principal de cada dependencia desde el sidebar
-- Tabs: Información pública · Landing pública · Bot IA · Equipo · Turnos · Administración · Historial
-- Carga la dep por UUID desde Supabase
-
-**`DependenciaGeneral.jsx`** → ruta `/admin/dependencia/:tipo` (por tipo string)
-- Vista legacy por tipo, usada por CIC (Sala PA, Juez, SUM, Ayuda Social) y deps especiales
-- Tabs: info · landing · turnos · administracion · inventario · contacto · beneficiarios · reclamos · reservas · calendario
-- Tiene el `LandingTab` completo con CMS de 3 templates
-
-### Sidebar (AdminLayout.jsx)
-- UN SOLO bloque "DEPENDENCIAS" — la duplicación fue eliminada en junio 2026
-- `subitemsParaTipo(tipo, basePath)` genera sub-items
-- Default genérico apunta a `/admin/dependencia-gestion/:id` con sub-items:
-  - Información · Landing pública · Bot IA · Administración
-- Tipos CIC (caps/juzgado/sum/social) → sus propias rutas (`/admin/sala`, `/admin/juez`, etc.)
-- Tipos info-only (policia/educacion/jardin) → solo "Información"
+`subitemsParaTipo(tipo, basePath)` genera sub-items via URL params:
+- **Default genérico** (deps dinámicas → `/admin/dependencia-gestion/:id`):
+  - Información · `?tab=landing` Landing pública · `?tab=bot_ia` Bot IA · `?tab=administracion` Administración
+- **caps/salud/sala** (Sala PA → `/admin/sala`):
+  - Agenda · `?tab=landing` Landing · `?tab=bot_ia` Bot IA · `?tab=admin` Administración
+- **juzgado** (→ `/admin/juez`):
+  - Información · Expedientes · Landing · Bot IA · Administración
+- **sum** (→ `/admin/sum`):
+  - Reservas · Landing · Bot IA · Administración
+- **social/ayuda_social** (→ `/admin/dependencia/social`):
+  - Beneficiarios · Landing · Bot IA · Administración
+- **Info-only** (policial/educación): solo "Información"
 
 ---
 
-## Convenciones de código
+## Onboarding flotante
 
-- **Hooks de datos:** `useXXX(municipioId, filters={})` con `useQuery` + `staleTime: 60_000`
-- **Timeout de queries:** `AbortController` con 8s + fallback columnas 42703
-- **Fechas:** siempre via `src/lib/datetime.js`. TZ Argentina UTC-3
-- **Estados CSS:** clases de `src/index.css` (`.estado-pendiente`, `.estado-confirmado`, etc.)
-- **`lock: false` en Supabase auth:** no tocar sin prueba multi-tab
+`src/hooks/useOnboardingProgress.js` — detecta automáticamente el progreso:
+- 10 items en 5 grupos: Identidad / Dependencias / Portal / Usuarios / WhatsApp
+- Queries paralelas a Supabase
+- Se oculta cuando `pct === 100`
+
+`src/components/admin/OnboardingChecklist.jsx` — pill flotante bottom-right:
+- Anillo SVG animado con % de progreso (gold `#C9A84C`)
+- Click → expande panel con checklist agrupada
+- Items completados: checkmark azul + tachado
+- Items pendientes: botón "→" que navega directo a la sección
+- Paleta: navy `#0F1C35` + gold `#C9A84C`
+- Integrado en `AdminLayout.jsx`
 
 ---
 
@@ -116,66 +118,52 @@ Tabla `dependencias` columnas: `modulo_turnos`, `modulo_erp`, `modulo_bot`, `lan
 
 ### Credenciales Real Sayana
 - `org_id`: `bebe0b78-0cd9-4c5d-9ba0-956559ae2a34`
-- `api_key`: en `configuracion_portal` clave `plan_b_api_key`
 - Número sandbox: `+14155238886` / Código: `join danger-most`
-- Número producción: `+17868395271` (A2P pendiente aprobación Twilio)
+- Número producción: `+17868395271` (A2P pendiente Twilio)
 - `PLANB_PARTNER_KEY`: `comunas-planb-2026` · `INTERNAL_SYNC_KEY`: `comunas-sync-2026`
 
-### Vercel Functions de WhatsApp
-- `api/send-whatsapp.js` → envía mensajes (proxy con `X-API-Key`)
-- `api/webhook-whatsapp.js` → recibe mensajes, crea turnos con `canal='whatsapp'`
-- `api/update-bot-config.js` → actualiza system prompt del bot
-- `api/sync-planb.js` → sincroniza KB de todas las dependencias con Plan-B
+### Vercel Functions
+- `api/send-whatsapp.js` → envía mensajes
+- `api/webhook-whatsapp.js` → recibe mensajes, crea turnos `canal='whatsapp'`
+- `api/sync-planb.js` → sincroniza KB deps con Plan-B
+- `api/update-bot-config.js` → actualiza system prompt
 
-### Comportamiento del bot (Plan-B)
-- Reset de sesión si >4hs sin actividad o vecino escribe "hola/inicio/menu/start/comenzar"
-- System prompt incluye `nombre_oficial` del municipio desde `datos_municipio`
-- Config del bot por dependencia: `bot_descripcion`, `bot_faq`, `bot_restricciones` en tabla `dependencias`
+### Plan-B comportamiento
+- Reset sesión si >4hs o vecino escribe "hola/inicio/menu/start/comenzar"
+- System prompt incluye `nombre_oficial` del municipio
+- Config bot por dep: `bot_descripcion`, `bot_faq`, `bot_restricciones`
 
 ---
 
 ## Módulos implementados
 
-### Portal ciudadano (`/portal/*`)
-- `PortalPublico.jsx` — home con Hero Carousel, accesos rápidos, noticias, dependencias
-- `DependenciaPublica.jsx` — landing pública por dependencia (`/portal/dependencia/:tipo`)
-  - Hook `useDependenciaPublica` filtra por `.eq('activa', true)` ✅
-  - 3 templates: `estandar`, `espacio_fisico`, `administrativa`
+### Portal ciudadano
+- `PortalPublico.jsx` — home pública del tenant
+- `DependenciaPublica.jsx` — landing por dep (`/portal/dependencia/:tipo`)
+  - Hook filtra `.eq('activa', true)` ✅
 
-### Panel admin — DependenciaGestion.jsx (vista principal de deps)
-Tabs disponibles por dependencia:
-1. **Información pública** — form editable: descripción, horario, teléfono, email, dirección, whatsapp, responsable
-2. **Landing pública** — redirect a DependenciaGeneral con tab landing (CMS completo)
-3. **Bot IA** — bot_descripcion, bot_faq, bot_restricciones + sync con Plan-B
-4. **Equipo** — lista usuarios del municipio
-5. **Turnos** — lista + modal nuevo turno
-6. **Administración** — AdministracionTab (gastos/ingresos/solicitudes)
-7. **Historial** — últimos 50 turnos
-
-### Panel admin — DependenciaGeneral.jsx (LandingTab CMS)
-- 3 templates con wireframe visual mini (muestra header/body/footer)
-- Badge "Activo" (gold) en template guardado · Badge "Seleccionado" (azul) en elegido sin guardar
-- Preview de layout con etiquetas descriptivas por sección (Siempre / Este template / Condicional)
+### Panel admin — DependenciaGestion.jsx
+Tabs: Información pública · Landing · Bot IA · Equipo · Turnos · Administración · Historial
+Sub-tabs en "Información": Información pública / Equipo / Turnos / Historial
 
 ### Panel admin — GestionDependencias.jsx (`/admin/dependencias`)
-- Tabla con toggles: Activa, Turnos, ERP/Admin, Bot IA + selector Template landing
+- Toggles: Activa, Turnos, ERP/Admin, Bot IA + selector Template landing
 - Leyenda explicativa de los 3 templates
-- Tooltips en cada columna explicando su función
-- Título: "Configuración de dependencias"
+- Tooltips en columnas
 
 ### Panel admin — ImportadorVecinos.jsx (`/admin/importador`)
-- Soporta xlsx/xls/csv/ods
-- AI mapping de columnas via Edge Function (fallback auto-map)
-- Fuzzy dedup por nombre (Levenshtein)
-- Upsert por `dni + municipio_id`
+- xlsx/xls/csv/ods · AI mapping · fuzzy dedup (Levenshtein) · upsert `dni+municipio_id`
 
-### Panel admin — Tablero turnos (TablazoCross.jsx)
-- Borde izquierdo por canal: WhatsApp `#7C3AED`, Online `#64748B`, Presencial `#C9A84C`
-- Notificación WA automática al confirmar turno (fire-and-forget a `/api/send-whatsapp`)
+### Panel admin — Tablero turnos
+- Borde por canal: WA `#7C3AED`, Online `#64748B`, Presencial `#C9A84C`
+- Notificación WA al confirmar turno (fire-and-forget)
 
-### SuperAdmin (`/superadmin/*`)
-- Dashboard, Municipios, Dominios, Panel Global básico
-- **Pendiente:** panel de salud, branding por tenant, dominio propio (CNAME)
+### CIC (módulos propios con funcionalidad específica)
+- `SalaPrimerosAuxilios.jsx` → `/admin/sala` — médicos, HC, recetas, planilla
+- `JuezDePaz.jsx` → `/admin/juez` — expedientes
+- `SUM.jsx` → `/admin/sum` — reservas
+- `AyudaSocial.jsx` → `/admin/dependencia/social` — beneficiarios
+- **Todos pendientes:** integrar `DepLandingTab` y `DepBotIATab` (componentes ya creados)
 
 ---
 
@@ -187,12 +175,12 @@ Tabs disponibles por dependencia:
 /admin → AdminDashboard
 /admin/tablero, /admin/crm, /admin/crm/:id, /admin/mensajeria
 /admin/sala, /admin/juez, /admin/sum
-/admin/dependencia/:tipo → DependenciaGeneral (por tipo — CIC + legacy)
-/admin/dependencia-gestion/:dependenciaId → DependenciaGestion (por UUID — sidebar principal)
+/admin/dependencia/:tipo → DependenciaGeneral (CIC + legacy)
+/admin/dependencia-gestion/:dependenciaId → DependenciaGestion (sidebar principal)
 /admin/inventario, /admin/flota, /admin/patrimonio, /admin/obras-publicas
 /admin/noticias, /admin/administracion, /admin/auditoria, /admin/rendicion
 /admin/ayuda-social, /admin/config, /admin/config-general
-/admin/dependencias → GestionDependencias (toggles módulos)
+/admin/dependencias → GestionDependencias
 /admin/importador → ImportadorVecinos
 /superadmin, /superadmin/municipios, /superadmin/panel, /superadmin/dominios
 ```
@@ -203,21 +191,21 @@ Tabs disponibles por dependencia:
 
 - `AuthContext.jsx:55-102` — doble query secuencial, no cambiar orden
 - `supabase.js:24-30` — `lock: false`, no tocar sin prueba multi-tab
-- `supabaseAnon` — si se elimina, el portal público falla intermitentemente
-- `useDependenciaPublica.js` — filtra por `activa` (no `activo`). No cambiar.
-- `AdminLayout.jsx` — UN SOLO bloque dependencias. No agregar DependenciasGestionNav de vuelta.
-- `CalendarioSemanal.jsx` — `borderDeCanal()` mapea canal a color de borde
-- `TablazoCross.jsx` — `handleConfirmar` dispara notificación WA fire-and-forget
-- `api/sync-planb.js` — requiere `INTERNAL_SYNC_KEY` y `PLANB_PARTNER_KEY` en Vercel env vars
+- `supabaseAnon` — si se elimina, el portal público falla
+- `useDependenciaPublica.js` — filtra `activa` (no `activo`)
+- `AdminLayout.jsx` — UN SOLO bloque dependencias, no agregar DependenciasGestionNav
+- `TablazoCross.jsx` — `handleConfirmar` dispara WA fire-and-forget
+- `api/sync-planb.js` — requiere `INTERNAL_SYNC_KEY` y `PLANB_PARTNER_KEY`
 
 ---
 
 ## Pendientes prioritarios (próxima sesión)
 
-1. **SuperAdmin Fase 1** — panel de salud: status Supabase/Vercel/GitHub + métricas por tenant + alertas
-2. **SuperAdmin Fase 2** — branding por tenant: 6 paletas + 4 templates home portal ciudadano
-3. **SuperAdmin Fase 3** — dominio propio: CNAME desde SuperAdmin → Vercel API + SSL automático
-4. **CMS Home del tenant** — templates para `PortalPublico.jsx`
-5. **Fix `useMunicipios.js:199`** — cambiar `activo: true` a `activa: true` al insertar deps nuevas
-6. **Número producción WA** — A2P pendiente Twilio. Cuando apruebe cambiar `whatsapp_modo` a `prod_twilio`
-7. **Unificación Landing** — mover `LandingTab` de DependenciaGeneral a componente separado para usarlo también en DependenciaGestion directamente (en vez de redirect)
+1. **Integrar DepLandingTab y DepBotIATab** en los 4 módulos CIC (SalaPrimerosAuxilios, JuezDePaz, SUM, AyudaSocial)
+2. **SuperAdmin Fase 1** — panel de salud: status Supabase/Vercel/GitHub + alertas
+3. **SuperAdmin Fase 2** — branding por tenant: 6 paletas + 4 templates home
+4. **SuperAdmin Fase 3** — dominio propio: CNAME → Vercel API + SSL
+5. **CMS Home del tenant** — templates para `PortalPublico.jsx`
+6. **Fix `useMunicipios.js:199`** — `activo: true` → `activa: true`
+7. **Número producción WA** — A2P pendiente. Cuando apruebe: `whatsapp_modo` → `prod_twilio`
+8. **Onboarding:** verificar que las queries del hook coincidan con tablas reales en prod
