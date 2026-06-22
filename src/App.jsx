@@ -44,6 +44,7 @@ import ConfigGeneral       from './pages/admin/ConfigGeneral'
 import GestionDependencias from './pages/admin/GestionDependencias'
 import ImportadorVecinos   from './pages/admin/ImportadorVecinos'
 import PortalPublico       from './pages/portal/PortalPublico'
+import AgendaPublica       from './pages/portal/AgendaPublica'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import DependenciaPublica  from './pages/portal/DependenciaPublica'
@@ -123,6 +124,7 @@ const router = createBrowserRouter([
   { path: '/portal/noticias', element: <LandingDomainGuard><AdminDomainRedirect><NoticiasListado /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/noticias/:id', element: <LandingDomainGuard><AdminDomainRedirect><NoticiaDetalle /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/dependencia/:tipo', element: <LandingDomainGuard><AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/agenda', element: <LandingDomainGuard><AdminDomainRedirect><AgendaPublica /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/turno', element: <LandingDomainGuard><AdminDomainRedirect><SacarTurno /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/mi-turno', element: <LandingDomainGuard><AdminDomainRedirect><MiTurno /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/mi-salud', element: <LandingDomainGuard><AdminDomainRedirect><MiSalud /></AdminDomainRedirect></LandingDomainGuard> },
