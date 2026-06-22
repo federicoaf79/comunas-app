@@ -59,22 +59,52 @@ export default function GestionDependencias() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="font-sora text-2xl font-bold text-primary">Gestión de dependencias</h1>
+        <h1 className="font-sora text-2xl font-bold text-primary">Configuración de dependencias</h1>
         <p className="mt-1 text-sm text-primary-500">
-          Activá o desactivá módulos por dependencia. Los cambios se aplican de inmediato.
+          Activá o desactivá módulos por dependencia y definí el template de su página pública. Los cambios se aplican de inmediato.
         </p>
       </header>
+
+      {/* Leyenda de templates */}
+      <div className="rounded-xl border border-border bg-white p-4 text-sm">
+        <p className="mb-2 font-semibold text-primary">¿Qué define el template de landing?</p>
+        <p className="mb-3 text-xs text-primary-500">El template determina la estructura y secciones que se muestran en la página pública de cada dependencia en el portal ciudadano.</p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-border p-3">
+            <p className="font-sora text-xs font-bold text-primary">📋 Estándar</p>
+            <p className="mt-1 text-[11px] text-primary-500">Hero + lista de servicios + datos de contacto + mapa. Para la mayoría de dependencias administrativas.</p>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <p className="font-sora text-xs font-bold text-primary">🏛️ Espacio físico</p>
+            <p className="mt-1 text-[11px] text-primary-500">Hero + galería de fotos + servicios + contacto + mapa. Para dependencias con instalaciones físicas (cementerio, polideportivo, SUM).</p>
+          </div>
+          <div className="rounded-lg border border-border p-3">
+            <p className="font-sora text-xs font-bold text-primary">📁 Administrativa</p>
+            <p className="mt-1 text-[11px] text-primary-500">Hero + trámites y requisitos + archivos descargables + contacto + mapa. Para oficinas con trámites formales (Juez de Paz, Registro Civil).</p>
+          </div>
+        </div>
+      </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-card">
         <table className="min-w-full divide-y divide-border text-sm">
           <thead className="bg-primary-50">
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-primary">Dependencia</th>
-              <th className="px-4 py-3 text-center font-semibold text-primary">Activa</th>
-              <th className="px-4 py-3 text-center font-semibold text-primary">Turnos</th>
-              <th className="px-4 py-3 text-center font-semibold text-primary">ERP</th>
-              <th className="px-4 py-3 text-center font-semibold text-primary">Bot IA</th>
-              <th className="px-4 py-3 text-center font-semibold text-primary">Template landing</th>
+              <th className="px-4 py-3 text-center font-semibold text-primary">
+                <span title="Si está activa, la dependencia aparece en el portal ciudadano y en el sistema">Activa</span>
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-primary">
+                <span title="Permite que los vecinos saquen turnos online para esta dependencia">Turnos</span>
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-primary">
+                <span title="Habilita el módulo de administración: gastos, ingresos, solicitudes de compra">ERP / Admin</span>
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-primary">
+                <span title="El bot de WhatsApp responderá preguntas sobre esta dependencia con su información específica">Bot IA</span>
+              </th>
+              <th className="px-4 py-3 text-center font-semibold text-primary">
+                <span title="Define la estructura visual de la página pública de esta dependencia en el portal ciudadano">Template landing</span>
+              </th>
               <th className="px-4 py-3 text-center font-semibold text-primary"></th>
             </tr>
           </thead>
