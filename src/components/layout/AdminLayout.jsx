@@ -167,7 +167,7 @@ function subitemsParaTipo(tipo, basePath) {
   const t = (tipo ?? '').toLowerCase()
   if (TIPOS_SIN_ADMIN_TAB.has(t)) {
     return [
-      { to: basePath, label: 'Gestión', kind: 'gestion' },
+      { to: basePath, label: 'Información', kind: 'gestion' },
     ]
   }
   if (t === 'caps' || t === 'salud' || t === 'sala') {
@@ -178,7 +178,7 @@ function subitemsParaTipo(tipo, basePath) {
   }
   if (t === 'juzgado') {
     return [
-      { to: basePath,                            label: 'Gestión',         kind: 'gestion' },
+      { to: basePath,                            label: 'Información',     kind: 'gestion' },
       { to: `${basePath}?tab=expedientes`,       label: 'Expedientes',     kind: 'gestion' },
       { to: `${basePath}?tab=landing`,           label: 'Landing pública', kind: 'gestion' },
       { to: `${basePath}?tab=admin`,             label: 'Administración',  kind: 'admin' },
@@ -200,7 +200,7 @@ function subitemsParaTipo(tipo, basePath) {
   }
   // Dependencias dinámicas genéricas
   return [
-    { to: basePath,                        label: 'Gestión',         kind: 'gestion' },
+    { to: basePath,                        label: 'Información',     kind: 'gestion' },
     { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
     { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
   ]

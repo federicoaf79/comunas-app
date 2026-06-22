@@ -147,40 +147,139 @@ function vecinoNombre(v) {
 // Tab: Información
 // ─────────────────────────────────────────────────────────────────
 
-function InfoRow({ label, value }) {
-  return (
-    <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:justify-between sm:gap-4 last:border-b-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-primary-400 sm:text-sm">{label}</p>
-      <p className="text-sm font-semibold text-primary sm:text-base">{value || '—'}</p>
-    </div>
-  )
-}
+function InformacionTab({ dep, municipioId }) {
+  const [form, setForm] = useState({
+    nombre:           dep.nombre           ?? '',
+    horario_atencion: dep.horario_atencion  ?? '',
+    telefono:         dep.telefono          ?? '',
+    direccion:        dep.direccion         ?? '',
+    email_contacto:   dep.email_contacto    ?? '',
+    whatsapp:         dep.whatsapp          ?? '',
+    responsable:      dep.responsable       ?? '',
+    descripcion_larga: dep.descripcion_larga ?? '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [ok, setOk]         = useState(false)
+  const [error, setError]   = useState('')
 
-function InformacionTab({ dep }) {
-  const info = DEP_INFO[dep.tipo] ?? {}
+  function set(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }))
+    setOk(false)
+  }
+
+  async function handleGuardar() {
+    setSaving(true)
+    setError('')
+    setOk(false)
+    try {
+      const { error: err } = await supabase
+        .from('dependencias')
+        .update({
+          horario_atencion:  form.horario_atencion  || null,
+          telefono:          form.telefono           || null,
+          direccion:         form.direccion          || null,
+          email_contacto:    form.email_contacto     || null,
+          whatsapp:          form.whatsapp           || null,
+          responsable:       form.responsable        || null,
+          descripcion_larga: form.descripcion_larga  || null,
+        })
+        .eq('id', dep.id)
+      if (err) throw err
+      setOk(true)
+    } catch (e) {
+      setError(e.message || 'No pudimos guardar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputCls = 'w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent'
+
   return (
     <div className="space-y-4">
       <div className="card p-5 sm:p-6">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Datos generales</h3>
-        <div className="mt-2">
-          <InfoRow label="Nombre"      value={dep.nombre} />
-          <InfoRow label="Tipo"        value={dep.tipo} />
-          <InfoRow label="Estado"      value={dep.activa === false ? 'Inactiva' : 'Activa'} />
-          <InfoRow label="Horario"     value={info.horario} />
-          <InfoRow label="Descripción" value={info.detalle} />
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="font-sora text-base font-bold text-primary">{dep.nombre}</h3>
+            <p className="mt-0.5 text-xs text-primary-400">
+              Tipo: {dep.tipo} · {dep.activa === false ? 'Inactiva' : 'Activa'}
+            </p>
+          </div>
+          <a
+            href={`/portal/dependencia/${dep.tipo}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary text-xs flex items-center gap-1.5"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            Ver en portal
+          </a>
         </div>
-      </div>
-      <div className="card p-5 sm:p-6">
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">Contacto directo</h3>
-        <div className="mt-2">
-          <InfoRow label="Teléfono"    value={null} />
-          <InfoRow label="Responsable" value={null} />
+
+        <div className="space-y-4">
+          {/* Descripción */}
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Descripción</label>
+            <textarea
+              rows={3}
+              value={form.descripcion_larga}
+              onChange={e => set('descripcion_larga', e.target.value)}
+              placeholder="Descripción de la dependencia para el portal ciudadano..."
+              className={inputCls}
+            />
+          </div>
+
+          {/* Grid de campos */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Horario de atención</label>
+              <input type="text" value={form.horario_atencion} onChange={e => set('horario_atencion', e.target.value)}
+                placeholder="Lun a Vie · 7:00 – 13:00" className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Responsable</label>
+              <input type="text" value={form.responsable} onChange={e => set('responsable', e.target.value)}
+                placeholder="Nombre del responsable" className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Teléfono</label>
+              <input type="text" value={form.telefono} onChange={e => set('telefono', e.target.value)}
+                placeholder="+54 9 385 XXX-XXXX" className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Email de contacto</label>
+              <input type="email" value={form.email_contacto} onChange={e => set('email_contacto', e.target.value)}
+                placeholder="dependencia@municipio.gob.ar" className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">Dirección</label>
+              <input type="text" value={form.direccion} onChange={e => set('direccion', e.target.value)}
+                placeholder="Av. San Martín s/n" className={inputCls} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-500">WhatsApp</label>
+              <input type="text" value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)}
+                placeholder="Solo dígitos: 5493854110001" className={inputCls} />
+            </div>
+          </div>
         </div>
-        <p className="mt-3 text-xs italic text-primary-400">
-          El teléfono y el responsable directo todavía no están en la tabla
-          dependencias. Si los necesitás visibles, configurálos en /admin/config-general
-          o pedí extender el schema.
-        </p>
+
+        {error && <div className="mt-4 rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>}
+        {ok && <div className="mt-4 rounded-md border border-ok-100 bg-ok-50 p-3 text-sm text-ok-700">Información guardada correctamente.</div>}
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={handleGuardar}
+            className="btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            {saving ? <Spinner size="sm" /> : null}
+            {saving ? 'Guardando...' : 'Guardar información'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1338,7 +1437,7 @@ export default function DependenciaGeneral() {
       {!isLoading && dep && (
         <>
           <div>
-            {seccion === 'info'           && <InformacionTab dep={dep} />}
+            {seccion === 'info'           && <InformacionTab dep={dep} municipioId={municipioId} />}
             {seccion === 'landing'        && <LandingTab dep={dep} municipioId={municipioId} />}
             {seccion === 'turnos'         && <TurnosTab dep={dep} onOpenNuevo={() => setModalOpen(true)} />}
             {seccion === 'administracion' && (
