@@ -204,6 +204,7 @@ function subitemsParaTipo(tipo, basePath) {
   return [
     { to: basePath,  label: 'Información',     kind: 'gestion' },
     { to: basePath,  label: 'Landing pública', kind: 'gestion' },
+    { to: basePath,  label: 'Bot IA',          kind: 'gestion' },
     { to: basePath,  label: 'Administración',  kind: 'admin'   },
   ]
 }
