@@ -199,13 +199,12 @@ function subitemsParaTipo(tipo, basePath) {
     ]
   }
   // Dependencias dinámicas genéricas → DependenciaGestion con tabs
-  // internos (useState). Todos apuntan al mismo basePath; el usuario
-  // llega y ve los tabs en la UI.
+  // vía URL params (?tab=). El sidebar navega directamente al tab correcto.
   return [
-    { to: basePath,  label: 'Información',     kind: 'gestion' },
-    { to: basePath,  label: 'Landing pública', kind: 'gestion' },
-    { to: basePath,  label: 'Bot IA',          kind: 'gestion' },
-    { to: basePath,  label: 'Administración',  kind: 'admin'   },
+    { to: basePath,                        label: 'Información',     kind: 'gestion' },
+    { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+    { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',          kind: 'gestion' },
+    { to: `${basePath}?tab=administracion`, label: 'Administración', kind: 'admin'   },
   ]
 }
 

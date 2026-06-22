@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
@@ -28,13 +28,10 @@ import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 // inferior). Paleta COMUNAS — navy/gold/azul, cero verde.
 // =============================================================
 
-const TABS = [
+const TABS_INFO = [
   { value: 'info',      label: 'Información pública' },
-  { value: 'landing',   label: 'Landing pública' },
-  { value: 'bot_ia',    label: 'Bot IA' },
   { value: 'equipo',    label: 'Equipo' },
   { value: 'turnos',    label: 'Turnos' },
-  { value: 'administracion', label: 'Administración' },
   { value: 'historial', label: 'Historial' },
 ]
 
@@ -673,7 +670,11 @@ export default function DependenciaGestion() {
   const { dependenciaId } = useParams()
   const { perfil } = useAuth()
   const municipioId = useEffectiveMunicipioId()
-  const [tab, setTab] = useState('info')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab') || 'info'
+  function setTab(value) {
+    setSearchParams(value === 'info' ? {} : { tab: value })
+  }
 
   const { data: dep, isLoading, error } = useQuery({
     queryKey: ['dependencia-gestion', dependenciaId],
@@ -730,28 +731,33 @@ export default function DependenciaGestion() {
         </div>
       </header>
 
-      {/* Tabs — mismo patrón que ObrasPublicas / AtencionDetalle */}
-      <nav role="tablist" className="flex overflow-x-auto border-b border-border">
-        {TABS.map(t => {
-          const active = tab === t.value
-          return (
+      {/* Tabs — solo para info/equipo/turnos/historial */}
+      {['info','equipo','turnos','historial'].includes(tab) && (
+        <div className="flex gap-1 border-b border-border">
+          {TABS_INFO.map(t => (
             <button
               key={t.value}
-              role="tab"
-              aria-selected={active}
               onClick={() => setTab(t.value)}
-              className={
-                'whitespace-nowrap border-b-2 px-4 py-2 text-sm font-semibold transition-colors ' +
-                (active
+              className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                tab === t.value
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-primary-400 hover:border-primary-200 hover:text-primary-700')
-              }
+                  : 'border-transparent text-primary-500 hover:text-primary'
+              }`}
             >
               {t.label}
             </button>
-          )
-        })}
-      </nav>
+          ))}
+        </div>
+      )}
+
+      {/* Breadcrumb para landing/bot_ia/administracion */}
+      {['landing','bot_ia','administracion'].includes(tab) && (
+        <div className="flex items-center gap-2 text-sm text-primary-500 pb-2 border-b border-border">
+          <button onClick={() => setTab('info')} className="hover:text-primary transition-colors">
+            ← Volver a Información
+          </button>
+        </div>
+      )}
 
       <div key={tab} className="animate-fade-in">
         {tab === 'info'      && <TabInformacion dep={dep} dependenciaId={dependenciaId} />}
