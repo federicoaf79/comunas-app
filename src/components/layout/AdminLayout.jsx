@@ -174,10 +174,11 @@ function subitemsParaTipo(tipo, basePath) {
   }
   if (t === 'caps' || t === 'salud' || t === 'sala') {
     return [
-      { to: basePath,                  label: 'Agenda',           kind: 'gestion' },
-      { to: `${basePath}?tab=landing`, label: 'Landing pública',  kind: 'gestion' },
-      { to: `${basePath}?tab=bot_ia`,  label: 'Bot IA',           kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,   label: 'Administración',   kind: 'admin' },
+      { to: basePath,                            label: 'Agenda',          kind: 'gestion' },
+      { to: `${basePath}?tab=profesionales`,     label: 'Profesionales',   kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,           label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,            label: 'Bot IA',          kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,             label: 'Administración',  kind: 'admin'   },
     ]
   }
   if (t === 'juzgado') {

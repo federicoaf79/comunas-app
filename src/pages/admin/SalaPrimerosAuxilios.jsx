@@ -15,6 +15,7 @@ import AdministracionTab from '../../components/admin/AdministracionTab'
 import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
 import DepLandingTab from '../../components/admin/DepLandingTab'
 import DepBotIATab from '../../components/admin/DepBotIATab'
+import ProfesionalesTab from '../../components/admin/ProfesionalesTab'
 import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 
@@ -41,6 +42,7 @@ const COLOR_TURNO_SALA = COLOR_POR_ESPECIALIDAD.general  // fallback histórico
 // sub-secciones desde el sidebar (AdminLayout NavGroup).
 const SECCION_LABEL = {
   agenda:         'Agenda',
+  profesionales:  'Profesionales',
   administracion: 'Administración',
 }
 
@@ -201,6 +203,13 @@ export default function SalaPrimerosAuxilios() {
     return (
       <div className="p-6">
         <DepBotIATab dep={depSalud} />
+      </div>
+    )
+  }
+  if (tabParamRaw === 'profesionales') {
+    return (
+      <div className="p-6">
+        <ProfesionalesTab municipioId={municipioId} dependenciaId={dependenciaSaludId} />
       </div>
     )
   }
