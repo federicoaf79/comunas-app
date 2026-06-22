@@ -198,11 +198,10 @@ function subitemsParaTipo(tipo, basePath) {
       { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
     ]
   }
-  // Dependencias dinámicas genéricas
+  // Dependencias dinámicas genéricas → ruta a DependenciaGestion que
+  // usa tabs internos (useState), no query params. Un solo link.
   return [
-    { to: basePath,                        label: 'Información',     kind: 'gestion' },
-    { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
-    { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
+    { to: basePath,  label: 'Información',  kind: 'gestion' },
   ]
 }
 
@@ -563,42 +562,6 @@ function SuperadminSection() {
   )
 }
 
-// Grupo de sidebar para el módulo genérico de gestión de
-// dependencias (DependenciaGestion, ruta /admin/dependencia-gestion/:id).
-// Aislado a propósito: hace su propia query y NO toca la lógica
-// de dependencias por :tipo existente más abajo. Lista las
-// dependencias activas del municipio que NO tienen módulo propio
-// (excluye sala PA, juzgado, SUM, administración, obras).
-const TIPOS_GESTION_EXCLUIDOS = new Set([
-  ...TIPOS_CON_MODULO_PROPIO,
-  'obras', 'obras_publicas',
-])
-
-function DependenciasGestionNav() {
-  const municipioId = useEffectiveMunicipioId()
-  const { data: deps = [] } = useDependenciasAdmin({ municipioIdOverride: municipioId })
-
-  const items = (deps ?? [])
-    .filter(d => d?.activa !== false)
-    .filter(d => !TIPOS_GESTION_EXCLUIDOS.has((d.tipo ?? '').toLowerCase()))
-    .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
-
-  if (items.length === 0) return null
-
-  return (
-    <>
-      <Rotulo>Dependencias</Rotulo>
-      {items.map(d => (
-        <FlatNavLink
-          key={d.id}
-          to={`/admin/dependencia-gestion/${d.id}`}
-          label={d.nombre}
-        />
-      ))}
-    </>
-  )
-}
-
 // Rótulo separador entre secciones del sidebar.
 function Rotulo({ children }) {
   return (
@@ -720,7 +683,7 @@ export default function AdminLayout() {
       if (seenTipo.has(t)) continue
       seenTipo.add(t)
       const label = LABEL_BY_TIPO[t] ?? d.nombre
-      const basePath = `/admin/dependencia/${t}`
+      const basePath = `/admin/dependencia-gestion/${d.id}`
       const entry = entryParaDep({ tipo: t, label, basePath, dep: d })
       if (!entry) continue
       if (TIPOS_INFO_ONLY.has(t)) info.push(entry)
@@ -791,8 +754,6 @@ export default function AdminLayout() {
               ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
-
-          <DependenciasGestionNav />
 
           {navGestionFiltrado.length > 0 && <Rotulo>Gestión municipal</Rotulo>}
           {navGestionFiltrado.map(item => (
