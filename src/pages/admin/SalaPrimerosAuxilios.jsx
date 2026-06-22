@@ -100,8 +100,8 @@ export default function SalaPrimerosAuxilios() {
   const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
   const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
-                    || tabParamRaw === 'landing' || tabParamRaw === 'bot_ia'
-                       ? tabParamRaw : null
+                       ? 'administracion'
+                       : 'agenda'
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const [turnoModalOpen, setTurnoModalOpen] = useState(false)
