@@ -10,6 +10,8 @@ import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+import DepLandingTab from '../../components/admin/DepLandingTab'
+import DepBotIATab from '../../components/admin/DepBotIATab'
 
 // Color estándar de los turnos del Juzgado de Paz — navy primary.
 const COLOR_TURNO_JUEZ = '#0F1C35'
@@ -609,7 +611,9 @@ export default function JuezDePaz() {
                        ? 'administracion'
                        : tabParamRaw === 'expedientes'
                          ? 'expedientes'
-                         : 'gestion'
+                         : tabParamRaw === 'landing' || tabParamRaw === 'bot_ia'
+                           ? tabParamRaw
+                           : 'gestion'
   const [modalOpen, setModalOpen] = useState(false)
 
   // Busca la dependencia "juzgado" del municipio del operador. Si
@@ -641,6 +645,9 @@ export default function JuezDePaz() {
     ? 'gestion'
     : puedeAdministrar ? 'administracion' : null
   const seccion = seccionPermitida(tabRequested) ? tabRequested : primeraSeccion
+
+  if (tabParamRaw === 'landing') return <div className="p-6"><DepLandingTab dep={depJuez} /></div>
+  if (tabParamRaw === 'bot_ia')  return <div className="p-6"><DepBotIATab  dep={depJuez} /></div>
 
   return (
     <div className="space-y-5">

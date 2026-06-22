@@ -15,6 +15,8 @@ import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import SumReservaFormModal from '../../components/admin/SumReservaFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
+import DepLandingTab from '../../components/admin/DepLandingTab'
+import DepBotIATab from '../../components/admin/DepBotIATab'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 import { dateOf, shortDateOf } from '../../lib/datetime'
 
@@ -537,7 +539,9 @@ export default function SUM() {
   const tabParamRaw = searchParams.get('tab') || ''
   const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
                        ? 'administracion'
-                       : 'reservas'
+                       : tabParamRaw === 'landing' || tabParamRaw === 'bot_ia'
+                         ? tabParamRaw
+                         : 'reservas'
   // Busca la dependencia del SUM en el municipio efectivo. El find
   // tolera variaciones del seed (sum / salon / salon_usos_multiples).
   const depsQ = useDependencias(municipioId)
@@ -563,6 +567,9 @@ export default function SUM() {
   const seccion = tabRequested === 'administracion' && !puedeAdministrar
     ? primeraSeccion
     : tabRequested
+
+  if (tabParamRaw === 'landing') return <div className="p-6"><DepLandingTab dep={depSum} /></div>
+  if (tabParamRaw === 'bot_ia')  return <div className="p-6"><DepBotIATab  dep={depSum} /></div>
 
   return (
     <div className="space-y-5">

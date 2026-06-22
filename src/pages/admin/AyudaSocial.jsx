@@ -17,6 +17,8 @@ import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import StatCard from '../../components/ui/StatCard'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
+import DepLandingTab from '../../components/admin/DepLandingTab'
+import DepBotIATab from '../../components/admin/DepBotIATab'
 import { dateOf, todayArgYMD } from '../../lib/datetime'
 
 // =============================================================
@@ -103,6 +105,16 @@ export default function AyudaSocial() {
     else                       next.set('tab', v)
     setSearchParams(next)
   }
+
+  // Busca la dependencia de Ayuda Social
+  const depsQ = useDependencias(municipioId)
+  const depSocial = useMemo(() => {
+    const tipos = ['social', 'ayuda_social']
+    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+  }, [depsQ.data])
+
+  if (tab === 'landing') return <div className="p-6"><DepLandingTab dep={depSocial} /></div>
+  if (tab === 'bot_ia')  return <div className="p-6"><DepBotIATab  dep={depSocial} /></div>
 
   return (
     <div className="space-y-5">

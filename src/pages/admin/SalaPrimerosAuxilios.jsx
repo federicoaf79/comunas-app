@@ -13,6 +13,8 @@ import Spinner from '../../components/ui/Spinner'
 import RecetaUploader from '../../components/hc/RecetaUploader'
 import AdministracionTab from '../../components/admin/AdministracionTab'
 import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
+import DepLandingTab from '../../components/admin/DepLandingTab'
+import DepBotIATab from '../../components/admin/DepBotIATab'
 import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 
@@ -98,8 +100,8 @@ export default function SalaPrimerosAuxilios() {
   const [searchParams] = useSearchParams()
   const tabParamRaw = searchParams.get('tab') || ''
   const tabRequested = tabParamRaw === 'admin' || tabParamRaw === 'administracion'
-                       ? 'administracion'
-                       : 'agenda'
+                    || tabParamRaw === 'landing' || tabParamRaw === 'bot_ia'
+                       ? tabParamRaw : null
   const [vista, setVista] = useState('dia')
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const [turnoModalOpen, setTurnoModalOpen] = useState(false)
@@ -186,6 +188,21 @@ export default function SalaPrimerosAuxilios() {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => window.print())
     })
+  }
+
+  if (tabParamRaw === 'landing') {
+    return (
+      <div className="p-6">
+        <DepLandingTab dep={depSalud} />
+      </div>
+    )
+  }
+  if (tabParamRaw === 'bot_ia') {
+    return (
+      <div className="p-6">
+        <DepBotIATab dep={depSalud} />
+      </div>
+    )
   }
 
   return (

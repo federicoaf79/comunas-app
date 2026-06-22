@@ -174,8 +174,10 @@ function subitemsParaTipo(tipo, basePath) {
   }
   if (t === 'caps' || t === 'salud' || t === 'sala') {
     return [
-      { to: basePath,                  label: 'Agenda',          kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,   label: 'Administración', kind: 'admin' },
+      { to: basePath,                  label: 'Agenda',           kind: 'gestion' },
+      { to: `${basePath}?tab=landing`, label: 'Landing pública',  kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,  label: 'Bot IA',           kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,   label: 'Administración',   kind: 'admin' },
     ]
   }
   if (t === 'juzgado') {
@@ -183,6 +185,7 @@ function subitemsParaTipo(tipo, basePath) {
       { to: basePath,                            label: 'Información',     kind: 'gestion' },
       { to: `${basePath}?tab=expedientes`,       label: 'Expedientes',     kind: 'gestion' },
       { to: `${basePath}?tab=landing`,           label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,            label: 'Bot IA',          kind: 'gestion' },
       { to: `${basePath}?tab=admin`,             label: 'Administración',  kind: 'admin' },
     ]
   }
@@ -190,6 +193,7 @@ function subitemsParaTipo(tipo, basePath) {
     return [
       { to: basePath,                        label: 'Reservas',        kind: 'gestion' },
       { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',          kind: 'gestion' },
       { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
     ]
   }
@@ -197,6 +201,7 @@ function subitemsParaTipo(tipo, basePath) {
     return [
       { to: basePath,                        label: 'Beneficiarios',   kind: 'gestion' },
       { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',          kind: 'gestion' },
       { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
     ]
   }
