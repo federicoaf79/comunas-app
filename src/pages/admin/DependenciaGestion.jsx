@@ -9,6 +9,8 @@ import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
 import { dateTimeOf } from '../../lib/datetime'
+import AdministracionTab from '../../components/admin/AdministracionTab'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 
 // =============================================================
 // /admin/dependencia-gestion/:dependenciaId — módulo genérico para
@@ -28,8 +30,10 @@ import { dateTimeOf } from '../../lib/datetime'
 
 const TABS = [
   { value: 'info',      label: 'Información pública' },
+  { value: 'landing',   label: 'Landing pública' },
   { value: 'equipo',    label: 'Equipo' },
   { value: 'turnos',    label: 'Turnos' },
+  { value: 'administracion', label: 'Administración' },
   { value: 'historial', label: 'Historial' },
 ]
 
@@ -479,12 +483,43 @@ function TabHistorial({ dependenciaId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TAB 5 · Landing pública (redirect)
+// ─────────────────────────────────────────────────────────────────
+
+function LandingRedirectTab({ dep }) {
+  return (
+    <div className="card p-6 text-center space-y-3">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto h-10 w-10 text-primary-300">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zM12 8v4m0 4h.01" />
+      </svg>
+      <p className="font-sora font-semibold text-primary">Configuración de Landing pública</p>
+      <p className="text-sm text-primary-500">
+        Editá el contenido, template y secciones que los vecinos ven en el portal ciudadano para esta dependencia.
+      </p>
+      <a
+        href={`/admin/dependencia/${dep.tipo}?tab=landing`}
+        className="btn-primary inline-flex items-center gap-2"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+        Ir a configuración de landing
+      </a>
+      <p className="text-xs text-primary-400">
+        También podés acceder desde el portal: <a href={`/portal/dependencia/${dep.tipo}`} target="_blank" rel="noopener noreferrer" className="underline">Ver página pública →</a>
+      </p>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página
 // ─────────────────────────────────────────────────────────────────
 
 export default function DependenciaGestion() {
   const { dependenciaId } = useParams()
   const { perfil } = useAuth()
+  const municipioId = useEffectiveMunicipioId()
   const [tab, setTab] = useState('info')
 
   const { data: dep, isLoading, error } = useQuery({
@@ -567,8 +602,18 @@ export default function DependenciaGestion() {
 
       <div key={tab} className="animate-fade-in">
         {tab === 'info'      && <TabInformacion dep={dep} dependenciaId={dependenciaId} />}
+        {tab === 'landing'   && dep && <LandingRedirectTab dep={dep} />}
         {tab === 'equipo'    && <TabEquipo dep={dep} />}
         {tab === 'turnos'    && <TabTurnos dep={dep} dependenciaId={dependenciaId} />}
+        {tab === 'administracion' && dep && (
+          <AdministracionTab
+            dependenciaId={dep.id}
+            dependenciaNombre={dep.nombre}
+            municipioId={municipioId}
+            canApprove={true}
+            canCreate={true}
+          />
+        )}
         {tab === 'historial' && <TabHistorial dependenciaId={dependenciaId} />}
       </div>
     </div>
