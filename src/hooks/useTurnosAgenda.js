@@ -80,7 +80,7 @@ export function useTurnosAgendaDependencia(dependenciaId, fechaDesde, fechaHasta
       return data ?? []
     },
     enabled: !!dependenciaId && !!fechaDesde,
-    staleTime: 30_000,
+    staleTime: 60_000,
   })
 }
 

@@ -72,7 +72,7 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
       return expandirEventos(data ?? [], fechaDesde, fechaHasta)
     },
     enabled: !!municipioId && !!fechaDesde,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   })
 }
 
@@ -90,7 +90,7 @@ export function useAgendaPublicaAdmin(municipioId) {
       return data ?? []
     },
     enabled: !!municipioId,
-    staleTime: 30_000,
+    staleTime: 2 * 60_000,
   })
 }
 

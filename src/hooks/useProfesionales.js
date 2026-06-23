@@ -17,7 +17,7 @@ export function useProfesionales(municipioId, dependenciaId) {
       return data ?? []
     },
     enabled: !!municipioId,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   })
 }
 
