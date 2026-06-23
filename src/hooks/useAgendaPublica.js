@@ -69,10 +69,13 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
   return useQuery({
     queryKey: ['agenda-publica', municipioId, fechaDesde, fechaHasta],
     queryFn: async () => {
-      if (!municipioId) return []
+      if (!municipioId || typeof municipioId !== 'string') return []
+      // Asegurarse que municipioId es un string UUID válido
+      const mId = typeof municipioId === 'string' ? municipioId : municipioId?.id ?? null
+      if (!mId) return []
       const SUPABASE_URL = 'https://tuvfrnjnupfurzkepsod.supabase.co'
       const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-      const url = `${SUPABASE_URL}/rest/v1/agenda_publica?municipio_id=eq.${municipioId}&activo=eq.true&order=hora_inicio.asc`
+      const url = `${SUPABASE_URL}/rest/v1/agenda_publica?municipio_id=eq.${mId}&activo=eq.true&order=hora_inicio.asc`
       const res = await fetch(url, {
         headers: {
           'apikey': SUPABASE_ANON_KEY,
