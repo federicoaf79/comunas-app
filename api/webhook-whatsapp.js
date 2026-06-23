@@ -96,7 +96,7 @@ export default async function handler(req, res) {
           vecino_id: vecino.id,
           dependencia_id: dep.id,
           fecha_hora: entities.fecha && entities.hora
-            ? `${entities.fecha}T${entities.hora}:00`
+            ? `${entities.fecha}T${entities.hora}:00-03:00`
             : null,
           estado: 'confirmado',
           motivo: message,
