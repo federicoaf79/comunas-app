@@ -2,7 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { supabaseAnon } from '../lib/supabaseAnon'
 
-const COLS = `
+// SQL ejecutado en Supabase para permitir acceso anónimo:
+// DROP POLICY IF EXISTS "publico puede ver agenda activa" ON agenda_publica;
+// CREATE POLICY "publico puede ver agenda activa" ON agenda_publica FOR SELECT TO anon USING (activo = true);
+
+const COLS_PUBLIC = `
+  id, titulo, tipo, descripcion, recurrente, dias_semana,
+  fecha_inicio, fecha_fin, hora_inicio, hora_fin, color, activo,
+  municipio_id, dependencia_id, profesional_id
+`
+
+const COLS_ADMIN = `
   id, titulo, tipo, descripcion, recurrente, dias_semana,
   fecha_inicio, fecha_fin, hora_inicio, hora_fin, color, activo,
   municipio_id, dependencia_id, profesional_id,
@@ -29,7 +39,6 @@ export function expandirEventos(eventos, fechaDesde, fechaHasta) {
       const cur = new Date(desde)
       while (cur <= hasta) {
         const nombreDia = cur.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-        console.log('[expandir] fecha:', cur.toISOString().split('T')[0], 'nombreDia:', nombreDia, 'dias_semana:', ev.dias_semana)
         const matchDia = ev.dias_semana.some(d => {
           const dn = d.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
           return dn === nombreDia || DIAS_MAP[dn] === cur.getDay()
@@ -66,15 +75,12 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
       // El filtro de fechas lo hace expandirEventos() en JS
       const { data, error } = await supabaseAnon
         .from('agenda_publica')
-        .select(COLS)
+        .select(COLS_PUBLIC)
         .eq('municipio_id', municipioId)
         .eq('activo', true)
         .order('hora_inicio')
       if (error) throw error
-      console.log('[agenda-publica] raw data:', data?.length, data?.map(e => ({titulo: e.titulo, recurrente: e.recurrente, dias: e.dias_semana})))
-      const expandido = expandirEventos(data ?? [], fechaDesde, fechaHasta)
-      console.log('[agenda-publica] expandido:', expandido.length, fechaDesde, fechaHasta)
-      return expandido
+      return expandirEventos(data ?? [], fechaDesde, fechaHasta)
     },
     enabled: !!municipioId && !!fechaDesde,
     staleTime: 5 * 60_000,
@@ -88,7 +94,7 @@ export function useAgendaPublicaAdmin(municipioId) {
       if (!municipioId) return []
       const { data, error} = await supabase
         .from('agenda_publica')
-        .select(COLS)
+        .select(COLS_ADMIN)
         .eq('municipio_id', municipioId)
         .order('created_at', { ascending: false })
       if (error) throw error
@@ -105,12 +111,12 @@ export function useUpsertAgendaPublica() {
     mutationFn: async ({ id, municipio_id, ...fields }) => {
       if (id) {
         const { data, error } = await supabase.from('agenda_publica')
-          .update(fields).eq('id', id).select(COLS).single()
+          .update(fields).eq('id', id).select(COLS_ADMIN).single()
         if (error) throw error
         return data
       }
       const { data, error } = await supabase.from('agenda_publica')
-        .insert({ municipio_id, ...fields }).select(COLS).single()
+        .insert({ municipio_id, ...fields }).select(COLS_ADMIN).single()
       if (error) throw error
       return data
     },
