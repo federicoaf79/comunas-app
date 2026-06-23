@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { supabase, supabasePublic } from '../lib/supabase'
 
 // SQL ejecutado en Supabase para permitir acceso anónimo:
 // DROP POLICY IF EXISTS "publico puede ver agenda activa" ON agenda_publica;
@@ -38,6 +38,7 @@ export function expandirEventos(eventos, fechaDesde, fechaHasta) {
       const cur = new Date(desde)
       while (cur <= hasta) {
         const nombreDia = cur.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        if (ev.recurrente) console.log('[expandir]', cur.toISOString().split('T')[0], 'nombreDia:', nombreDia, 'dias_semana:', ev.dias_semana)
         const matchDia = ev.dias_semana.some(d => {
           const dn = d.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
           return dn === nombreDia || DIAS_MAP[dn] === cur.getDay()
@@ -70,21 +71,21 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
     queryKey: ['agenda-publica', municipioId, fechaDesde, fechaHasta],
     queryFn: async () => {
       if (!municipioId || typeof municipioId !== 'string') return []
-      // Asegurarse que municipioId es un string UUID válido
-      const mId = typeof municipioId === 'string' ? municipioId : municipioId?.id ?? null
-      if (!mId) return []
-      const SUPABASE_URL = 'https://tuvfrnjnupfurzkepsod.supabase.co'
-      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-      const url = `${SUPABASE_URL}/rest/v1/agenda_publica?municipio_id=eq.${mId}&activo=eq.true&order=hora_inicio.asc`
-      const res = await fetch(url, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        }
-      })
-      if (!res.ok) throw new Error(`Error ${res.status}`)
-      const data = await res.json()
-      return expandirEventos(data ?? [], fechaDesde, fechaHasta)
+      const client = typeof supabasePublic !== 'undefined' ? supabasePublic : supabase
+      const { data, error } = await client
+        .from('agenda_publica')
+        .select('id, titulo, tipo, descripcion, recurrente, dias_semana, fecha_inicio, fecha_fin, hora_inicio, hora_fin, color, activo, municipio_id, dependencia_id, profesional_id')
+        .eq('municipio_id', municipioId)
+        .eq('activo', true)
+        .order('hora_inicio')
+      if (error) {
+        console.error('[agenda-publica] error:', error)
+        throw error
+      }
+      console.log('[agenda-publica] data:', data?.length, data?.[0])
+      const expandido = expandirEventos(data ?? [], fechaDesde, fechaHasta)
+      console.log('[agenda-publica] expandido:', expandido.length, 'fechaDesde:', fechaDesde, 'fechaHasta:', fechaHasta)
+      return expandido
     },
     enabled: !!municipioId && !!fechaDesde,
     staleTime: 5 * 60_000,
