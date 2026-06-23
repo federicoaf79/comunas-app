@@ -40,7 +40,7 @@ async function fetchMunicipios() {
   try {
     const { data: muni, error } = await supabase
       .from('municipios')
-      .select('id, nombre, slug, activo, created_at, provincia, provincia_id, provincias_config:provincia_id ( id, nombre )')
+      .select('id, nombre, slug, activa, created_at, provincia, provincia_id, provincias_config:provincia_id ( id, nombre )')
       .order('nombre', { ascending: true })
       .abortSignal(controller.signal)
     if (error) throw error
@@ -177,7 +177,7 @@ async function createMunicipio(payload, onProgress = () => {}) {
       slug,
       provincia:    provincia_nombre,
       provincia_id,
-      activo:       true,
+      activa:       true,
     })
     .select('id, nombre, slug')
     .single()
@@ -196,7 +196,7 @@ async function createMunicipio(payload, onProgress = () => {}) {
       nombre:       n,
       tipo,
       capa:         TIPOS_CAPA_1.has(tipo) ? 1 : 2,
-      activo:       true,
+      activa:       true,
     }
   })
   const { data: depsCreadas, error: depsErr } = await supabase
