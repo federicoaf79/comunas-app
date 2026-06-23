@@ -38,7 +38,6 @@ export function expandirEventos(eventos, fechaDesde, fechaHasta) {
       const cur = new Date(desde)
       while (cur <= hasta) {
         const nombreDia = cur.toLocaleDateString('es-AR', { weekday: 'long' }).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-        if (ev.recurrente) console.log('[expandir]', cur.toISOString().split('T')[0], 'nombreDia:', nombreDia, 'dias_semana:', ev.dias_semana)
         const matchDia = ev.dias_semana.some(d => {
           const dn = d.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
           return dn === nombreDia || DIAS_MAP[dn] === cur.getDay()
@@ -88,15 +87,11 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
 
       if (!res.ok) {
         const txt = await res.text()
-        console.error('[agenda-publica] fetch error:', res.status, txt)
         throw new Error(`Error ${res.status}: ${txt}`)
       }
 
       const data = await res.json()
-      console.log('[agenda-publica] data OK:', data?.length, 'municipioId:', municipioId)
-      const expandido = expandirEventos(data ?? [], fechaDesde, fechaHasta)
-      console.log('[agenda-publica] expandido:', expandido.length)
-      return expandido
+      return expandirEventos(data ?? [], fechaDesde, fechaHasta)
     },
     enabled: !!municipioId && typeof municipioId === 'string' && municipioId.length > 10 && !!fechaDesde,
     staleTime: 5 * 60_000,
