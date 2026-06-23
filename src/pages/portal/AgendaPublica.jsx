@@ -62,8 +62,7 @@ function formatHora(h) {
 
 export default function AgendaPublica() {
   const navigate = useNavigate()
-  const { data: municipioIdFromHook } = usePortalMunicipioId()
-  const municipioId = municipioIdFromHook ?? '654d0e86-255d-4498-b5c9-80d91793d318'
+  const { data: municipioId, isLoading: loadingMunicipioId } = usePortalMunicipioId()
   const { data: muniDatos } = useDatosMunicipio(municipioId)
   const { vecino } = useVecino()
 
@@ -98,6 +97,15 @@ export default function AgendaPublica() {
   }, [vista, fechaSelec])
 
   const { data: eventos = [], isLoading } = useAgendaPublica(municipioId, fechaDesde, fechaHasta)
+
+  // Spinner global mientras resuelve el municipioId
+  if (loadingMunicipioId) {
+    return (
+      <div className="min-h-svh bg-background flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
 
   const eventosFiltrados = filtroTipo === 'todos'
     ? eventos

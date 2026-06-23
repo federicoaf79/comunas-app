@@ -323,13 +323,38 @@ export function useUpsertSalaPaConfig({ municipioIdOverride } = {}) {
 }
 
 // usePortalMunicipioId — devuelve el `municipio_id` del portal
-// público. Derivado del bundle (ver usePortalConfigBundle), que
-// extrae el municipio_id desde la fila `datos_municipio`. Antes
-// hacía su propia query — ahora comparte la del bundle.
+// público. Usa fetch nativo con anon key para evitar el lock del
+// AuthContext que compite con el cliente Supabase.
+//
+// Reescrito en junio 2026 para evitar "Lock:comunas-auth was
+// released because another request stole it" al montar el portal.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const MUNICIPIO_ID_FALLBACK = '654d0e86-255d-4498-b5c9-80d91793d318'
+
 export function usePortalMunicipioId() {
-  const bundle = usePortalConfigBundle()
-  return {
-    ...bundle,
-    data: bundle.data?.municipio_id ?? null,
-  }
+  const slug = useSubdomainTenant()
+  return useQuery({
+    queryKey: ['portal-municipio-id', slug],
+    queryFn: async () => {
+      if (!slug) return MUNICIPIO_ID_FALLBACK
+
+      const url = `${SUPABASE_URL}/rest/v1/municipios?slug=eq.${slug}&select=id&limit=1`
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      })
+
+      if (!res.ok) {
+        console.warn('[usePortalMunicipioId] fetch error:', res.status)
+        return MUNICIPIO_ID_FALLBACK
+      }
+
+      const data = await res.json()
+      return data?.[0]?.id ?? MUNICIPIO_ID_FALLBACK
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutos — el slug del municipio no cambia
+  })
 }
