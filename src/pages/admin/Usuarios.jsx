@@ -107,21 +107,20 @@ async function toggleUsuarioActivo(id, activo) {
 }
 
 async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id }) {
-  const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  const { error } = await supabase
-    .from('usuarios')
-    .insert({
-      id,
-      municipio_id,
+  const response = await fetch('/api/invite-user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       email,
       nombre,
-      roles:            [rol],
-      dependencias_ids: dependencia_id ? [dependencia_id] : [],
-      activo:           false,
+      roles: [rol],
+      municipio_id,
+      dependencia_id
     })
-  if (error) throw error
+  })
+
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error)
 }
 
 // ─────────────────────────────────────────────────────────────────
