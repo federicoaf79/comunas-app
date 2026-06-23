@@ -61,12 +61,13 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
     queryKey: ['agenda-publica', municipioId, fechaDesde, fechaHasta],
     queryFn: async () => {
       if (!municipioId) return []
+      // Traer TODOS los eventos activos del municipio sin filtrar por fecha en Supabase
+      // El filtro de fechas lo hace expandirEventos() en JS
       const { data, error } = await supabaseAnon
         .from('agenda_publica')
         .select(COLS)
         .eq('municipio_id', municipioId)
         .eq('activo', true)
-        .or(`recurrente.eq.true,and(fecha_inicio.gte.${fechaDesde.slice(0,7)}-01,fecha_inicio.lte.${fechaHasta.slice(0,7)}-31)`)
         .order('hora_inicio')
       if (error) throw error
       return expandirEventos(data ?? [], fechaDesde, fechaHasta)
