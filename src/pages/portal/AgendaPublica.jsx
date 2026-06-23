@@ -242,121 +242,142 @@ export default function AgendaPublica() {
           </div>
         </div>
 
-        {/* Filtros tipo */}
-        <div className="mb-3 flex flex-wrap gap-2">
-          <button onClick={() => setFiltroTipo('todos')}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-              filtroTipo === 'todos' ? 'bg-primary text-white' : 'bg-white border border-border text-primary-500'
-            }`}>
-            Todos
-          </button>
-          {tiposPresentes.map(t => (
-            <button key={t} onClick={() => setFiltroTipo(t)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-all flex items-center gap-1 ${
-                filtroTipo === t ? 'text-white' : 'bg-white border border-border text-primary-500'
-              }`}
-              style={filtroTipo === t ? { background: TIPO_COLOR[t] } : {}}>
-              <span>{t === 'medico' ? '🩺' : t === 'taller' ? '📚' : t === 'asesoria' ? '⚖️' : t === 'evento' ? '🎯' : '📌'}</span>
-              {TIPO_LABEL[t] ?? t}
+        <div className="flex gap-4">
+          {/* Leyenda lateral */}
+          <aside className="hidden lg:flex flex-col gap-2 w-36 shrink-0 pt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-primary-400 mb-1">Tipos de eventos</p>
+            {Object.entries(TIPO_LABEL).map(([k, v]) => (
+              <button key={k} type="button"
+                onClick={() => setFiltroTipo(filtroTipo === k ? 'todos' : k)}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium transition-all ${
+                  filtroTipo === k ? 'text-white shadow-sm' : 'bg-white border border-border text-primary-600 hover:border-primary-300'
+                }`}
+                style={filtroTipo === k ? { background: TIPO_COLOR[k] } : {}}>
+                <span className="text-base shrink-0">
+                  {k === 'medico' ? '🩺' : k === 'taller' ? '📚' : k === 'asesoria' ? '⚖️' : k === 'evento' ? '🎯' : '📌'}
+                </span>
+                <span>{v}</span>
+              </button>
+            ))}
+            <button type="button"
+              onClick={() => setFiltroTipo('todos')}
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium transition-all ${
+                filtroTipo === 'todos' ? 'bg-primary text-white shadow-sm' : 'bg-white border border-border text-primary-600 hover:border-primary-300'
+              }`}>
+              <span className="text-base">📅</span>
+              <span>Todos</span>
             </button>
-          ))}
-        </div>
+          </aside>
 
-        {/* Navegación fecha */}
-        <div className="mb-4 flex items-center gap-2">
-          <button onClick={() => navegar(-1)} className="rounded-md border border-border p-1.5 hover:bg-primary-50">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
-            </svg>
-          </button>
-          <span className="font-sora text-sm font-semibold text-primary capitalize min-w-[200px] text-center">
-            {formatFechaHeader()}
-          </span>
-          <button onClick={() => navegar(1)} className="rounded-md border border-border p-1.5 hover:bg-primary-50">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
-            </svg>
-          </button>
-          <button onClick={() => setFechaSelec(hoy)} className="rounded-md border border-border px-3 py-1.5 text-xs text-primary-500 hover:bg-primary-50">
-            Hoy
-          </button>
-        </div>
+          {/* Calendario + filtros mobile */}
+          <div className="flex-1 min-w-0">
+            {/* Filtros tipo — solo mobile */}
+            <div className="mb-3 flex flex-wrap gap-2 lg:hidden">
+              <button onClick={() => setFiltroTipo('todos')}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  filtroTipo === 'todos' ? 'bg-primary text-white' : 'bg-white border border-border text-primary-500'
+                }`}>
+                Todos
+              </button>
+              {tiposPresentes.map(t => (
+                <button key={t} onClick={() => setFiltroTipo(t)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-all flex items-center gap-1 ${
+                    filtroTipo === t ? 'text-white' : 'bg-white border border-border text-primary-500'
+                  }`}
+                  style={filtroTipo === t ? { background: TIPO_COLOR[t] } : {}}>
+                  <span>{t === 'medico' ? '🩺' : t === 'taller' ? '📚' : t === 'asesoria' ? '⚖️' : t === 'evento' ? '🎯' : '📌'}</span>
+                  {TIPO_LABEL[t] ?? t}
+                </button>
+              ))}
+            </div>
 
-        {/* Calendario */}
-        {isLoading ? (
-          <div className="flex justify-center py-10"><Spinner size="lg" /></div>
-        ) : (
-          <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-primary-50">
-                  <th className="w-16 px-3 py-2 text-left text-[10px] font-semibold uppercase text-primary-400">Hora</th>
-                  {diasVista.map(fecha => {
-                    const d = new Date(fecha + 'T12:00:00')
-                    const esHoy = fecha === hoy
-                    return (
-                      <th key={fecha} className={`px-2 py-2 text-center ${esHoy ? 'text-[#1D4ED8] font-bold' : 'text-primary font-semibold'}`}>
-                        <div className="capitalize">{d.toLocaleDateString('es-AR', { weekday:'short' })}</div>
-                        <div className={`text-[11px] ${esHoy ? 'text-[#1D4ED8]' : 'text-primary-400'}`}>{d.getDate()}</div>
-                      </th>
-                    )
-                  })}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {horas.map(hora => (
-                  <tr key={hora} className="hover:bg-primary-50/20 transition-colors">
-                    <td className="px-3 py-1.5 text-[10px] font-mono text-primary-400 align-top">{hora}</td>
-                    {diasVista.map(fecha => {
-                      const evs = eventosEnSlot(fecha, hora)
-                      const pasado = fecha < hoy || (fecha === hoy && parseInt(hora) < new Date().getHours())
-                      return (
-                        <td key={fecha} className="px-1 py-1 align-top min-w-[80px]">
-                          {evs.length > 0 && (
-                            <div className="space-y-0.5">
-                              {evs.map(ev => {
-                                const color = TIPO_COLOR[ev.tipo] ?? '#64748B'
-                                const esInicio = ev.hora_inicio.slice(0,5) === hora.slice(0,5)
-                                if (!esInicio) return null
-                                return (
-                                  <button key={ev.id} type="button"
-                                    onClick={() => { setModalEvento(ev); setFormTurno({ motivo:'', orden:null }); setOrdenPreview(null); setError('') }}
-                                    className="w-full rounded-lg px-2 py-1.5 text-left transition-all hover:shadow-sm hover:opacity-90"
-                                    style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
-                                    <div className="flex items-center gap-1 mb-0.5">
-                                      <span style={{ color }} className="shrink-0">{TIPO_ICON_SVG[ev.tipo]}</span>
-                                      <span className="text-[10px] font-bold truncate" style={{ color }}>{ev.titulo}</span>
-                                    </div>
-                                    <p className="text-[9px] text-primary-400">{formatHora(ev.hora_inicio)} – {formatHora(ev.hora_fin)}</p>
-                                    {ev.profesional && (
-                                      <p className="text-[9px] text-primary-400 truncate">{ev.profesional.nombre}</p>
-                                    )}
-                                    {ev.profesional?.requiere_orden && (
-                                      <p className="text-[9px] mt-0.5" style={{ color }}>📋 orden requerida</p>
-                                    )}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* Navegación fecha */}
+            <div className="mb-4 flex items-center gap-2">
+              <button onClick={() => navegar(-1)} className="rounded-md border border-border p-1.5 hover:bg-primary-50">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+              </button>
+              <span className="font-sora text-sm font-semibold text-primary capitalize min-w-[200px] text-center">
+                {formatFechaHeader()}
+              </span>
+              <button onClick={() => navegar(1)} className="rounded-md border border-border p-1.5 hover:bg-primary-50">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+              </button>
+              <button onClick={() => setFechaSelec(hoy)} className="rounded-md border border-border px-3 py-1.5 text-xs text-primary-500 hover:bg-primary-50">
+                Hoy
+              </button>
+            </div>
+
+            {/* Calendario */}
+            {isLoading ? (
+              <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
+                <table className="min-w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-primary-50">
+                      <th className="w-16 px-3 py-2 text-left text-[10px] font-semibold uppercase text-primary-400">Hora</th>
+                      {diasVista.map(fecha => {
+                        const d = new Date(fecha + 'T12:00:00')
+                        const esHoy = fecha === hoy
+                        return (
+                          <th key={fecha} className={`px-2 py-2 text-center ${esHoy ? 'text-[#1D4ED8] font-bold' : 'text-primary font-semibold'}`}>
+                            <div className="capitalize">{d.toLocaleDateString('es-AR', { weekday:'short' })}</div>
+                            <div className={`text-[11px] ${esHoy ? 'text-[#1D4ED8]' : 'text-primary-400'}`}>{d.getDate()}</div>
+                          </th>
+                        )
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {horas.map(hora => (
+                      <tr key={hora} className="hover:bg-primary-50/20 transition-colors">
+                        <td className="px-3 py-1.5 text-[10px] font-mono text-primary-400 align-top">{hora}</td>
+                        {diasVista.map(fecha => {
+                          const evs = eventosEnSlot(fecha, hora)
+                          const pasado = fecha < hoy || (fecha === hoy && parseInt(hora) < new Date().getHours())
+                          return (
+                            <td key={fecha} className="px-1 py-1 align-top min-w-[80px]">
+                              {evs.length > 0 && (
+                                <div className="space-y-0.5">
+                                  {evs.map(ev => {
+                                    const color = TIPO_COLOR[ev.tipo] ?? '#64748B'
+                                    const esInicio = ev.hora_inicio.slice(0,5) === hora.slice(0,5)
+                                    if (!esInicio) return null
+                                    return (
+                                      <button key={ev.id} type="button"
+                                        onClick={() => { setModalEvento(ev); setFormTurno({ motivo:'', orden:null }); setOrdenPreview(null); setError('') }}
+                                        className="w-full rounded-lg px-2 py-1.5 text-left transition-all hover:shadow-sm hover:opacity-90"
+                                        style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
+                                        <div className="flex items-center gap-1 mb-0.5">
+                                          <span style={{ color }} className="shrink-0">{TIPO_ICON_SVG[ev.tipo]}</span>
+                                          <span className="text-[10px] font-bold truncate" style={{ color }}>{ev.titulo}</span>
+                                        </div>
+                                        <p className="text-[9px] text-primary-400">{formatHora(ev.hora_inicio)} – {formatHora(ev.hora_fin)}</p>
+                                        {ev.profesional && (
+                                          <p className="text-[9px] text-primary-400 truncate">{ev.profesional.nombre}</p>
+                                        )}
+                                        {ev.profesional?.requiere_orden && (
+                                          <p className="text-[9px] mt-0.5" style={{ color }}>📋 orden requerida</p>
+                                        )}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Leyenda */}
-        <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-primary-400">
-          {Object.entries(TIPO_LABEL).map(([k, v]) => (
-            <span key={k} className="flex items-center gap-1">
-              <span className="h-2.5 w-2.5 rounded" style={{ background: TIPO_COLOR[k] }} />
-              {k === 'medico' ? '🩺' : k === 'taller' ? '📚' : k === 'asesoria' ? '⚖️' : k === 'evento' ? '🎯' : '📌'} {v}
-            </span>
-          ))}
         </div>
       </main>
 
