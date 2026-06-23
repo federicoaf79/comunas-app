@@ -65,17 +65,22 @@ export default function OnboardingChecklist({ progress, pct, completedCount, tot
       {expanded && (
         <div
           ref={panelRef}
-          className="fixed bottom-20 right-6 z-50 w-[300px] max-h-[480px] overflow-y-auto rounded-2xl shadow-2xl"
-          style={{ background: 'var(--color-background-primary)', border: '1px solid var(--color-border-secondary)', boxShadow: '0 8px 32px rgba(0,0,0,0.12)' }}
+          className="fixed bottom-20 right-6 z-50 w-[300px] max-h-[560px] overflow-y-auto rounded-2xl shadow-2xl"
+          style={{ background: '#FFFFFF', border: '1.5px solid #E2E8F0', boxShadow: '0 20px 60px rgba(0,0,0,0.18)' }}
         >
           {/* Header */}
           <div className="sticky top-0 flex items-start justify-between gap-3 px-4 py-3"
             style={{ background: 'var(--color-background-primary)', borderBottom: '1px solid var(--color-border-tertiary)' }}>
             <div>
               <p className="text-sm font-semibold text-primary font-sora">Configuración de la plataforma</p>
-              <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>
-                {completedCount} de {totalCount} pasos completados
-              </p>
+              <div className="mt-0.5 flex items-center gap-2">
+                <p className="text-[11px]" style={{ color: '#64748B' }}>
+                  {completedCount} de {totalCount} completados
+                </p>
+                <span className="rounded-full bg-[#C9A84C] px-1.5 py-0.5 text-[9px] font-bold text-primary-900">
+                  {totalCount - completedCount} pendientes
+                </span>
+              </div>
             </div>
             <button
               type="button"
@@ -106,12 +111,12 @@ export default function OnboardingChecklist({ progress, pct, completedCount, tot
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         ) : (
-                          <svg viewBox="0 0 24 24" fill="none" stroke="var(--color-border)" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="#CBD5E1" strokeWidth="1.5" className="h-3.5 w-3.5 shrink-0">
                             <circle cx="12" cy="12" r="9" />
                           </svg>
                         )}
                         <span className={`text-xs truncate ${item.done ? 'line-through' : ''}`}
-                          style={{ color: item.done ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)' }}>
+                          style={{ color: item.done ? '#94A3B8' : '#0F1C35', fontWeight: item.done ? 400 : 500 }}>
                           {item.label}
                         </span>
                       </div>
