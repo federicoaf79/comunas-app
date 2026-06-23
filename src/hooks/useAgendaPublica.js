@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { supabaseAnon } from '../lib/supabaseAnon'
 
 // SQL ejecutado en Supabase para permitir acceso anónimo:
 // DROP POLICY IF EXISTS "publico puede ver agenda activa" ON agenda_publica;
@@ -71,15 +70,17 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
     queryKey: ['agenda-publica', municipioId, fechaDesde, fechaHasta],
     queryFn: async () => {
       if (!municipioId) return []
-      // Traer TODOS los eventos activos del municipio sin filtrar por fecha en Supabase
-      // El filtro de fechas lo hace expandirEventos() en JS
-      const { data, error } = await supabaseAnon
-        .from('agenda_publica')
-        .select(COLS_PUBLIC)
-        .eq('municipio_id', municipioId)
-        .eq('activo', true)
-        .order('hora_inicio')
-      if (error) throw error
+      const SUPABASE_URL = 'https://tuvfrnjnupfurzkepsod.supabase.co'
+      const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+      const url = `${SUPABASE_URL}/rest/v1/agenda_publica?municipio_id=eq.${municipioId}&activo=eq.true&order=hora_inicio.asc`
+      const res = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      })
+      if (!res.ok) throw new Error(`Error ${res.status}`)
+      const data = await res.json()
       return expandirEventos(data ?? [], fechaDesde, fechaHasta)
     },
     enabled: !!municipioId && !!fechaDesde,
