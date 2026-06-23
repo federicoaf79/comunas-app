@@ -5,7 +5,7 @@ import Spinner from '../ui/Spinner'
 // =============================================================
 // CalendarioSemanal — vista semanal estándar de eventos.
 //
-// Diseñado para ser reutilizado por Sala PA, Juez de Paz, SUM y
+// Diseñado para ser reutilizado por Sala Primeros Auxilios, Juez de Paz, SUM y
 // TablazoCross. Recibe una lista uniforme de "eventos" y un mapa
 // de color por tipo; el render se encarga de posicionarlos en una
 // grilla horaria 07:00–20:00 con 7 columnas (Lun-Dom).

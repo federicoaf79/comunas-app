@@ -21,7 +21,7 @@ import { todayArgYMD, dateOf } from '../../lib/datetime'
 
 // =============================================================
 // AdministracionTab — sección reusable para cualquier dependencia
-// (Sala PA, Juez de Paz, SUM, Portal Web, o cualquier
+// (Sala Primeros Auxilios, Juez de Paz, SUM, Portal Web, o cualquier
 // DependenciaGeneral) que necesite mostrar el flujo financiero:
 // gastos del área, solicitudes de insumos y presupuesto del año.
 //

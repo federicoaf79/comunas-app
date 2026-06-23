@@ -83,7 +83,7 @@ const SEGMENTOS_FIJOS = [
   { value: 'todos',   label: 'Todos los vecinos',       grupo: 'Zona' },
   { value: 'urbano',  label: 'Zona Urbana',             grupo: 'Zona' },
   { value: 'rural',   label: 'Zona Rural',              grupo: 'Zona' },
-  { value: 'sala_pa', label: 'Pacientes Sala PA (turnos activos)', grupo: 'Por dependencia' },
+  { value: 'sala_pa', label: 'Pacientes Sala Primeros Auxilios (turnos activos)', grupo: 'Por dependencia' },
   { value: 'juez',    label: 'Visitantes Juez de Paz',  grupo: 'Por dependencia' },
   { value: 'sum',     label: 'Reservas SUM (60 días)',  grupo: 'Por dependencia' },
   { value: 'manual',  label: 'Selección manual',        grupo: 'Personalizado' },

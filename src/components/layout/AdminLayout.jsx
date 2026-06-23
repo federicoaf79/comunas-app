@@ -124,7 +124,7 @@ const NAV_TOP = [
 // `tipo` debe coincidir con la fila de `dependencias` para poder
 // resolver el dep.id y leer permisos del perfil.
 const CIC_BLUEPRINT = [
-  { tipo: 'caps',    label: 'Sala PA',      basePath: '/admin/sala',                modulo: 'sala_pa',
+  { tipo: 'caps',    label: 'Sala Primeros Auxilios',      basePath: '/admin/sala',                modulo: 'sala_pa',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />

@@ -7,7 +7,7 @@ import Button from '../ui/Button'
 // Se invoca al RPC public.consultas_publicas_por_vecino(p_dni, p_telefono).
 // El RPC verifica DNI + teléfono y devuelve sólo id/fecha/motivo/medico_nombre.
 // NUNCA devuelve diagnóstico ni receta — eso queda restringido a la HC
-// completa que se consulta presencialmente en la Sala PA.
+// completa que se consulta presencialmente en la Sala Primeros Auxilios.
 async function consultarMiSalud(dni, telefono) {
   const { data, error } = await supabase.rpc('consultas_publicas_por_vecino', {
     p_dni:      dni.trim(),
@@ -82,7 +82,7 @@ export default function MiSaludForm() {
       {consultas !== null && !error && consultas.length === 0 && (
         <div className="mt-4 rounded-md border border-border bg-primary-50 p-3 text-sm text-primary-500">
           No encontramos consultas asociadas. Verificá que el DNI y el teléfono
-          coincidan con los que tenemos en la Sala PA.
+          coincidan con los que tenemos en la Sala Primeros Auxilios.
         </div>
       )}
 

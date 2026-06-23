@@ -114,7 +114,7 @@ export default function SalaPrimerosAuxilios() {
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
 
   // Dependencia de salud para restringir las queries de turnos a
-  // la Sala PA. Buscamos sobre varios `tipo` posibles porque las
+  // la Sala Primeros Auxilios. Buscamos sobre varios `tipo` posibles porque las
   // bases viejas usan 'caps' / 'sala' / 'primeros_auxilios' y las
   // nuevas tienden a 'salud'. Resolver por listado evita falsos
   // negativos del filtro estricto `tipo='caps'`.
@@ -164,7 +164,7 @@ export default function SalaPrimerosAuxilios() {
     dependenciaId: dependenciaSaludId ?? undefined,
   })
 
-  // Configuración operativa de Sala PA — la duración estándar de
+  // Configuración operativa de Sala Primeros Auxilios — la duración estándar de
   // turno se imprime en el footer de la planilla. Si el hook todavía
   // no resolvió, usamos el default para no romper el render.
   const salaPaConfigQ = useSalaPaConfigAdmin({ municipioIdOverride: municipioId })
@@ -219,7 +219,7 @@ export default function SalaPrimerosAuxilios() {
       <header>
         <h1 className="font-sora text-2xl font-bold text-primary">Sala de Primeros Auxilios</h1>
         <p className="mt-1 text-sm text-primary-500">
-          <span className="text-primary-400">Sala PA</span>
+          <span className="text-primary-400">Sala Primeros Auxilios</span>
           <span className="mx-1.5 text-primary-300">›</span>
           <span className="font-medium text-primary-700">{SECCION_LABEL[seccion] ?? '—'}</span>
           {depSaludNombre && (

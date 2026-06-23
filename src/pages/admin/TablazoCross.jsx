@@ -9,7 +9,7 @@ import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 
-// Colores estándar por tipo de evento — alineados con Sala PA /
+// Colores estándar por tipo de evento — alineados con Sala Primeros Auxilios /
 // Juez de Paz / SUM para que el operador reconozca de un vistazo
 // la dependencia detrás del bloque.
 const COLOR_SALA  = '#1D4ED8'  // azul ok — turnos clínicos
@@ -597,7 +597,7 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
   const leyenda = useMemo(() => {
     const out = []
     if (!skipTurnos) {
-      out.push({ label: 'Sala PA',     color: COLOR_SALA })
+      out.push({ label: 'Sala Primeros Auxilios',     color: COLOR_SALA })
       out.push({ label: 'Juez de Paz', color: COLOR_JUEZ })
       out.push({ label: 'Otras deps.', color: COLOR_OTRA })
     }

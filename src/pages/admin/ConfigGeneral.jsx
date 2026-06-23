@@ -549,7 +549,7 @@ function PlanBForm({ initial, disabled, municipioId }) {
             onChange={e => set('mensaje_bienvenida', e.target.value)}
             rows={3}
             className="input-field resize-y"
-            placeholder="Hola! Tu turno fue confirmado. Te esperamos en la Sala PA."
+            placeholder="Hola! Tu turno fue confirmado. Te esperamos en la Sala Primeros Auxilios."
           />
         </div>
         <div className="sm:col-span-2">
@@ -1003,7 +1003,7 @@ function WhatsAppBotSection({ disabled, municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Sección 5 — Sala PA (duración estándar de turno)
+// Sección 5 — Sala Primeros Auxilios (duración estándar de turno)
 // ─────────────────────────────────────────────────────────────────
 
 const DURACION_MIN = 10
@@ -1032,7 +1032,7 @@ function SalaPaForm({ initial, disabled, municipioId }) {
         ...(initial ?? {}),
         duracion_turno_min: valor,
       })
-      setOk('Configuración de Sala PA guardada.')
+      setOk('Configuración de Sala Primeros Auxilios guardada.')
     } catch (e) {
       setError(e?.message ?? 'No pudimos guardar la configuración.')
     }
@@ -1041,7 +1041,7 @@ function SalaPaForm({ initial, disabled, municipioId }) {
   return (
     <SectionShell
       title="Sala de Primeros Auxilios"
-      desc="Parámetros operativos de la Sala PA. La duración estándar de turno se muestra en la planilla imprimible y, a partir del Sprint 3, va a controlar el espaciado del calendario semanal."
+      desc="Parámetros operativos de la Sala Primeros Auxilios. La duración estándar de turno se muestra en la planilla imprimible y, a partir del Sprint 3, va a controlar el espaciado del calendario semanal."
       error={error}
       ok={ok}
     >
@@ -1064,7 +1064,7 @@ function SalaPaForm({ initial, disabled, municipioId }) {
       </div>
       <div className="mt-5 flex justify-end">
         <Button onClick={handleSave} loading={upsertMut.isPending} disabled={disabled || fueraDeRango}>
-          Guardar Sala PA
+          Guardar Sala Primeros Auxilios
         </Button>
       </div>
     </SectionShell>
@@ -1073,7 +1073,7 @@ function SalaPaForm({ initial, disabled, municipioId }) {
 
 function SalaPaSection({ disabled, municipioId }) {
   const { data, isLoading } = useSalaPaConfigAdmin({ municipioIdOverride: municipioId })
-  if (isLoading) return <LoadingShell title="Cargando configuración de Sala PA..." />
+  if (isLoading) return <LoadingShell title="Cargando configuración de Sala Primeros Auxilios..." />
   return (
     <SalaPaForm
       initial={{ ...DEFAULT_SALA_PA_CONFIG, ...(data ?? {}) }}

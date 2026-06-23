@@ -360,7 +360,7 @@ export function useTurnosByVecino(vecinoId) {
 // posicional para los casos en que la página resuelve el municipio
 // fuera del perfil (superadmin sin municipio asignado que cae al
 // "primer municipio activo" via useEffectiveMunicipioId). Esto
-// permite a Sala PA / Juez de Paz / SUM ubicar la dependencia
+// permite a Sala Primeros Auxilios / Juez de Paz / SUM ubicar la dependencia
 // adecuada incluso cuando perfil.municipio_id es null.
 export function useDependencias(municipioIdOverride) {
   const { perfil } = useAuth()

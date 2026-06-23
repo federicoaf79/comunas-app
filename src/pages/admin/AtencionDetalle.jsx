@@ -287,11 +287,11 @@ function BackHeader({ nombre, dni, estadoTurno, estadoBadge, onBack }) {
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
         >
-          ← Volver a Sala PA
+          ← Volver a Sala Primeros Auxilios
         </button>
       ) : (
         <Link to="/admin/sala" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
-          ← Volver a Sala PA
+          ← Volver a Sala Primeros Auxilios
         </Link>
       )}
       {nombre && (

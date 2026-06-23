@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
 // =============================================================
-// useAtenciones — asiento clínico de la Sala PA.
+// useAtenciones — asiento clínico de la Sala Primeros Auxilios.
 //
 // Tablas: atenciones + atencion_insumos (migration 20260511).
 //

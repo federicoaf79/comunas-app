@@ -45,7 +45,7 @@ export const TRAMITES_PORTAL_DEFAULT = [
   {
     id:          'turno-sala-pa',
     titulo:      'Turno Sala de Primeros Auxilios',
-    descripcion: 'Solicitá turno médico para atención en la Sala PA.',
+    descripcion: 'Solicitá turno médico para atención en la Sala Primeros Auxilios.',
     icono:       'salud',
     tipo:        'turno',
     url:         '/portal/turno',

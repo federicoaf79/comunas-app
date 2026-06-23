@@ -319,7 +319,7 @@ function MonthCalendar({ year, month, reservasByDate }) {
 // TAB 1b · Vista semanal de reservas (calendario estándar)
 //
 // Muestra las reservas del SUM en la misma grilla semanal que usan
-// Sala PA y Juez de Paz. Útil para chequear de un vistazo qué
+// Sala Primeros Auxilios y Juez de Paz. Útil para chequear de un vistazo qué
 // franjas están comprometidas durante la semana.
 // ─────────────────────────────────────────────────────────────────
 

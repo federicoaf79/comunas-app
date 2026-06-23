@@ -33,7 +33,7 @@ const VECINO_BASIC_COLS = 'id, dni, nombre, apellido, nombre_completo, telefono,
 
 // =============================================================
 // AtencionDrawer — panel lateral que abre cuando el operador
-// hace click en un turno de la Sala PA. Concentra el flujo
+// hace click en un turno de la Sala Primeros Auxilios. Concentra el flujo
 // clínico completo: form de la atención, gestión de insumos
 // usados y vista de historia clínica del vecino.
 //

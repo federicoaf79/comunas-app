@@ -407,7 +407,7 @@ function SaludTab({ consultas, isLoading, error }) {
           <p className="font-semibold text-primary-700">Próximamente</p>
           <p className="mt-1">
             Vas a poder consultar y subir documentos clínicos desde acá.
-            Por ahora, llevalos en mano cuando vayas a la Sala PA.
+            Por ahora, llevalos en mano cuando vayas a la Sala Primeros Auxilios.
           </p>
         </div>
       </div>
@@ -480,7 +480,7 @@ function DatosTab({ vecino }) {
           Datos de salud
         </h3>
         <p className="mt-1 text-xs text-primary-500">
-          Solo lectura — los actualiza el equipo de la Sala PA.
+          Solo lectura — los actualiza el equipo de la Sala Primeros Auxilios.
         </p>
         <div className="mt-2">
           <DatoRow label="Grupo sanguíneo" value={null} />

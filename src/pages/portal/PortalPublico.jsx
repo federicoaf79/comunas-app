@@ -65,7 +65,7 @@ const ACCESOS_RAPIDOS = [
   {
     to:    '/portal/turno',
     label: 'Sacar turno',
-    desc:  'Sala PA, Juez de Paz, SUM, Administración',
+    desc:  'Sala Primeros Auxilios, Juez de Paz, SUM, Administración',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <rect x="3" y="5" width="18" height="16" rx="2" />
@@ -88,7 +88,7 @@ const ACCESOS_RAPIDOS = [
   {
     to:    '/portal/mi-salud',
     label: 'Mi Salud',
-    desc:  'Resumen de tus atenciones en la Sala PA',
+    desc:  'Resumen de tus atenciones en la Sala Primeros Auxilios',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="h-8 w-8">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
@@ -1090,7 +1090,7 @@ const DEFAULT_FOOTER_DATOS = {
   direccion:      'Av. San Martín s/n',
   telefono:       '(0385) 4-110-001',
   email:          '',
-  horario:        'L-V 7:00 – 13:00 · Sala PA 8:00 – 20:00',
+  horario:        'L-V 7:00 – 13:00 · Sala Primeros Auxilios 8:00 – 20:00',
 }
 const DEFAULT_FOOTER_REDES = {
   facebook:  '',

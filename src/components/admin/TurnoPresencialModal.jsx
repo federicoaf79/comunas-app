@@ -14,7 +14,7 @@ import { todayArgYMD, ARG_OFFSET } from '../../lib/datetime'
 
 // =============================================================
 // TurnoPresencialModal — alta rápida de turno presencial desde
-// Sala PA.
+// Sala Primeros Auxilios.
 //
 // Flujo:
 //   1) Buscador (DNI o nombre) con resultados live.

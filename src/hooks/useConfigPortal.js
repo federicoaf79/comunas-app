@@ -299,10 +299,10 @@ export function useDatosMunicipio() {
 // ─────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────
-// Sala PA — configuración operativa
+// Sala Primeros Auxilios — configuración operativa
 // ─────────────────────────────────────────────────────────────────
 
-// Defaults del módulo Sala PA. `duracion_turno_min` controla la
+// Defaults del módulo Sala Primeros Auxilios. `duracion_turno_min` controla la
 // duración estándar de cada turno. Se muestra hoy en el footer de
 // la planilla imprimible; en el Sprint 3 va a alimentar también el
 // espaciado del calendario.

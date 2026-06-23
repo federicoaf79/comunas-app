@@ -4,11 +4,11 @@
 //
 // Se usa desde:
 //   - HistoriaClinicaForm (form reusable)
-//   - TurnoPresencialModal (Sala PA — crear vecino + HC)
-//   - AtencionDrawer (Sala PA — banner si vecino existente con HC
+//   - TurnoPresencialModal (Sala Primeros Auxilios — crear vecino + HC)
+//   - AtencionDrawer (Sala Primeros Auxilios — banner si vecino existente con HC
 //     incompleta)
 //
-// Los campos exigidos son los acordados con dirección de Sala PA:
+// Los campos exigidos son los acordados con dirección de Sala Primeros Auxilios:
 // nombre, fecha_nac, dni, telefono, sexo, grupo_sanguineo, alergias
 // (con check de "sin alergias conocidas"), barrio/localidad y
 // contacto de emergencia (nombre + teléfono).
@@ -103,7 +103,7 @@ export function validateFechaNac(iso) {
 
 // Devuelve la lista de campos obligatorios que falten en un vecino
 // existente. Se usa para mostrar el banner "HC incompleta" en el
-// flujo de atención cuando el vecino fue creado antes de Sala PA
+// flujo de atención cuando el vecino fue creado antes de Sala Primeros Auxilios
 // y no completó los datos clínicos básicos.
 //
 // Reglas:
