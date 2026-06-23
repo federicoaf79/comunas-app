@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { medicoGuardia } from '../../lib/mockData'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useSalaPaConfigAdmin, DEFAULT_SALA_PA_CONFIG } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
+import { useMedicoGuardia } from '../../hooks/useMedicoGuardia'
 import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
@@ -94,6 +94,7 @@ export default function SalaPrimerosAuxilios() {
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
+  const { data: medicoGuardia, isLoading: loadingMedico } = useMedicoGuardia(municipioId)
 
   // Lectura del ?tab= desde URL. Sin escritura: el cambio de
   // sub-sección viene exclusivamente desde el sidebar (AdminLayout).
@@ -270,15 +271,30 @@ export default function SalaPrimerosAuxilios() {
             <p className="text-[10px] font-semibold uppercase tracking-wider text-primary-400">
               Médico de guardia
             </p>
-            <p className="truncate font-sora text-sm font-semibold text-primary">
-              {medicoGuardia.nombre}
-              <span className="ml-2 text-xs font-medium text-primary-500">
-                · {medicoGuardia.especialidad} · {medicoGuardia.matricula}
-              </span>
-            </p>
-            <p className="truncate text-xs text-primary-500">
-              {medicoGuardia.desde} – {medicoGuardia.hasta} · {medicoGuardia.telefono}
-            </p>
+            {loadingMedico ? (
+              <p className="text-xs text-primary-400">Cargando...</p>
+            ) : medicoGuardia ? (
+              <>
+                <p className="truncate font-sora text-sm font-semibold text-primary">
+                  {medicoGuardia.nombre}
+                  {medicoGuardia.especialidad && medicoGuardia.matricula && (
+                    <span className="ml-2 text-xs font-medium text-primary-500">
+                      · {medicoGuardia.especialidad} · {medicoGuardia.matricula}
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-xs text-primary-500">
+                  {medicoGuardia.hora_desde && medicoGuardia.hora_hasta && (
+                    <>{medicoGuardia.hora_desde} – {medicoGuardia.hora_hasta}</>
+                  )}
+                  {medicoGuardia.telefono && (
+                    <> · {medicoGuardia.telefono}</>
+                  )}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-primary-400 italic">Sin guardia programada</p>
+            )}
           </div>
         </div>
 
