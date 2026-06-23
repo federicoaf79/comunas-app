@@ -79,7 +79,7 @@ export default async function handler(req, res) {
           slots.push({
             hora,
             fecha: fechaConsulta,
-            fecha_hora: `${fechaConsulta}T${hora}:00`,
+            fecha_hora: `${fechaConsulta}T${hora}:00-03:00`,
             agente: agente.nombre,
           })
         }
