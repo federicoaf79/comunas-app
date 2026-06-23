@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useAgendaPublicaAdmin, useUpsertAgendaPublica, useDeleteAgendaPublica } from '../../hooks/useAgendaPublica'
+import { useAgendaPublica, useAgendaPublicaAdmin, useUpsertAgendaPublica, useDeleteAgendaPublica } from '../../hooks/useAgendaPublica'
 import { useProfesionales } from '../../hooks/useProfesionales'
 import { useDependenciasAdmin } from '../../hooks/useDependenciaPublica'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { getSemanaActual, getDiasSemana } from '../../hooks/useTurnosAgenda'
 import Spinner from '../../components/ui/Spinner'
 
 const TIPOS = [
@@ -226,6 +227,11 @@ export default function AgendaPublicaPage() {
   const { data: eventos = [], isLoading } = useAgendaPublicaAdmin(municipioId)
   const deleteMut = useDeleteAgendaPublica()
   const [modal, setModal] = useState(null)
+  const [vista, setVista] = useState('lista') // 'lista' | 'semana'
+  const [semanaOffset, setSemanaOffset] = useState(0)
+  const { desde, hasta } = getSemanaActual(semanaOffset)
+  const dias = getDiasSemana(desde)
+  const { data: eventosCalendario = [] } = useAgendaPublica(municipioId, desde, hasta)
 
   const activos   = eventos.filter(e => e.activo)
   const inactivos = eventos.filter(e => !e.activo)
@@ -251,12 +257,25 @@ export default function AgendaPublicaPage() {
             Eventos, profesionales visitantes y actividades que los vecinos ven en el portal.
           </p>
         </div>
-        <button type="button" onClick={() => setModal('new')} className="btn-primary flex items-center gap-2">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
-          </svg>
-          Agregar evento
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Toggle vista */}
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            {[{ v:'lista', label:'Lista' }, { v:'semana', label:'Semana' }].map(o => (
+              <button key={o.v} type="button" onClick={() => setVista(o.v)}
+                className={`px-4 py-1.5 text-xs font-medium transition-colors ${
+                  vista === o.v ? 'bg-primary text-white' : 'bg-white text-primary-500 hover:bg-primary-50'
+                }`}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={() => setModal('new')} className="btn-primary flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
+            </svg>
+            Agregar evento
+          </button>
+        </div>
       </header>
 
       {/* Modal */}
@@ -285,6 +304,96 @@ export default function AgendaPublicaPage() {
         </div>
       )}
 
+      {/* Vista semanal */}
+      {vista === 'semana' && (
+        <div className="space-y-4">
+          {/* Navegación */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setSemanaOffset(v => v - 1)}
+              className="rounded-md border border-border p-1.5 hover:bg-primary-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <span className="font-sora text-sm font-semibold text-primary min-w-[200px] text-center">
+              {new Date(desde + 'T12:00:00').toLocaleDateString('es-AR', { day:'numeric', month:'long' })}
+              {' – '}
+              {new Date(hasta + 'T12:00:00').toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' })}
+            </span>
+            <button onClick={() => setSemanaOffset(v => v + 1)}
+              className="rounded-md border border-border p-1.5 hover:bg-primary-50">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+            <button onClick={() => setSemanaOffset(0)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs text-primary-500 hover:bg-primary-50">
+              Esta semana
+            </button>
+          </div>
+
+          {/* Grilla semanal */}
+          <div className="overflow-x-auto rounded-xl border border-border bg-white">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-primary-50">
+                  <th className="w-16 px-3 py-2 text-left text-[10px] font-semibold uppercase text-primary-400">Hora</th>
+                  {dias.map(d => (
+                    <th key={d.fecha} className={`px-2 py-2 text-center ${d.esHoy ? 'text-[#1D4ED8] font-bold' : 'text-primary font-semibold'}`}>
+                      <div>{d.nombre}</div>
+                      <div className={`text-[11px] ${d.esHoy ? 'text-[#1D4ED8]' : 'text-primary-400'}`}>
+                        {new Date(d.fecha + 'T12:00:00').getDate()}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {Array.from({ length: 14 }, (_, i) => `${String(i + 7).padStart(2,'0')}:00`).map(hora => {
+                  const horaMin = parseInt(hora) * 60
+                  return (
+                    <tr key={hora} className="hover:bg-primary-50/20 transition-colors">
+                      <td className="px-3 py-1.5 text-[10px] font-mono text-primary-400 align-top">{hora}</td>
+                      {dias.map(d => {
+                        const evsSlot = eventosCalendario.filter(ev => {
+                          if (ev.fecha !== d.fecha) return false
+                          const evInicio = parseInt(ev.hora_inicio) * 60
+                          const evFin = parseInt(ev.hora_fin) * 60
+                          return evInicio < horaMin + 60 && evFin > horaMin && ev.hora_inicio.slice(0,5) === hora.slice(0,5)
+                        })
+                        const TIPO_COLOR_ADMIN = { medico:'#1D4ED8', taller:'#7C3AED', asesoria:'#C9A84C', evento:'#059669', otro:'#64748B' }
+                        const TIPO_ICON_ADMIN = { medico:'🩺', taller:'📚', asesoria:'⚖️', evento:'🎯', otro:'📌' }
+                        return (
+                          <td key={d.fecha} className="px-1 py-1 align-top min-w-[100px]">
+                            {evsSlot.map(ev => {
+                              const color = TIPO_COLOR_ADMIN[ev.tipo] ?? '#64748B'
+                              return (
+                                <button key={ev.id} type="button" onClick={() => setModal(eventos.find(e => e.id === ev.id) ?? ev)}
+                                  className="w-full rounded-lg px-2 py-1.5 mb-0.5 text-left hover:opacity-80 transition-opacity"
+                                  style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[11px]">{TIPO_ICON_ADMIN[ev.tipo]}</span>
+                                    <span className="text-[10px] font-semibold truncate" style={{ color }}>{ev.titulo}</span>
+                                  </div>
+                                  <p className="text-[9px] text-primary-400">{ev.hora_inicio.slice(0,5)} – {ev.hora_fin.slice(0,5)}</p>
+                                </button>
+                              )
+                            })}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Vista lista — solo cuando vista === 'lista' */}
+      {vista === 'lista' && (
+        <>
       {/* Lista */}
       {activos.length === 0 && inactivos.length === 0 ? (
         <div className="card p-10 text-center">
@@ -340,6 +449,8 @@ export default function AgendaPublicaPage() {
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   )

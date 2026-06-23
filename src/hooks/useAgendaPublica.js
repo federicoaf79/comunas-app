@@ -66,7 +66,7 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
         .select(COLS)
         .eq('municipio_id', municipioId)
         .eq('activo', true)
-        .or(`recurrente.eq.true,and(fecha_inicio.gte.${fechaDesde},fecha_inicio.lte.${fechaHasta})`)
+        .or(`recurrente.eq.true,and(fecha_inicio.gte.${fechaDesde.slice(0,7)}-01,fecha_inicio.lte.${fechaHasta.slice(0,7)}-31)`)
         .order('hora_inicio')
       if (error) throw error
       return expandirEventos(data ?? [], fechaDesde, fechaHasta)
@@ -81,7 +81,7 @@ export function useAgendaPublicaAdmin(municipioId) {
     queryKey: ['agenda-publica-admin', municipioId],
     queryFn: async () => {
       if (!municipioId) return []
-      const { data, error } = await supabase
+      const { data, error} = await supabase
         .from('agenda_publica')
         .select(COLS)
         .eq('municipio_id', municipioId)
