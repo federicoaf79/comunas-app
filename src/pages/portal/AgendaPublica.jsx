@@ -62,7 +62,8 @@ function formatHora(h) {
 
 export default function AgendaPublica() {
   const navigate = useNavigate()
-  const { data: municipioId } = usePortalMunicipioId()
+  const { data: municipioIdFromHook } = usePortalMunicipioId()
+  const municipioId = municipioIdFromHook ?? '654d0e86-255d-4498-b5c9-80d91793d318'
   const { data: muniDatos } = useDatosMunicipio(municipioId)
   const { vecino } = useVecino()
 
