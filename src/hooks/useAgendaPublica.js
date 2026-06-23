@@ -70,24 +70,35 @@ export function useAgendaPublica(municipioId, fechaDesde, fechaHasta) {
   return useQuery({
     queryKey: ['agenda-publica', municipioId, fechaDesde, fechaHasta],
     queryFn: async () => {
-      if (!municipioId || typeof municipioId !== 'string') return []
-      const client = typeof supabasePublic !== 'undefined' ? supabasePublic : supabase
-      const { data, error } = await client
-        .from('agenda_publica')
-        .select('id, titulo, tipo, descripcion, recurrente, dias_semana, fecha_inicio, fecha_fin, hora_inicio, hora_fin, color, activo, municipio_id, dependencia_id, profesional_id')
-        .eq('municipio_id', municipioId)
-        .eq('activo', true)
-        .order('hora_inicio')
-      if (error) {
-        console.error('[agenda-publica] error:', error)
-        throw error
+      if (!municipioId || typeof municipioId !== 'string' || municipioId.length < 10) return []
+
+      // Usar fetch nativo con la anon key hardcodeada para evitar cualquier cliente Supabase
+      const SUPABASE_URL = 'https://tuvfrnjnupfurzkepsod.supabase.co'
+      const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR1dmZybmpudXBmdXJ6a2Vwc29kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYzMTIwMDAsImV4cCI6MjA2MTg4ODAwMH0.7_3JEkvCHXhCJlOlOxVFDMSH_d91lXSiSy7IXJI9MeM'
+
+      const url = `${SUPABASE_URL}/rest/v1/agenda_publica?municipio_id=eq.${municipioId}&activo=eq.true&order=hora_inicio.asc&select=id,titulo,tipo,descripcion,recurrente,dias_semana,fecha_inicio,fecha_fin,hora_inicio,hora_fin,color,activo,municipio_id,dependencia_id,profesional_id`
+
+      const res = await fetch(url, {
+        headers: {
+          'apikey': ANON_KEY,
+          'Authorization': `Bearer ${ANON_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      })
+
+      if (!res.ok) {
+        const txt = await res.text()
+        console.error('[agenda-publica] fetch error:', res.status, txt)
+        throw new Error(`Error ${res.status}: ${txt}`)
       }
-      console.log('[agenda-publica] data:', data?.length, data?.[0])
+
+      const data = await res.json()
+      console.log('[agenda-publica] data OK:', data?.length, 'municipioId:', municipioId)
       const expandido = expandirEventos(data ?? [], fechaDesde, fechaHasta)
-      console.log('[agenda-publica] expandido:', expandido.length, 'fechaDesde:', fechaDesde, 'fechaHasta:', fechaHasta)
+      console.log('[agenda-publica] expandido:', expandido.length)
       return expandido
     },
-    enabled: !!municipioId && !!fechaDesde,
+    enabled: !!municipioId && typeof municipioId === 'string' && municipioId.length > 10 && !!fechaDesde,
     staleTime: 5 * 60_000,
   })
 }
