@@ -16,7 +16,6 @@ import TurnoPresencialModal from '../../components/admin/TurnoPresencialModal'
 import DepLandingTab from '../../components/admin/DepLandingTab'
 import DepBotIATab from '../../components/admin/DepBotIATab'
 import ProfesionalesTab from '../../components/admin/ProfesionalesTab'
-import AgendaPublicaAdmin from '../../components/admin/AgendaPublicaAdmin'
 import PlanillaImprimir from '../../components/admin/PlanillaImprimir'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
 
@@ -43,7 +42,6 @@ const COLOR_TURNO_SALA = COLOR_POR_ESPECIALIDAD.general  // fallback histórico
 // sub-secciones desde el sidebar (AdminLayout NavGroup).
 const SECCION_LABEL = {
   agenda:         'Agenda',
-  agenda_publica: 'Agenda pública',
   profesionales:  'Profesionales',
   administracion: 'Administración',
 }
@@ -212,17 +210,6 @@ export default function SalaPrimerosAuxilios() {
     return (
       <div className="p-6">
         <ProfesionalesTab municipioId={municipioId} dependenciaId={dependenciaSaludId} />
-      </div>
-    )
-  }
-  if (tabParamRaw === 'agenda_publica') {
-    return (
-      <div className="p-6">
-        <div className="mb-4">
-          <h2 className="font-sora text-xl font-bold text-primary">Agenda pública de profesionales</h2>
-          <p className="mt-1 text-sm text-primary-500">Gestión de turnos por profesional. Los vecinos ven disponibilidad en el portal.</p>
-        </div>
-        <AgendaPublicaAdmin dependenciaId={dependenciaSaludId} municipioId={municipioId} />
       </div>
     )
   }

@@ -45,6 +45,7 @@ import GestionDependencias from './pages/admin/GestionDependencias'
 import ImportadorVecinos   from './pages/admin/ImportadorVecinos'
 import PortalPublico       from './pages/portal/PortalPublico'
 import AgendaPublica       from './pages/portal/AgendaPublica'
+import AgendaPublicaPage   from './pages/admin/AgendaPublicaPage'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import DependenciaPublica  from './pages/portal/DependenciaPublica'
@@ -197,6 +198,7 @@ const router = createBrowserRouter([
                   { path: '/admin/auditoria',      element: <Auditoria /> },
                   { path: '/admin/rendicion',      element: <Rendicion /> },
                   { path: '/admin/ayuda-social',   element: <AyudaSocial /> },
+                  { path: '/admin/agenda-publica', element: <AgendaPublicaPage /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
                   { path: '/admin/dependencias',   element: <GestionDependencias /> },
