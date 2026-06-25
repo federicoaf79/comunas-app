@@ -164,7 +164,7 @@ const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           {
-            element: <RoleGuard roles={['admin_comuna', 'operador']} />,
+            element: <RoleGuard roles={['admin_comuna', 'admin_portal', 'usuario_admin', 'subadmin', 'usuario_sub', 'reporting', 'operador']} />,
             children: [
               {
                 element: <AdminLayout />,
