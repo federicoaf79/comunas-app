@@ -6,10 +6,15 @@ const AuthContext = createContext(null)
 // Orden de prioridad: el primer rol que matchea define la ruta destino.
 // `superadmin` no requiere municipio_id (gestión global).
 const ROLE_HOME = [
-  ['superadmin',   '/superadmin'],
-  ['admin_comuna', '/admin'],
-  ['operador',     '/admin'],
-  ['vecino',       '/portal'],
+  ['superadmin',    '/superadmin'],
+  ['admin_comuna',  '/admin'],
+  ['admin_portal',  '/admin'],
+  ['usuario_admin', '/admin'],
+  ['subadmin',      '/admin'],
+  ['usuario_sub',   '/admin'],
+  ['reporting',     '/admin'],
+  ['operador',      '/admin'],
+  ['vecino',        '/portal'],
 ]
 
 export function homeRouteFor(roles) {
