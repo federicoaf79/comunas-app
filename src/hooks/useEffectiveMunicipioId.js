@@ -30,7 +30,7 @@ export function useEffectiveMunicipioId() {
       const { data, error } = await supabase
         .from('municipios')
         .select('id')
-        .eq('activa', true)
+        .eq('activo', true)
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle()

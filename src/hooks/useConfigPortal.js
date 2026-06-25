@@ -97,7 +97,7 @@ async function fetchPortalConfigBundle(slug) {
       .from('municipios')
       .select('id')
       .eq('slug', slug)
-      .eq('activa', true)
+      .eq('activo', true)
       .maybeSingle()
     if (munError) {
       console.warn('[fetchPortalConfigBundle] municipios query error:', munError.message)
