@@ -1,72 +1,75 @@
 ---
-name: Tulkas — Stack Técnico y Convenciones
-key: tulkas-stack
-description: Reglas técnicas no negociables del ecosistema Tulkas.
+name: tulkas-stack
+description: >
+  Stack técnico y convenciones compartidas por todos los proyectos de Tulkas Media.
+  Activar en cualquier tarea de desarrollo para cualquier proyecto del ecosistema.
+  Contiene las reglas no negociables y los patrones establecidos.
 ---
 
-# Stack Técnico Tulkas
+# Tulkas Stack — Convenciones del Ecosistema
 
-## Stack base (siempre)
-- **Frontend**: React 19 + Vite + Tailwind CSS
-- **Backend/DB**: Supabase (Postgres + Auth + Storage + Edge Functions)
-- **Deploy**: Vercel (Hobby hasta revenue real, luego Pro)
-- **Repo**: GitHub (federicoaf79 para proyectos propios, PlanB1205 para Plan-B)
-- **Email**: Resend
-- **Mensajería**: Plan-B client (`@federico/planb-client`)
-- **Dev local**: Windows + PowerShell
+## Stack base (todos los proyectos web)
+- Frontend: React + Vite + Tailwind CSS
+- Backend: Supabase (PostgreSQL + Auth + Storage + Realtime)
+- Deploy: Vercel (frontend) + Supabase (backend)
+- DNS: Cloudflare
+- Email: Resend
+- Control de versiones: GitHub
 
-## Convenciones PowerShell
-```powershell
-# CORRECTO — punto y coma para encadenar
-cd C:\proyecto ; git add . ; git commit -m "feat: ..."
+## Reglas no negociables
 
-# INCORRECTO — nunca usar &&
-cd C:\proyecto && git add .
-```
+### Supabase
+- Toda tabla nueva necesita migration file versionado en `supabase/migrations/`
+- Nunca `USING (true)` en políticas RLS — siempre filtrar por tenant/user
+- fetchAllPaginated para queries que pueden superar 1000 rows
+- Siempre manejar el error de Supabase: `const { data, error } = await ...; if (error) throw error`
 
-## Reglas Supabase (no negociables)
+### React / Frontend
+- No hardcodear datos que deberían venir de la DB
+- Estados de loading y error siempre implementados en pantallas principales
+- Validación de formularios antes de enviar a Supabase
+- No dejar console.log en código que va a producción
+- Paleta sin verde (regla de diseño Tulkas): usar cobre #B8712E como acento
 
-### fetchAllPaginated — SIEMPRE para queries grandes
-```javascript
-// Para cualquier query que pueda superar 1000 filas
-// PostgREST tiene límite de 1000 por defecto
-const data = await fetchAllPaginated('tabla', filtros);
-// NUNCA: supabase.from('tabla').select('*') sin paginación en tablas grandes
-```
+### Git
+- Commits en formato: tipo(scope): descripción en presente
+- Tipos: fix, feat, docs, refactor, chore, test
+- Nunca commitear .env o secrets
+- Un PR / feature por branch
 
-### Dos clientes Supabase en portales públicos
-```javascript
-// Cliente con auth (usuarios logueados)
-const supabase = createClient(url, anonKey);
+### Seguridad
+- API keys siempre en variables de entorno
+- Nunca en código, nunca en historial de git
+- Si hay keys en historial: rotar inmediatamente y limpiar con BFG
 
-// Cliente público sin auth (portal público, magic links)
-const supabasePublic = createClient(url, anonKey, { auth: { persistSession: false } });
-// NUNCA eliminar el cliente público — rompe el portal
-```
+## Proyectos del ecosistema
 
-### RLS (Row Level Security)
-- Los helpers RLS deben existir en la DB ANTES de activar policies
-- Verificar en SQL Editor: `SELECT * FROM pg_proc WHERE proname LIKE 'is_%' OR proname LIKE 'has_%'`
-- Sin helpers → timeout silencioso en prod
+| ID | Nombre | Repo | Local | Estado |
+|---|---|---|---|---|
+| comunas | Comunas ERP | federicoaf79/comunas-app | C:\Users\ffrey\comunas-app | PROD |
+| oohplanner | OOH Planner | federicoaf79/oohplanner-app | C:\oohplanner-app | PROD |
+| tolrank | Tolrank | federicoaf79/ai-audit-web | C:\Users\ffrey\ai-audit-web | PROD |
+| curex | Curex | federicoaf79/curex-alpha | C:\Curex | DEV |
+| planb | Plan-B | PlanB1205/plan-b-backend | C:\plan-b-backend | PAUSA |
+| urbantales | Urban Tales | federicoaf79/urban-tales | C:\UrbanTales | DEV |
+| dentalab | Dentalab-Compras | federicoaf79/dentalab-compras | C:\dentalab-compras | NUEVO |
 
-### Migraciones SQL
-- SIEMPRE versionadas: `supabase/migrations/YYYYMMDD_descripcion.sql`
-- NUNCA crear tablas en prod sin migración en el repo
-- Verificar que corrieron: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`
+## Cuentas y accesos
+- GitHub principal: federicoaf79
+- GitHub Plan-B: PlanB1205
+- Vercel: federicoaf79 (curex, oohplanner, comunas) + contacto-5166 (Plan-B)
+- Supabase TulkasOS: fbcuspqkmpqtotwajqnq.supabase.co
+- MCP Server: localhost:3100
+- Backend TulkasOS: localhost:3101
 
-### Edge Functions
-- Deno + TypeScript
-- Secrets con `supabase secrets set NOMBRE=valor`
-- NUNCA hardcodear secrets en el código
+## FreyHub — módulos reutilizables
+Repo: federicoaf79/federico-packages (C:\Users\ffrey\federico-packages)
+Es un reservorio de copy-paste — NO una dependencia npm.
 
-## Errores comunes y soluciones
-- **Error 42703** → columna no existe. Usar try/catch con fallback a columnas seguras.
-- **Timeout silencioso** → RLS helpers faltantes. Verificar antes de activar policies.
-- **CORS en Edge Functions** → agregar headers `Access-Control-Allow-Origin`
-- **Date shift Argentina** → usar `YYYY-MM-DD` sin timezone, nunca `new Date()` directo
+Módulos disponibles:
+- @federico/utils — helpers de formato, cn(), datetime Argentina TZ
+- @federico/supabase — cliente principal + fetchAllPaginated
+- @federico/email — Resend
+- @federico/whatsapp-web-sender — Puppeteer WhatsApp (puerto 3099)
 
-## Workflow con Claude Code
-```powershell
-cd C:\[proyecto] ; claude
-```
-El CLAUDE.md del proyecto es la fuente de verdad. Leerlo primero siempre.
+Uso: copiar el código del módulo al proyecto, NO instalar como npm package.
