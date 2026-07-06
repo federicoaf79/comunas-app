@@ -40,9 +40,9 @@ const TABS_INFO = [
 // responsable). `responsable` puede no existir si ese migration no
 // se aplicó → retry defensivo sin esa columna.
 const DEP_COLS_FULL =
-  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion, responsable'
+  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion, responsable, servicios'
 const DEP_COLS_BASE =
-  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion'
+  'id, municipio_id, nombre, tipo, activa, descripcion_larga, horario_atencion, telefono, email_contacto, direccion, servicios'
 
 async function fetchDependencia(id) {
   let { data, error } = await supabase
@@ -99,16 +99,25 @@ function TabInformacion({ dep, dependenciaId }) {
     direccion:        dep.direccion ?? '',
     responsable:      dep.responsable ?? '',
     activa:           dep.activa !== false,
+    servicios:        Array.isArray(dep.servicios) ? dep.servicios.join('\n') : '',
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
   const [okMsg, setOkMsg]   = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
+  const esPolideportivo = ['polideportivo', 'deporte'].includes((dep.tipo ?? '').toLowerCase())
+
   async function handleSave() {
     setError(''); setOkMsg('')
     if (!form.nombre.trim()) { setError('El nombre es obligatorio.'); return }
     setSaving(true)
+
+    // Parsear servicios (deportes/actividades) desde textarea → array
+    const serviciosArray = form.servicios.trim()
+      ? form.servicios.split('\n').map(s => s.trim()).filter(Boolean)
+      : null
+
     const patchFull = {
       nombre:            form.nombre.trim(),
       descripcion_larga: form.descripcion_larga.trim() || null,
@@ -118,6 +127,7 @@ function TabInformacion({ dep, dependenciaId }) {
       direccion:         form.direccion.trim() || null,
       responsable:       form.responsable.trim() || null,
       activa:            !!form.activa,
+      servicios:         serviciosArray,
     }
     try {
       let { error } = await supabase
@@ -229,6 +239,23 @@ function TabInformacion({ dep, dependenciaId }) {
             placeholder="Agregá una descripción para que los vecinos sepan qué hace esta dependencia, qué servicios ofrece y cómo pueden acceder"
           />
         </div>
+        {esPolideportivo && (
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-sm font-medium text-primary-700">
+              Deportes y actividades disponibles
+            </label>
+            <textarea
+              rows={4}
+              value={form.servicios}
+              onChange={e => set('servicios', e.target.value)}
+              className="input-field resize-y font-mono text-sm"
+              placeholder="Fútbol&#10;Básquet&#10;Vóley&#10;Natación&#10;Gimnasio&#10;Yoga&#10;(uno por línea)"
+            />
+            <p className="mt-1 text-xs text-primary-500">
+              Listá las actividades deportivas que ofrece el polideportivo. Una por línea.
+            </p>
+          </div>
+        )}
         <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-primary-700">
           <input
             type="checkbox"

@@ -16,6 +16,7 @@ const DEP_OPTIONS = [
   { value: 'juzgado',        label: 'Juzgado de Paz',               tipos: ['juzgado'] },
   { value: 'sum',            label: 'SUM (Salón de Usos Múltiples)', tipos: ['sum', 'intendencia'] },
   { value: 'administracion', label: 'Administración / Intendencia', tipos: ['intendencia'] },
+  { value: 'polideportivo',  label: 'Polideportivo Municipal',      tipos: ['polideportivo', 'deporte'] },
 ]
 
 const CANALES = [

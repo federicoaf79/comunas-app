@@ -23,7 +23,7 @@ import Spinner from '../../components/ui/Spinner'
 
 // Tipos de dependencia que aceptan turnos online — alineado con
 // DEP_OPTIONS de SacarTurnoFormPortal.
-const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin'])
+const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'polideportivo', 'deporte'])
 
 // Fallback de horario por tipo cuando la dependencia no tiene
 // `horario_atencion` cargado en la DB.
