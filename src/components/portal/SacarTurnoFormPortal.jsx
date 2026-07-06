@@ -8,17 +8,6 @@ import Select from '../ui/Select'
 import Button from '../ui/Button'
 import Spinner from '../ui/Spinner'
 
-// Opciones simples para el ciudadano. El mapeo a `dependencias.tipo`
-// permite caer a una alternativa si el municipio no tiene SUM o
-// administración cargada (cae a Intendencia).
-const DEP_OPTIONS = [
-  { value: 'caps',           label: 'Sala de Primeros Auxilios',    tipos: ['caps'] },
-  { value: 'juzgado',        label: 'Juzgado de Paz',               tipos: ['juzgado'] },
-  { value: 'sum',            label: 'SUM (Salón de Usos Múltiples)', tipos: ['sum', 'intendencia'] },
-  { value: 'administracion', label: 'Administración / Intendencia', tipos: ['intendencia'] },
-  { value: 'polideportivo',  label: 'Polideportivo Municipal',      tipos: ['polideportivo', 'deporte'] },
-]
-
 const CANALES = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'sms',      label: 'SMS' },
@@ -374,14 +363,8 @@ export default function SacarTurnoFormPortal() {
     }
   }
 
-  function resolveDep(tipoUI) {
-    const opt = DEP_OPTIONS.find(o => o.value === tipoUI)
-    if (!opt) return null
-    for (const tipo of opt.tipos) {
-      const found = deps.find(d => d.tipo === tipo)
-      if (found) return found
-    }
-    return deps[0] ?? null
+  function resolveDep(depId) {
+    return deps.find(d => d.id === depId) ?? null
   }
 
   const isFamiliar = form.paraQuien === 'familiar'
@@ -628,7 +611,7 @@ export default function SacarTurnoFormPortal() {
         value={form.dependencia}
         onChange={v => set('dependencia', v)}
         placeholder="Seleccionar..."
-        options={DEP_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+        options={deps.map(d => ({ value: d.id, label: d.nombre }))}
       />
       <Input
         label="Fecha preferida"
