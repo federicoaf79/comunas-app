@@ -307,12 +307,23 @@ export default function SacarTurnoFormPortal() {
 
   useEffect(() => {
     let cancelled = false
-    supabase
-      .from('dependencias')
-      .select('id, municipio_id, tipo, nombre')
-      .then(({ data }) => { if (!cancelled) setDeps(data ?? []) })
+    if (!portalMunicipioId) return
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+    fetch(
+      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${portalMunicipioId}&activa=eq.true&modulo_turnos=eq.true&select=id,municipio_id,tipo,nombre&order=nombre.asc`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      }
+    )
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setDeps(data ?? []) })
+      .catch(err => console.warn('[SacarTurno] fetch deps:', err))
     return () => { cancelled = true }
-  }, [])
+  }, [portalMunicipioId])
 
   // Si el usuario edita el DNI después de buscar, reseteamos el
   // estado de lookup — el bloque gold/banner desaparece hasta que
