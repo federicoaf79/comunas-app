@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { validateDniArg, normalizePhoneE164 } from '../../lib/historiaClinica'
+import { useOrdenMedicaUpload } from '../../hooks/useOrdenMedicaUpload'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -38,6 +39,8 @@ const EMPTY = {
   vinculo:         '',
   vinculo_otro:    '',
   familiar_edad:   '',
+  // Orden médica (solo si requiere_orden=true)
+  ordenFile: null,
 }
 
 // Búsqueda por DNI scoping al municipio del portal. Devuelve la
@@ -274,6 +277,10 @@ function FamiliarPanel({ form, set }) {
 // Componente principal
 // ─────────────────────────────────────────────────────────────────
 export default function SacarTurnoFormPortal() {
+  const [searchParams] = useSearchParams()
+  const requiereOrden = searchParams.get('requiere_orden') === 'true'
+  const especialidadURL = searchParams.get('esp') || ''
+
   const [form, setForm]           = useState(EMPTY)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState('')
@@ -294,6 +301,7 @@ export default function SacarTurnoFormPortal() {
 
   const portalMunicipioQ = usePortalMunicipioId()
   const portalMunicipioId = portalMunicipioQ.data ?? null
+  const { uploadOrden, uploading: uploadingOrden } = useOrdenMedicaUpload()
 
   useEffect(() => {
     let cancelled = false
@@ -374,10 +382,12 @@ export default function SacarTurnoFormPortal() {
   // además requerimos nombre/DNI/vínculo del familiar (y el texto
   // libre cuando vínculo === 'otro'). Si el DNI no existe en la DB
   // (alta nueva), además exigimos el checkbox "Soy vecino".
+  // Si requiere orden médica, exigimos que hayan subido el archivo.
   const canSubmit =
     !!form.dni && !!form.nombre && !!form.telefono &&
     !!form.dependencia && !!form.fecha &&
     (dniStatus !== 'notfound' || esVecino) &&
+    (!requiereOrden || !!form.ordenFile) &&
     (!isFamiliar || (
       !!form.familiar_nombre.trim() &&
       !!form.familiar_dni.trim() &&
@@ -429,12 +439,16 @@ export default function SacarTurnoFormPortal() {
         dependencia_id: dep.id,
         vecino_id:      v.id,
         fecha_hora,
-        estado:         'pendiente',
+        estado:         requiereOrden ? 'pendiente_validacion' : 'pendiente',
         canal:          form.canal,
         motivo:         form.motivo || null,
       }
       if (isFamiliar) {
         payload.metadata = buildFamiliarMetadata(form)
+      }
+      // Si hay especialidad en URL, guardarla en metadata
+      if (especialidadURL) {
+        payload.metadata = { ...(payload.metadata || {}), especialidad: especialidadURL }
       }
 
       const { data: turno, error: tErr } = await supabase
@@ -443,6 +457,14 @@ export default function SacarTurnoFormPortal() {
         .select('id, numero_turno, fecha_hora, estado')
         .single()
       if (tErr) throw tErr
+
+      // Si requiere orden y hay archivo, subirlo
+      if (requiereOrden && form.ordenFile) {
+        const uploadResult = await uploadOrden(form.ordenFile, turno.id, v.id)
+        if (!uploadResult.success) {
+          throw new Error('Error al subir orden médica: ' + uploadResult.error)
+        }
+      }
 
       setResultado({
         numero:          turno?.numero_turno ?? turno?.id?.slice(0, 8),
@@ -636,6 +658,65 @@ export default function SacarTurnoFormPortal() {
           }
         />
       </div>
+
+      {/* Campo de upload de orden médica — solo si requiere_orden=true */}
+      {requiereOrden && (
+        <div className="col-span-2">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-700">
+            Orden médica <span className="font-normal normal-case tracking-normal text-red-500">*</span>
+          </label>
+          <div
+            className="relative rounded-md border-2 border-dashed border-[#C9A84C] bg-[#C9A84C]/5 p-4 text-center transition-colors hover:border-[#C9A84C]/70 hover:bg-[#C9A84C]/10"
+          >
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) {
+                  // Validar tamaño (max 5MB)
+                  if (file.size > 5 * 1024 * 1024) {
+                    setError('El archivo es muy grande. Máximo 5MB.')
+                    e.target.value = ''
+                    return
+                  }
+                  set('ordenFile', file)
+                  setError('')
+                }
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              required={requiereOrden}
+            />
+            <div className="pointer-events-none flex flex-col items-center gap-2">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#C9A84C"
+                strokeWidth="2"
+                className="h-8 w-8"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              {form.ordenFile ? (
+                <div className="text-sm">
+                  <p className="font-semibold text-primary">📄 {form.ordenFile.name}</p>
+                  <p className="text-xs text-primary-500">
+                    {(form.ordenFile.size / 1024).toFixed(1)} KB
+                  </p>
+                </div>
+              ) : (
+                <div className="text-sm text-primary-700">
+                  <p className="font-semibold">Adjuntá tu orden médica</p>
+                  <p className="text-xs text-primary-500">Foto o PDF · Máximo 5MB</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-primary-500">
+            Subí una foto clara de tu orden de derivación médica. Formatos aceptados: JPG, PNG, PDF
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="col-span-2 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-xs text-danger">
