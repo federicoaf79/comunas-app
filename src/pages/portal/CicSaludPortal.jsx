@@ -1,7 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useProfesionales } from '../../hooks/useProfesionales'
-import { useDependencias } from '../../hooks/useTurnos'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
@@ -11,7 +10,41 @@ export default function CicSaludPortal() {
   const portalMunicipioQ = usePortalMunicipioId()
   const municipioId = portalMunicipioQ.data ?? null
 
-  const { data: deps = [] } = useDependencias(municipioId)
+  const [deps, setDeps] = useState([])
+  const [loadingDeps, setLoadingDeps] = useState(true)
+
+  // Fetch dependencias con anon key para portal público
+  useEffect(() => {
+    let cancelled = false
+    if (!municipioId) return
+
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    fetch(
+      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${municipioId}&tipo=eq.cic_salud&activa=eq.true&select=id,nombre,tipo,municipio_id`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      }
+    )
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled) {
+          setDeps(data ?? [])
+          setLoadingDeps(false)
+        }
+      })
+      .catch(err => {
+        console.warn('[CicSaludPortal] fetch deps:', err)
+        if (!cancelled) setLoadingDeps(false)
+      })
+
+    return () => { cancelled = true }
+  }, [municipioId])
+
   const depCicSalud = useMemo(
     () => deps.find(d => d.tipo === 'cic_salud' && d.activa !== false),
     [deps]
@@ -52,7 +85,7 @@ export default function CicSaludPortal() {
     }
   }
 
-  if (isLoading) {
+  if (loadingDeps || isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F5F4EF]">
         <Spinner size="lg" />
@@ -65,6 +98,9 @@ export default function CicSaludPortal() {
       <div className="flex min-h-screen items-center justify-center bg-[#F5F4EF]">
         <div className="text-center">
           <p className="text-[#0F1C35]">CIC — Servicios de Salud no disponible</p>
+          <p className="mt-2 text-sm text-[#0F1C35] opacity-70">
+            {!municipioId ? 'No se pudo identificar el municipio' : 'La dependencia no está activa'}
+          </p>
         </div>
       </div>
     )
