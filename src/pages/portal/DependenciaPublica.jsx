@@ -23,7 +23,7 @@ import Spinner from '../../components/ui/Spinner'
 
 // Tipos de dependencia que aceptan turnos online — alineado con
 // DEP_OPTIONS de SacarTurnoFormPortal.
-const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'polideportivo', 'deporte'])
+const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'polideportivo', 'deporte', 'odontologia'])
 
 // Fallback de horario por tipo cuando la dependencia no tiene
 // `horario_atencion` cargado en la DB.
@@ -38,6 +38,7 @@ const HORARIO_FALLBACK = {
   obras_publicas:'Lun a Vie · 7:00 – 13:00',
   deporte:      'Consultar horarios',
   polideportivo:'Consultar horarios',
+  odontologia:  'Lun a Vie · 8:00 – 13:00',
   cementerio:   'Todos los días · 8:00 – 18:00',
   velatorio:    'Disponibilidad 24/7',
   policia:      '24/7 · 911 / 101',
@@ -88,6 +89,9 @@ function IconForTipo({ tipo, className = 'h-12 w-12' }) {
   )
   if (/educ|escuel|jardi|primaria|secundaria|biblioteca/.test(t)) return (
     <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5h7a3 3 0 0 1 3 3v12a3 3 0 0 0-3-3H3V5zM21 5h-7a3 3 0 0 0-3 3v12a3 3 0 0 1 3-3h7V5z" /></svg>
+  )
+  if (/odontolog/.test(t)) return (
+    <svg {...common}><path strokeLinecap="round" strokeLinejoin="round" d="M8 3c-1.5 0-2.5.8-3 2-.5 1.2-.5 3-.5 5s0 3.8.5 5c.5 1.2 1.5 2 3 2 .8 0 1.2-.5 1.5-1.2.3-.7.5-1.8.5-2.8v-6c0-1-.2-2.1-.5-2.8C9.2 3.5 8.8 3 8 3zM16 3c-1.5 0-2.5.8-3 2-.5 1.2-.5 3-.5 5s0 3.8.5 5c.5 1.2 1.5 2 3 2 .8 0 1.2-.5 1.5-1.2.3-.7.5-1.8.5-2.8v-6c0-1-.2-2.1-.5-2.8-.3-.7-.7-1.2-1.5-1.2zM8 15v3c0 1.2.5 2 1.5 2.5M16 15v3c0 1.2-.5 2-1.5 2.5" /></svg>
   )
   return (
     <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" /><path strokeLinecap="round" d="M8 9h8M8 13h8M8 17h5" /></svg>

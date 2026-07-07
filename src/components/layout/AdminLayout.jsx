@@ -16,6 +16,7 @@ const TIPOS_CON_MODULO_PROPIO = new Set([
   'sum', 'salon',
   'intendencia', 'admin', 'comuna',
   'cic_salud',
+  'odontologia',
 ])
 
 // Etiqueta amigable por tipo — usada en el sidebar para que tipos
@@ -42,6 +43,7 @@ const LABEL_BY_TIPO = {
   bienes:               'Bienes',
   ayuda_social:         'Ayuda Social',
   social:               'Ayuda Social',
+  odontologia:          'Consultorio Odontológico',
 }
 
 // NAV_TOP — links planos del header del sidebar. Dashboard +
@@ -226,6 +228,15 @@ function subitemsParaTipo(tipo, basePath) {
       { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
       { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',          kind: 'gestion' },
       { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
+    ]
+  }
+  if (t === 'odontologia') {
+    return [
+      { to: basePath,                              label: 'Agenda',          kind: 'gestion' },
+      { to: `${basePath}?tab=profesionales`,       label: 'Profesionales',   kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,             label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,              label: 'Bot IA',          kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,               label: 'Administración',  kind: 'admin'   },
     ]
   }
   // Dependencias dinámicas genéricas → DependenciaGestion con tabs

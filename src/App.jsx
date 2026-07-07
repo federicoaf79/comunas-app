@@ -29,6 +29,7 @@ import AtencionDetalle      from './pages/admin/AtencionDetalle'
 import CicSalud            from './pages/admin/CicSalud'
 import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
+import Odontologia         from './pages/admin/Odontologia'
 import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
 import DependenciaGestion  from './pages/admin/DependenciaGestion'
 import Inventario          from './pages/admin/Inventario'
@@ -188,6 +189,7 @@ const router = createBrowserRouter([
                   { path: '/admin/cic-salud',                  element: <CicSalud /> },
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
+                  { path: '/admin/dependencia/odontologia', element: <Odontologia /> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
                   // Módulo genérico nuevo, keyeado por UUID de la
                   // fila (no por tipo). Path distinto a propósito

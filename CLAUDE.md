@@ -100,6 +100,10 @@ Agenda · Profesionales · Landing pública · Bot IA · Administración
 - sum: Reservas · Landing · Bot IA · Administración
 - social/ayuda_social: Beneficiarios · Landing · Bot IA · Administración
 
+### subitemsParaTipo — Consultorio Odontológico (odontologia)
+Agenda · Profesionales · Landing pública · Bot IA · Administración
+(NO requiere orden médica para turnos — turno directo)
+
 ---
 
 ## Módulos CIC — early returns
@@ -186,9 +190,10 @@ Sección "Profesionales que atienden" entre Servicios y Contacto:
 
 ```
 /portal/agenda → AgendaPublica (pública, sin auth)
-/portal/dependencia/:tipo → DependenciaPublica (con profesionales para caps/salud/sala)
+/portal/dependencia/:tipo → DependenciaPublica (con profesionales para caps/salud/sala/odontologia)
 /admin/agenda-publica → AgendaPublicaPage (lista + semana)
 /admin/sala → SalaPrimerosAuxilios (?tab=profesionales|landing|bot_ia|admin)
+/admin/dependencia/odontologia → Odontologia (?tab=profesionales|landing|bot_ia|admin)
 /admin/juez → JuezDePaz · /admin/sum → SUM · /admin/dependencia/social → AyudaSocial
 /admin/dependencia-gestion/:id → DependenciaGestion
 /superadmin → SuperadminDashboard
