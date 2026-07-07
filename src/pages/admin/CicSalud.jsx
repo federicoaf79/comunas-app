@@ -91,7 +91,15 @@ export default function CicSalud() {
     return depCicSalud ? <ProfesionalesTab dependencia={depCicSalud} /> : <Spinner />
   }
   if (tabRequested === 'admin') {
-    return depCicSalud ? <AdministracionTab dependencia={depCicSalud} /> : <Spinner />
+    return depCicSalud ? (
+      <AdministracionTab
+        dependenciaId={depCicSalud.id}
+        dependenciaNombre={depCicSalud.nombre}
+        municipioId={municipioId}
+        canApprove={esDirector}
+        canCreate={canCreate}
+      />
+    ) : <Spinner />
   }
 
   // Tab por defecto: Turnos
