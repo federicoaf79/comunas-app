@@ -280,6 +280,7 @@ export default function SacarTurnoFormPortal() {
   const [searchParams] = useSearchParams()
   const requiereOrden = searchParams.get('requiere_orden') === 'true'
   const especialidadURL = searchParams.get('esp') || ''
+  const depParam = searchParams.get('dep') || ''  // dep desde URL (slug/tipo)
 
   const [form, setForm]           = useState(EMPTY)
   const [submitting, setSubmitting] = useState(false)
@@ -298,6 +299,7 @@ export default function SacarTurnoFormPortal() {
   // Track del último DNI buscado para no re-disparar la query si el
   // usuario blurea sin cambiar nada.
   const lastDniLookup = useRef('')
+  const depPreselectado = useRef(false)  // flag para solo preseleccionar una vez
 
   const portalMunicipioQ = usePortalMunicipioId()
   const portalMunicipioId = portalMunicipioQ.data ?? null
@@ -309,7 +311,7 @@ export default function SacarTurnoFormPortal() {
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
     const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
     fetch(
-      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${portalMunicipioId}&activa=eq.true&modulo_turnos=eq.true&select=id,municipio_id,tipo,nombre&order=nombre.asc`,
+      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${portalMunicipioId}&activa=eq.true&modulo_turnos=eq.true&select=id,municipio_id,tipo,nombre,slug&order=nombre.asc`,
       {
         headers: {
           apikey: SUPABASE_ANON_KEY,
@@ -322,6 +324,30 @@ export default function SacarTurnoFormPortal() {
       .catch(err => console.warn('[SacarTurno] fetch deps:', err))
     return () => { cancelled = true }
   }, [portalMunicipioId])
+
+  // Preselección de dependencia desde ?dep= en la URL
+  useEffect(() => {
+    if (!depParam || depPreselectado.current || deps.length === 0) return
+
+    // Normalizar para matching flexible (lowercase, sin acentos, sin guiones)
+    const normalizar = s => (s ?? '')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/[\s_\-/]+/g, '')
+
+    const targetNorm = normalizar(depParam)
+
+    // Buscar por slug exacto → tipo exacto → nombre parcial
+    const match = deps.find(d => normalizar(d.slug) === targetNorm)
+               ?? deps.find(d => normalizar(d.tipo) === targetNorm)
+               ?? deps.find(d => normalizar(d.nombre).includes(targetNorm))
+
+    if (match) {
+      set('dependencia', match.id)
+      depPreselectado.current = true
+    }
+  }, [depParam, deps])
 
   // Si el usuario edita el DNI después de buscar, reseteamos el
   // estado de lookup — el bloque gold/banner desaparece hasta que
