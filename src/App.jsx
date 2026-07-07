@@ -137,11 +137,13 @@ const router = createBrowserRouter([
   { path: '/portal/tramites', element: <LandingDomainGuard><AdminDomainRedirect><TramitesPortal /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/historia', element: <LandingDomainGuard><AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect></LandingDomainGuard> },
 
-  // Portal del Vecino — área personal con sesión propia (DNI + tel)
-  // independiente del auth de Supabase. La sesión vive en sessionStorage.
+  // Portal del Vecino — área personal con autenticación dual:
+  // - Supabase Auth (email + password con user_id vinculado)
+  // - Acceso rápido (DNI + teléfono sin cuenta)
+  // La sesión vive en localStorage (persiste entre cierres).
   // En comunas.lat → redirige a / (landing)
   // En admin.comunas.lat → redirige a /login
-  { path: '/mi-cuenta/acceso', element: <LandingDomainGuard><AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/acceso', element: <LandingDomainGuard><AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect></LandingDomainGuard> },
   {
     element: (
       <LandingDomainGuard>
@@ -151,7 +153,7 @@ const router = createBrowserRouter([
       </LandingDomainGuard>
     ),
     children: [
-      { path: '/mi-cuenta', element: <VecinoDashboard /> },
+      { path: '/portal/mi-cuenta', element: <VecinoDashboard /> },
     ],
   },
 

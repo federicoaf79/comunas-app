@@ -14,7 +14,7 @@ export default function VecinoAcceso() {
 
   // Si ya hay sesión, ir directo al dashboard
   useEffect(() => {
-    if (isVecinoLogued) navigate('/mi-cuenta', { replace: true })
+    if (isVecinoLogued) navigate('/portal/mi-cuenta', { replace: true })
   }, [isVecinoLogued, navigate])
 
   return (
@@ -120,7 +120,7 @@ function LoginTab({ setVecinoSession, navigate }) {
         user_email: data.user.email,
       })
 
-      navigate('/mi-cuenta', { replace: true })
+      navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
       setError(e?.message ?? 'No pudimos iniciar sesión. Verificá tus datos.')
     } finally {
@@ -263,7 +263,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
         user_email: authData.user.email,
       })
 
-      navigate('/mi-cuenta', { replace: true })
+      navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
       setError(e?.message ?? 'No pudimos crear tu cuenta. Probá de nuevo.')
     } finally {
@@ -376,7 +376,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
         auth_mode: 'rapido',
         telefono_login: telefono.replace(/[^0-9]/g, ''),
       })
-      navigate('/mi-cuenta', { replace: true })
+      navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
       setError(e?.message ?? 'No pudimos verificar tu identidad. Probá de nuevo.')
     } finally {
