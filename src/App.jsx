@@ -26,6 +26,7 @@ import TablazoCross        from './pages/admin/TablazoCross'
 import Mensajeria          from './pages/admin/Mensajeria'
 import SalaPrimerosAuxilios from './pages/admin/SalaPrimerosAuxilios'
 import AtencionDetalle      from './pages/admin/AtencionDetalle'
+import CicSalud            from './pages/admin/CicSalud'
 import JuezDePaz           from './pages/admin/JuezDePaz'
 import SUM                 from './pages/admin/SUM'
 import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
@@ -49,6 +50,7 @@ import AgendaPublicaPage   from './pages/admin/AgendaPublicaPage'
 import NoticiasListado     from './pages/portal/NoticiasListado'
 import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import DependenciaPublica  from './pages/portal/DependenciaPublica'
+import CicSaludPortal      from './pages/portal/CicSaludPortal'
 import SacarTurno          from './pages/portal/SacarTurno'
 import MiTurno             from './pages/portal/MiTurno'
 import MiSalud             from './pages/portal/MiSalud'
@@ -125,6 +127,7 @@ const router = createBrowserRouter([
   { path: '/portal/noticias', element: <LandingDomainGuard><AdminDomainRedirect><NoticiasListado /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/noticias/:id', element: <LandingDomainGuard><AdminDomainRedirect><NoticiaDetalle /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/dependencia/:tipo', element: <LandingDomainGuard><AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/cic-salud', element: <LandingDomainGuard><AdminDomainRedirect><CicSaludPortal /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/agenda', element: <LandingDomainGuard><AdminDomainRedirect><AgendaPublica /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/turno', element: <LandingDomainGuard><AdminDomainRedirect><SacarTurno /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/mi-turno', element: <LandingDomainGuard><AdminDomainRedirect><MiTurno /></AdminDomainRedirect></LandingDomainGuard> },
@@ -182,6 +185,7 @@ const router = createBrowserRouter([
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/sala',                       element: <SalaPrimerosAuxilios /> },
                   { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
+                  { path: '/admin/cic-salud',                  element: <CicSalud /> },
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
