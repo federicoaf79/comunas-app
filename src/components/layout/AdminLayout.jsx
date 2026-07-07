@@ -12,10 +12,10 @@ import { useOnboardingProgress } from '../../hooks/useOnboardingProgress'
 // se EXCLUYEN de la lista "Otras dependencias" para no duplicar
 // el acceso desde el sidebar.
 const TIPOS_CON_MODULO_PROPIO = new Set([
-  'caps', 'salud',
   'juzgado',
   'sum', 'salon',
   'intendencia', 'admin', 'comuna',
+  'cic_salud',
 ])
 
 // Etiqueta amigable por tipo — usada en el sidebar para que tipos
@@ -124,7 +124,7 @@ const NAV_TOP = [
 // `tipo` debe coincidir con la fila de `dependencias` para poder
 // resolver el dep.id y leer permisos del perfil.
 const CIC_BLUEPRINT = [
-  { tipo: 'caps',    label: 'Sala Primeros Auxilios',      basePath: '/admin/sala',                modulo: 'sala_pa',
+  { tipo: 'cic_salud', label: 'CIC — Servicios de Salud', basePath: '/admin/cic-salud', modulo: 'cic_salud',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 5v14M5 12h14" />
@@ -156,7 +156,7 @@ const CIC_BLUEPRINT = [
 
 // Tipos que viven en CIC — se excluyen de DEPENDENCIAS dinámicas
 // para no duplicar la entrada.
-const TIPOS_CIC = new Set(['caps', 'salud', 'sala', 'juzgado', 'sum', 'salon', 'social', 'ayuda_social'])
+const TIPOS_CIC = new Set(['cic_salud', 'juzgado', 'sum', 'salon', 'social', 'ayuda_social'])
 
 // Tipos solo-informativos — un solo link al detalle, sin gestión
 // ni administración. Se renderizan al final del bloque DEPENDENCIAS
@@ -188,6 +188,15 @@ function subitemsParaTipo(tipo, basePath) {
   if (t === 'caps' || t === 'salud' || t === 'sala') {
     return [
       { to: basePath,                              label: 'Agenda',          kind: 'gestion' },
+      { to: `${basePath}?tab=profesionales`,       label: 'Profesionales',   kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,             label: 'Landing pública', kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,              label: 'Bot IA',          kind: 'gestion' },
+      { to: `${basePath}?tab=admin`,               label: 'Administración',  kind: 'admin'   },
+    ]
+  }
+  if (t === 'cic_salud') {
+    return [
+      { to: basePath,                              label: 'Turnos',          kind: 'gestion' },
       { to: `${basePath}?tab=profesionales`,       label: 'Profesionales',   kind: 'gestion' },
       { to: `${basePath}?tab=landing`,             label: 'Landing pública', kind: 'gestion' },
       { to: `${basePath}?tab=bot_ia`,              label: 'Bot IA',          kind: 'gestion' },
