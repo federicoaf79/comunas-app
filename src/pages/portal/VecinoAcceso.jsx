@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
 import { supabase } from '../../lib/supabase'
@@ -20,54 +20,57 @@ export default function VecinoAcceso() {
   return (
     <PortalFormPage
       titulo="Mi cuenta"
-      descripcion="Ingresá a tu cuenta para acceder a tus turnos, tu historia clínica y los datos de tu familia."
+      descripcion="Accedé a tus turnos, historia clínica y datos."
+      compact
     >
-      <div className="card overflow-hidden p-0">
-        {/* Tabs */}
-        <div className="flex border-b border-border bg-[#F5F4EF]">
-          <button
-            type="button"
-            onClick={() => setTab('login')}
-            className={
-              'flex-1 px-4 py-3 text-sm font-semibold transition-colors ' +
-              (tab === 'login'
-                ? 'border-b-2 border-primary bg-white text-primary'
-                : 'text-primary-500 hover:text-primary')
-            }
-          >
-            Ingresar
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('registro')}
-            className={
-              'flex-1 px-4 py-3 text-sm font-semibold transition-colors ' +
-              (tab === 'registro'
-                ? 'border-b-2 border-primary bg-white text-primary'
-                : 'text-primary-500 hover:text-primary')
-            }
-          >
-            Registrarse
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('rapido')}
-            className={
-              'flex-1 px-4 py-3 text-sm font-semibold transition-colors ' +
-              (tab === 'rapido'
-                ? 'border-b-2 border-primary bg-white text-primary'
-                : 'text-primary-500 hover:text-primary')
-            }
-          >
-            Acceso rápido
-          </button>
-        </div>
+      <div className="mx-auto max-w-[420px]">
+        <div className="card overflow-hidden p-0">
+          {/* Tabs */}
+          <div className="flex border-b border-border bg-[#F5F4EF]">
+            <button
+              type="button"
+              onClick={() => setTab('login')}
+              className={
+                'flex-1 px-3 py-2 font-sora text-xs font-semibold transition-colors sm:text-sm ' +
+                (tab === 'login'
+                  ? 'border-b-2 border-[#0F1C35] bg-white text-[#0F1C35]'
+                  : 'text-[#0F1C35]/70 hover:text-[#0F1C35]')
+              }
+            >
+              Ingresar
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('registro')}
+              className={
+                'flex-1 px-3 py-2 font-sora text-xs font-semibold transition-colors sm:text-sm ' +
+                (tab === 'registro'
+                  ? 'border-b-2 border-[#0F1C35] bg-white text-[#0F1C35]'
+                  : 'text-[#0F1C35]/70 hover:text-[#0F1C35]')
+              }
+            >
+              Registrarse
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('rapido')}
+              className={
+                'flex-1 px-3 py-2 font-sora text-xs font-semibold transition-colors sm:text-sm ' +
+                (tab === 'rapido'
+                  ? 'border-b-2 border-[#0F1C35] bg-white text-[#0F1C35]'
+                  : 'text-[#0F1C35]/70 hover:text-[#0F1C35]')
+              }
+            >
+              Sin cuenta
+            </button>
+          </div>
 
-        {/* Contenido */}
-        <div className="p-5 sm:p-6">
-          {tab === 'login' && <LoginTab setVecinoSession={setVecinoSession} navigate={navigate} />}
-          {tab === 'registro' && <RegistroTab setVecinoSession={setVecinoSession} navigate={navigate} />}
-          {tab === 'rapido' && <RapidoTab setVecinoSession={setVecinoSession} navigate={navigate} />}
+          {/* Contenido */}
+          <div className="p-4 sm:p-5">
+            {tab === 'login' && <LoginTab setVecinoSession={setVecinoSession} navigate={navigate} />}
+            {tab === 'registro' && <RegistroTab setVecinoSession={setVecinoSession} navigate={navigate} />}
+            {tab === 'rapido' && <RapidoTab setVecinoSession={setVecinoSession} navigate={navigate} />}
+          </div>
         </div>
       </div>
     </PortalFormPage>
@@ -110,7 +113,7 @@ function LoginTab({ setVecinoSession, navigate }) {
 
       if (vecinoError || !vecino) {
         await supabase.auth.signOut()
-        throw new Error('No encontramos tu perfil de vecino vinculado a esta cuenta')
+        throw new Error('No encontramos tu perfil vinculado')
       }
 
       // Sesión exitosa
@@ -122,7 +125,7 @@ function LoginTab({ setVecinoSession, navigate }) {
 
       navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
-      setError(e?.message ?? 'No pudimos iniciar sesión. Verificá tus datos.')
+      setError(e?.message ?? 'Error al iniciar sesión. Verificá tus datos.')
     } finally {
       setSubmitting(false)
     }
@@ -131,16 +134,7 @@ function LoginTab({ setVecinoSession, navigate }) {
   const canSubmit = !!email.trim() && !!password
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div>
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
-          Ingresá con tu cuenta
-        </h3>
-        <p className="mt-1 text-sm text-primary-500">
-          Usá el email y contraseña con los que te registraste.
-        </p>
-      </div>
-
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Input
         label="Email"
         type="email"
@@ -160,7 +154,7 @@ function LoginTab({ setVecinoSession, navigate }) {
       />
 
       {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
           {error}
         </div>
       )}
@@ -245,8 +239,6 @@ function RegistroTab({ setVecinoSession, navigate }) {
             apellido,
             nombre_completo: nombre.trim(),
             telefono: telefono.trim(),
-            // TODO: Leer config registro_portal para portal_estado
-            // Por ahora: activo por defecto
             portal_estado: 'activo',
           })
           .select()
@@ -265,7 +257,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
 
       navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
-      setError(e?.message ?? 'No pudimos crear tu cuenta. Probá de nuevo.')
+      setError(e?.message ?? 'Error al crear cuenta. Probá de nuevo.')
     } finally {
       setSubmitting(false)
     }
@@ -274,16 +266,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
   const canSubmit = !!email.trim() && !!password && !!dni.trim() && !!nombre.trim()
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div>
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
-          Creá tu cuenta
-        </h3>
-        <p className="mt-1 text-sm text-primary-500">
-          Registrate para acceder a tu área personal desde cualquier dispositivo.
-        </p>
-      </div>
-
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Input
         label="Email"
         type="email"
@@ -302,16 +285,27 @@ function RegistroTab({ setVecinoSession, navigate }) {
         autoComplete="new-password"
         placeholder="Mínimo 6 caracteres"
       />
-      <Input
-        label="DNI"
-        value={dni}
-        onChange={e => setDni(e.target.value.replace(/[^\d]/g, ''))}
-        required
-        inputMode="numeric"
-        type="text"
-        autoComplete="off"
-        placeholder="Ej: 32145678"
-      />
+      <div className="grid grid-cols-2 gap-2">
+        <Input
+          label="DNI"
+          value={dni}
+          onChange={e => setDni(e.target.value.replace(/[^\d]/g, ''))}
+          required
+          inputMode="numeric"
+          type="text"
+          autoComplete="off"
+          placeholder="32145678"
+        />
+        <Input
+          label="Teléfono"
+          value={telefono}
+          onChange={e => setTelefono(e.target.value)}
+          inputMode="tel"
+          type="tel"
+          autoComplete="tel"
+          placeholder="+54 9..."
+        />
+      </div>
       <Input
         label="Nombre completo"
         value={nombre}
@@ -320,18 +314,9 @@ function RegistroTab({ setVecinoSession, navigate }) {
         autoComplete="name"
         placeholder="Juan Pérez"
       />
-      <Input
-        label="Teléfono celular (opcional)"
-        value={telefono}
-        onChange={e => setTelefono(e.target.value)}
-        inputMode="tel"
-        type="tel"
-        autoComplete="tel"
-        placeholder="+54 9 ..."
-      />
 
       {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
           {error}
         </div>
       )}
@@ -365,10 +350,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
     try {
       const vecino = await findVecinoByDniTelefono({ dni, telefono })
       if (!vecino) {
-        setError(
-          'No encontramos tu cuenta. Verificá el DNI y el celular, ' +
-          'o registrate en la pestaña "Registrarse".'
-        )
+        setError('No encontramos tu cuenta. Registrate en "Registrarse".')
         return
       }
       setVecinoSession({
@@ -378,7 +360,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
       })
       navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
-      setError(e?.message ?? 'No pudimos verificar tu identidad. Probá de nuevo.')
+      setError(e?.message ?? 'Error al verificar identidad.')
     } finally {
       setSubmitting(false)
     }
@@ -387,16 +369,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
   const canSubmit = !!dni.trim() && !!telefono.trim()
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div>
-        <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
-          Acceso sin cuenta
-        </h3>
-        <p className="mt-1 text-sm text-primary-500">
-          Si no tenés cuenta registrada, ingresá con tu DNI y celular.
-        </p>
-      </div>
-
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Input
         label="DNI"
         value={dni}
@@ -405,7 +378,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
         inputMode="numeric"
         type="text"
         autoComplete="off"
-        placeholder="Ej: 32145678"
+        placeholder="32145678"
       />
       <Input
         label="Teléfono celular"
@@ -419,7 +392,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
       />
 
       {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
           {error}
         </div>
       )}
@@ -433,11 +406,10 @@ function RapidoTab({ setVecinoSession, navigate }) {
         Ingresar
       </Button>
 
-      <div className="rounded-md border border-[#C9A84C] bg-[#C9A84C]/10 p-3 text-xs text-[#0F1C35]">
-        <p className="font-semibold">💡 Recomendación:</p>
-        <p className="mt-1">
-          Registrate con email y contraseña para acceder desde cualquier
-          dispositivo sin tener que recordar tu celular.
+      <div className="rounded-md border border-[#C9A84C] bg-[#C9A84C]/10 p-2 text-[10px] text-[#0F1C35]">
+        <p className="font-sora font-semibold">💡 Tip:</p>
+        <p className="mt-0.5">
+          Registrate con email para acceder desde cualquier dispositivo.
         </p>
       </div>
     </form>
