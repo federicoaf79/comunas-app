@@ -541,7 +541,7 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
 
   // step: 'upload' | 'sheet' | 'confirm'
   const [step, setStep]           = useState('upload')

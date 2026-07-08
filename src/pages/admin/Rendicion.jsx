@@ -56,7 +56,7 @@ function aniosDisponibles() {
 // ─────────────────────────────────────────────────────────────────
 
 export default function Rendicion() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { data: dependencias = [] } = useDependencias()
   const { data: partidasTipo = [] } = usePartidasTipo()
   const [tab, setTab] = useState('resumen')

@@ -595,7 +595,7 @@ function ExpedientesTab({ depJuez, municipioId, canCreate }) {
 export default function JuezDePaz() {
   const qc = useQueryClient()
   const { perfil, hasRole } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])

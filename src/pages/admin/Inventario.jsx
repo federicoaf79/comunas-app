@@ -80,7 +80,7 @@ function stockDisplayLabel(item) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function Inventario() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { hasRole } = useAuth()
   const canEdit     = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = canEdit

@@ -95,7 +95,7 @@ function EstadoBadge({ estado }) {
 export default function AyudaSocial() {
   const { hasRole } = useAuth()
   const canEdit = hasRole(['admin_comuna', 'superadmin'])
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'beneficiarios'
 

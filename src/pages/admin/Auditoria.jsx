@@ -360,7 +360,7 @@ function ResumenTab({ municipioId }) {
 export default function Auditoria() {
   const { hasRole } = useAuth()
   const autorizado = hasRole(['admin_comuna', 'superadmin'])
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [tab, setTab] = useState('accesos')
 
   if (!autorizado) {

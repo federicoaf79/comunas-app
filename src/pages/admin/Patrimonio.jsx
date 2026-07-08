@@ -79,7 +79,7 @@ function SeguroBadge({ iso }) {
 export default function Patrimonio() {
   const { hasRole } = useAuth()
   const autorizado  = hasRole(['admin_comuna', 'superadmin'])
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId, loading } = useEffectiveMunicipioId()
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab') || ''
   const tab = ['inmuebles', 'muebles', 'seguros'].includes(tabParam) ? tabParam : 'inmuebles'
@@ -118,19 +118,29 @@ export default function Patrimonio() {
         </p>
       </header>
 
-      {!municipioId && (
+      {loading && (
+        <div className="card flex items-center justify-center p-12">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {!loading && !municipioId && (
         <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
           No encontramos un municipio asignado ni un fallback activo.
         </div>
       )}
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      {!loading && (
+        <>
+          <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
-      <div>
-        {tab === 'inmuebles' && <InmueblesTab municipioId={municipioId} dependencias={dependencias} />}
-        {tab === 'muebles'   && <MueblesTab   municipioId={municipioId} dependencias={dependencias} />}
-        {tab === 'seguros'   && <SegurosTab   municipioId={municipioId} dependencias={dependencias} />}
-      </div>
+          <div>
+            {tab === 'inmuebles' && <InmueblesTab municipioId={municipioId} dependencias={dependencias} />}
+            {tab === 'muebles'   && <MueblesTab   municipioId={municipioId} dependencias={dependencias} />}
+            {tab === 'seguros'   && <SegurosTab   municipioId={municipioId} dependencias={dependencias} />}
+          </div>
+        </>
+      )}
     </div>
   )
 }

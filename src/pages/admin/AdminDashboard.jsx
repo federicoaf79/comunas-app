@@ -1427,7 +1427,7 @@ export default function AdminDashboard() {
   // useEffectiveMunicipioId — para superadmin sin municipio_id cae al
   // primer municipio activo. Sin esto el médico de guardia y otras
   // queries con .eq('municipio_id', null) no encuentran filas.
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   // today como 'YYYY-MM-DD' sin hora — Supabase serializa el string
   // a timestamptz interpretándolo como medianoche UTC y eso rompe
   // los .lte/.gte contra semana_inicio/semana_fin si el formato no

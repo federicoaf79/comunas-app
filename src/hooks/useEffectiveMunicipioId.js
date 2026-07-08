@@ -15,8 +15,13 @@ import { useAuth } from '../context/AuthContext'
 //   el caller debe mostrar un banner de "no hay municipio para
 //   guardar".
 //
-// Lo usan ConfigGeneral y Administracion para que el superadmin
-// no quede bloqueado por la falta de su propio municipio_id.
+// NUEVO (julio 2026): devuelve { municipioId, loading } para
+// que los callers puedan mostrar spinner mientras resuelve el
+// fallback, en vez de mostrar un banner de error prematuro.
+//
+// Lo usan ConfigGeneral, Administracion, Flota y Patrimonio
+// para que el superadmin no quede bloqueado por la falta de
+// su propio municipio_id.
 // =============================================================
 
 export function useEffectiveMunicipioId() {
@@ -44,5 +49,8 @@ export function useEffectiveMunicipioId() {
     staleTime: 60 * 60 * 1000,
   })
 
-  return propio ?? fallbackQ.data ?? null
+  const municipioId = propio ?? fallbackQ.data ?? null
+  const loading = necesitaFallback && fallbackQ.isLoading
+
+  return { municipioId, loading }
 }

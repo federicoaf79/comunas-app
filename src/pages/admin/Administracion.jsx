@@ -1502,7 +1502,7 @@ export default function Administracion() {
   // useEffectiveMunicipioId resuelve el municipio destino — el del
   // perfil para admin_comuna/operador, o el primer municipio activo
   // como fallback para superadmin (perfil.municipio_id null).
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId, loading } = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
 
   // Lectura del ?tab= desde URL. Sin escritura: la navegación
@@ -1516,18 +1516,25 @@ export default function Administracion() {
 
   return (
     <div className="space-y-5">
-      {!municipioId && (
+      {loading && (
+        <div className="card flex items-center justify-center p-12">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {!loading && !municipioId && (
         <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
           No encontramos un municipio asignado ni un municipio activo de fallback.
           Pedile al administrador que configure al menos un municipio.
         </div>
       )}
 
-      <div>
-        {seccion === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
-        {seccion === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
-        {seccion === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
-        {seccion === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
+      {!loading && (
+        <div>
+          {seccion === 'dashboard'   && <DashboardTab municipioId={municipioId} />}
+          {seccion === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
+          {seccion === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
+          {seccion === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
         {seccion === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
         {seccion === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
       </div>

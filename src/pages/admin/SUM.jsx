@@ -324,7 +324,7 @@ function MonthCalendar({ year, month, reservasByDate }) {
 // ─────────────────────────────────────────────────────────────────
 
 function ReservasSemanalTab() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(new Date()))
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
   const fechaFrom = ymdLocal(weekStart)
@@ -525,7 +525,7 @@ function TarifasTab() {
 
 export default function SUM() {
   const { perfil, hasRole } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])

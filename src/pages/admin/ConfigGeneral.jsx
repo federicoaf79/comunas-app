@@ -1207,14 +1207,9 @@ function MarcoNormativoSection() {
 // ─────────────────────────────────────────────────────────────────
 
 export default function ConfigGeneral() {
-  const { perfil, hasRole } = useAuth()
-  const municipioId  = useEffectiveMunicipioId()
+  const { hasRole } = useAuth()
+  const { municipioId, loading } = useEffectiveMunicipioId()
   const sinMunicipio = !municipioId
-  // Caso especial: superadmin con perfil cargado pero municipio
-  // todavía resolviendo via fallback. Mostramos un loading sutil
-  // en vez de el banner gold de "sin municipio".
-  const esperandoFallback =
-    !perfil?.municipio_id && hasRole('superadmin') && !municipioId
 
   return (
     <div className="space-y-5">
@@ -1225,13 +1220,13 @@ export default function ConfigGeneral() {
         </p>
       </header>
 
-      {esperandoFallback && (
+      {loading && (
         <div className="card flex items-center justify-center p-12">
           <Spinner />
         </div>
       )}
 
-      {!esperandoFallback && sinMunicipio && (
+      {!loading && sinMunicipio && (
         <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
           Tu usuario no tiene un municipio asignado y tampoco encontramos un
           municipio activo de fallback. Pedile al administrador que configure
@@ -1239,7 +1234,7 @@ export default function ConfigGeneral() {
         </div>
       )}
 
-      {!esperandoFallback && !sinMunicipio && (
+      {!loading && !sinMunicipio && (
         <div className="space-y-5">
           <IdentidadVisualSection disabled={sinMunicipio} municipioId={municipioId} />
           <RedesSocialesSection   disabled={sinMunicipio} municipioId={municipioId} />

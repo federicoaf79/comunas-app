@@ -223,7 +223,7 @@ const TIPO_COLOR = {
 }
 
 export default function AgendaPublicaPage() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { data: eventos = [], isLoading } = useAgendaPublicaAdmin(municipioId)
   const deleteMut = useDeleteAgendaPublica()
   const [modal, setModal] = useState(null)

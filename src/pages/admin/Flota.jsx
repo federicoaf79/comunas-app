@@ -68,7 +68,7 @@ function VehicleIcon({ tipo, className = 'h-10 w-10' }) {
 // ─────────────────────────────────────────────────────────────────
 
 export default function Flota() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId, loading } = useEffectiveMunicipioId()
   const [tab, setTab] = useState('vehiculos')
   const { data: dependencias = [] } = useDependencias()
 
@@ -81,20 +81,30 @@ export default function Flota() {
         </p>
       </header>
 
-      {!municipioId && (
+      {loading && (
+        <div className="card flex items-center justify-center p-12">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {!loading && !municipioId && (
         <div className="rounded-md border border-accent-100 bg-accent-50 p-3 text-sm text-accent-700">
           No encontramos un municipio asignado ni un fallback activo.
         </div>
       )}
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+      {!loading && (
+        <>
+          <Tabs tabs={TABS} value={tab} onChange={setTab} />
 
-      <div>
-        {tab === 'vehiculos'   && <VehiculosTab   municipioId={municipioId} dependencias={dependencias} />}
-        {tab === 'combustible' && <CombustibleTab municipioId={municipioId} />}
-        {tab === 'service'     && <ServiceTab     municipioId={municipioId} />}
-        {tab === 'alertas'     && <AlertasTab     municipioId={municipioId} />}
-      </div>
+          <div>
+            {tab === 'vehiculos'   && <VehiculosTab   municipioId={municipioId} dependencias={dependencias} />}
+            {tab === 'combustible' && <CombustibleTab municipioId={municipioId} />}
+            {tab === 'service'     && <ServiceTab     municipioId={municipioId} />}
+            {tab === 'alertas'     && <AlertasTab     municipioId={municipioId} />}
+          </div>
+        </>
+      )}
     </div>
   )
 }
