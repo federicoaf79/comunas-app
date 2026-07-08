@@ -679,7 +679,7 @@ export default function TablazoCross() {
   const [dependenciaId, setDependenciaId] = useState('')
   const [estado, setEstado]               = useState('')
 
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { data: deps = [] } = useDependencias()
   const depsActivasOpts = useMemo(() => {
     const base = (deps ?? [])

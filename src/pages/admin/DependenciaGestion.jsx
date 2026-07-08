@@ -696,7 +696,7 @@ function TabBotIA({ dep }) {
 export default function DependenciaGestion() {
   const { dependenciaId } = useParams()
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = searchParams.get('tab') || 'info'
   function setTab(value) {

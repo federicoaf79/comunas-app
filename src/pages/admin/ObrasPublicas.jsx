@@ -94,7 +94,7 @@ function canEditObras({ hasRole, perfil, dependencias }) {
 
 export default function ObrasPublicas() {
   const { hasRole, perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { data: dependencias = [] } = useDependencias(municipioId)
   const puedeEditar = canEditObras({ hasRole, perfil, dependencias })
 

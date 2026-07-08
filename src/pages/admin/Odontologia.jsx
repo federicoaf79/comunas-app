@@ -74,7 +74,7 @@ function ymdLocal(d) {
 export default function Odontologia() {
   const navigate = useNavigate()
   const { perfil, hasRole } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const esDirector  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = esDirector
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])

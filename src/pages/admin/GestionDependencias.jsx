@@ -25,7 +25,7 @@ const TEMPLATE_OPTS = [
 ]
 
 export default function GestionDependencias() {
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [deps, setDeps] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState({})

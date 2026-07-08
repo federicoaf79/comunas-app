@@ -1350,7 +1350,7 @@ export default function DependenciaGeneral() {
   // useEffectiveMunicipioId resuelve el municipio destino — para
   // superadmin (perfil.municipio_id null) cae al primer municipio
   // activo. Lo necesitan Inventario y Administración por igual.
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const canEditInv  = hasRole(['admin_comuna', 'superadmin'])
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
   const canCreate   = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])

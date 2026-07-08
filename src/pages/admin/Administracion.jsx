@@ -1535,9 +1535,10 @@ export default function Administracion() {
           {seccion === 'solicitudes' && <SolicitudesTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
           {seccion === 'gastos'      && <GastosTab municipioId={municipioId} dependencias={dependencias} canApprove={canApprove} />}
           {seccion === 'ingresos'    && <IngresosTab municipioId={municipioId} />}
-        {seccion === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
-        {seccion === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
-      </div>
+          {seccion === 'presupuesto' && <PresupuestoTab municipioId={municipioId} />}
+          {seccion === 'partidas'    && <PartidasTab municipioId={municipioId} dependencias={dependencias} />}
+        </div>
+      )}
     </div>
   )
 }

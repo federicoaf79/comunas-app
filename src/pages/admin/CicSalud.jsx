@@ -67,7 +67,7 @@ function ymdLocal(d) {
 
 export default function CicSalud() {
   const { perfil, hasRole } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
   const canCreate = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])
 

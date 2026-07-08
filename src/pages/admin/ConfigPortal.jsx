@@ -1187,7 +1187,7 @@ function TabTramitesPortal({ municipioId, sinMunicipio }) {
 
 export default function ConfigPortal() {
   const { perfil, hasRole } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const sinMunicipio = !municipioId
   const canApprove   = hasRole(['admin_comuna', 'superadmin'])
   const canCreate    = hasRole(['admin_comuna', 'superadmin', 'subadmin', 'usuario_sub'])

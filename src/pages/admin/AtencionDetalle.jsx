@@ -82,7 +82,7 @@ export default function AtencionDetalle() {
   const { turnoId } = useParams()
   const navigate = useNavigate()
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const [tab, setTab] = useState('atencion')
 
   // Dependencia salud para filtrar el catálogo de insumos.
