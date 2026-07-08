@@ -3,7 +3,7 @@ import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import {
   useVehiculos, useCombustibleLog, useServiceVehiculos,
-  useCreateVehiculo, useCreateCombustible, useCreateService,
+  useCreateVehiculo, useUpdateVehiculo, useCreateCombustible, useCreateService,
   TIPOS_VEHICULO, ESTADOS_VEHICULO, TIPOS_COMBUSTIBLE, TIPOS_SERVICE,
   diasParaVencer,
 } from '../../hooks/useFlota'
@@ -278,6 +278,8 @@ function VehiculosTab({ municipioId, dependencias }) {
       {detalle && (
         <VehiculoDetalleDrawer
           vehiculo={detalle}
+          dependencias={dependencias}
+          municipioId={municipioId}
           onClose={() => setDetalle(null)}
         />
       )}
@@ -285,8 +287,21 @@ function VehiculosTab({ municipioId, dependencias }) {
   )
 }
 
-function VehiculoFormModal({ municipioId, dependencias, onClose }) {
-  const [form, setForm] = useState({
+function VehiculoFormModal({ municipioId, dependencias, vehiculo, onClose }) {
+  const isEdit = !!vehiculo
+  const [form, setForm] = useState(vehiculo ? {
+    dependencia_id: vehiculo.dependencia_id ?? '',
+    patente: vehiculo.patente ?? '',
+    marca: vehiculo.marca ?? '',
+    modelo: vehiculo.modelo ?? '',
+    anio: vehiculo.anio ?? '',
+    tipo: vehiculo.tipo ?? 'camioneta',
+    km_actuales: vehiculo.km_actuales ?? '',
+    estado: vehiculo.estado ?? 'operativo',
+    seguro_vencimiento: vehiculo.seguro_vencimiento ?? '',
+    vtv_vencimiento: vehiculo.vtv_vencimiento ?? '',
+    observaciones: vehiculo.observaciones ?? '',
+  } : {
     dependencia_id: '', patente: '', marca: '', modelo: '', anio: '',
     tipo: 'camioneta', km_actuales: '', estado: 'operativo',
     seguro_vencimiento: '', vtv_vencimiento: '', observaciones: '',
@@ -294,14 +309,15 @@ function VehiculoFormModal({ municipioId, dependencias, onClose }) {
   const [error, setError] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
   const create = useCreateVehiculo()
+  const update = useUpdateVehiculo()
 
   const canSubmit = !!form.tipo && !!form.estado
+  const saving = create.isPending || update.isPending
 
   async function handle() {
     setError('')
     try {
-      await create.mutateAsync({
-        municipio_id:        municipioId,
+      const payload = {
         dependencia_id:      form.dependencia_id || null,
         patente:             form.patente.trim() || null,
         marca:               form.marca.trim() || null,
@@ -313,18 +329,24 @@ function VehiculoFormModal({ municipioId, dependencias, onClose }) {
         seguro_vencimiento:  form.seguro_vencimiento || null,
         vtv_vencimiento:     form.vtv_vencimiento || null,
         observaciones:       form.observaciones.trim() || null,
-      })
+      }
+      if (isEdit) {
+        await update.mutateAsync({ id: vehiculo.id, ...payload })
+      } else {
+        await create.mutateAsync({ municipio_id: municipioId, ...payload })
+      }
       onClose()
     } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
   }
 
   return (
     <Modal
-      open onClose={onClose} size="lg" title="Registrar vehículo"
+      open onClose={onClose} size="lg"
+      title={isEdit ? 'Editar vehículo' : 'Registrar vehículo'}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
-          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={handle} loading={saving} disabled={!canSubmit}>Guardar</Button>
         </>
       }
     >
@@ -360,65 +382,112 @@ function VehiculoFormModal({ municipioId, dependencias, onClose }) {
   )
 }
 
-function VehiculoDetalleDrawer({ vehiculo, onClose }) {
+function VehiculoDetalleDrawer({ vehiculo, dependencias, municipioId, onClose }) {
   const combQ = useCombustibleLog({ vehiculoId: vehiculo.id, limit: 20 })
   const servQ = useServiceVehiculos({ vehiculoId: vehiculo.id, limit: 20 })
+  const [modalEdit, setModalEdit] = useState(false)
+  const [modalCombustible, setModalCombustible] = useState(false)
+  const [modalService, setModalService] = useState(false)
 
   return (
-    <Modal
-      open onClose={onClose} size="xl"
-      title={`${vehiculo.patente || 'S/P'} · ${[vehiculo.marca, vehiculo.modelo].filter(Boolean).join(' ')}`}
-      footer={<Button variant="secondary" onClick={onClose}>Cerrar</Button>}
-    >
-      <div className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <ResumenCelda label="KM actuales"          value={fmtNum.format(vehiculo.km_actuales ?? 0)} />
-          <ResumenCelda label="Estado"               value={estadoLabel(vehiculo.estado)} />
-          <ResumenCelda label="Dependencia"          value={vehiculo.dependencia?.nombre ?? '—'} />
-          <ResumenCelda label="Seguro vence"         value={vehiculo.seguro_vencimiento ? dateOf(vehiculo.seguro_vencimiento) : '—'} />
-          <ResumenCelda label="VTV vence"            value={vehiculo.vtv_vencimiento ? dateOf(vehiculo.vtv_vencimiento) : '—'} />
-          <ResumenCelda label="Tipo"                 value={TIPOS_VEHICULO.find(t => t.value === vehiculo.tipo)?.label ?? '—'} />
+    <>
+      <Modal
+        open onClose={onClose} size="xl"
+        title={`${vehiculo.patente || 'S/P'} · ${[vehiculo.marca, vehiculo.modelo].filter(Boolean).join(' ')}`}
+        footer={
+          <div className="flex w-full items-center justify-between">
+            <Button onClick={() => setModalEdit(true)}>Editar vehículo</Button>
+            <Button variant="secondary" onClick={onClose}>Cerrar</Button>
+          </div>
+        }
+      >
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ResumenCelda label="KM actuales"          value={fmtNum.format(vehiculo.km_actuales ?? 0)} />
+            <ResumenCelda label="Estado"               value={estadoLabel(vehiculo.estado)} />
+            <ResumenCelda label="Dependencia"          value={vehiculo.dependencia?.nombre ?? '—'} />
+            <ResumenCelda label="Seguro vence"         value={vehiculo.seguro_vencimiento ? dateOf(vehiculo.seguro_vencimiento) : '—'} />
+            <ResumenCelda label="VTV vence"            value={vehiculo.vtv_vencimiento ? dateOf(vehiculo.vtv_vencimiento) : '—'} />
+            <ResumenCelda label="Tipo"                 value={TIPOS_VEHICULO.find(t => t.value === vehiculo.tipo)?.label ?? '—'} />
+          </div>
+
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-sora text-sm font-bold text-primary">Combustible</h3>
+              <button
+                onClick={() => setModalCombustible(true)}
+                className="text-xs font-semibold text-accent hover:underline"
+              >
+                + Cargar combustible
+              </button>
+            </div>
+            {combQ.isLoading ? <Spinner size="sm" /> : (combQ.data ?? []).length === 0 ? (
+              <p className="text-xs text-primary-400">Sin cargas registradas.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+                {combQ.data.map(c => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
+                    <span className="font-mono text-primary-400">{dateOf(c.fecha)}</span>
+                    <span className="text-primary">{fmtDec.format(c.litros)} L</span>
+                    <span className="text-primary-500">· {c.tipo_combustible}</span>
+                    <span className="text-primary-500">· {fmtNum.format(c.km_al_cargar ?? 0)} km</span>
+                    <span className="ml-auto font-semibold tabular-nums text-primary">{fmtMoney.format(c.costo_total ?? 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-sora text-sm font-bold text-primary">Service</h3>
+              <button
+                onClick={() => setModalService(true)}
+                className="text-xs font-semibold text-accent hover:underline"
+              >
+                + Registrar service
+              </button>
+            </div>
+            {servQ.isLoading ? <Spinner size="sm" /> : (servQ.data ?? []).length === 0 ? (
+              <p className="text-xs text-primary-400">Sin services registrados.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
+                {servQ.data.map(s => (
+                  <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
+                    <span className="font-mono text-primary-400">{dateOf(s.fecha)}</span>
+                    <ServiceBadge tipo={s.tipo_service} />
+                    <span className="text-primary">{s.descripcion}</span>
+                    <span className="text-primary-500">· {fmtNum.format(s.km_al_service ?? 0)} km</span>
+                    <span className="ml-auto font-semibold tabular-nums text-primary">{fmtMoney.format(s.costo ?? 0)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
+      </Modal>
 
-        <section>
-          <h3 className="font-sora text-sm font-bold text-primary">Combustible</h3>
-          {combQ.isLoading ? <Spinner size="sm" /> : (combQ.data ?? []).length === 0 ? (
-            <p className="text-xs text-primary-400">Sin cargas registradas.</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-              {combQ.data.map(c => (
-                <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
-                  <span className="font-mono text-primary-400">{dateOf(c.fecha)}</span>
-                  <span className="text-primary">{fmtDec.format(c.litros)} L</span>
-                  <span className="text-primary-500">· {c.tipo_combustible}</span>
-                  <span className="text-primary-500">· {fmtNum.format(c.km_al_cargar ?? 0)} km</span>
-                  <span className="ml-auto font-semibold tabular-nums text-primary">{fmtMoney.format(c.costo_total ?? 0)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section>
-          <h3 className="font-sora text-sm font-bold text-primary">Service</h3>
-          {servQ.isLoading ? <Spinner size="sm" /> : (servQ.data ?? []).length === 0 ? (
-            <p className="text-xs text-primary-400">Sin services registrados.</p>
-          ) : (
-            <ul className="mt-2 divide-y divide-border rounded-lg border border-border">
-              {servQ.data.map(s => (
-                <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-xs">
-                  <span className="font-mono text-primary-400">{dateOf(s.fecha)}</span>
-                  <ServiceBadge tipo={s.tipo_service} />
-                  <span className="text-primary">{s.descripcion}</span>
-                  <span className="text-primary-500">· {fmtNum.format(s.km_al_service ?? 0)} km</span>
-                  <span className="ml-auto font-semibold tabular-nums text-primary">{fmtMoney.format(s.costo ?? 0)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </Modal>
+      {modalEdit && (
+        <VehiculoFormModal
+          municipioId={municipioId}
+          dependencias={dependencias}
+          vehiculo={vehiculo}
+          onClose={() => setModalEdit(false)}
+        />
+      )}
+      {modalCombustible && (
+        <CombustibleFormModal
+          vehiculo={vehiculo}
+          onClose={() => setModalCombustible(false)}
+        />
+      )}
+      {modalService && (
+        <ServiceFormModal
+          vehiculo={vehiculo}
+          onClose={() => setModalService(false)}
+        />
+      )}
+    </>
   )
 }
 
@@ -428,6 +497,203 @@ function ResumenCelda({ label, value }) {
       <div className="text-xs uppercase tracking-wider text-primary-400">{label}</div>
       <div className="mt-0.5 text-sm font-semibold text-primary">{value}</div>
     </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Modales de carga rápida desde detalle del vehículo
+// ─────────────────────────────────────────────────────────────────
+
+function CombustibleFormModal({ vehiculo, onClose }) {
+  const [form, setForm] = useState({
+    fecha: todayArgYMD(),
+    litros: '',
+    km_al_cargar: vehiculo.km_actuales ?? '',
+    tipo_combustible: 'nafta',
+    costo_total: '',
+    proveedor: '',
+  })
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+  const create = useCreateCombustible()
+
+  const canSubmit = !!form.fecha && !!form.litros && !!form.tipo_combustible
+
+  async function handle() {
+    setError('')
+    try {
+      await create.mutateAsync({
+        vehiculo_id:      vehiculo.id,
+        fecha:            form.fecha,
+        litros:           Number(form.litros),
+        km_al_cargar:     form.km_al_cargar ? Number(form.km_al_cargar) : null,
+        tipo_combustible: form.tipo_combustible,
+        costo_total:      form.costo_total ? Number(form.costo_total) : null,
+        proveedor:        form.proveedor.trim() || null,
+      })
+      onClose()
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="md"
+      title={`Cargar combustible — ${vehiculo.patente || 'S/P'}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
+          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="Fecha"
+          type="date"
+          value={form.fecha}
+          onChange={e => set('fecha', e.target.value)}
+        />
+        <Select
+          label="Tipo de combustible"
+          value={form.tipo_combustible}
+          onChange={v => set('tipo_combustible', v)}
+          options={TIPOS_COMBUSTIBLE}
+        />
+        <Input
+          label="Litros"
+          type="number"
+          min="0"
+          step="0.01"
+          value={form.litros}
+          onChange={e => set('litros', e.target.value)}
+        />
+        <Input
+          label="KM al cargar"
+          type="number"
+          min="0"
+          value={form.km_al_cargar}
+          onChange={e => set('km_al_cargar', e.target.value)}
+          hint="Se actualizará el KM del vehículo si es mayor"
+        />
+        <Input
+          label="Costo total (ARS)"
+          type="number"
+          min="0"
+          value={form.costo_total}
+          onChange={e => set('costo_total', e.target.value)}
+        />
+        <Input
+          label="Proveedor"
+          value={form.proveedor}
+          onChange={e => set('proveedor', e.target.value)}
+          placeholder="YPF, Shell, etc."
+        />
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">{error}</div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function ServiceFormModal({ vehiculo, onClose }) {
+  const [form, setForm] = useState({
+    fecha: todayArgYMD(),
+    tipo_service: 'aceite',
+    descripcion: '',
+    km_al_service: vehiculo.km_actuales ?? '',
+    proximo_service_km: '',
+    costo: '',
+    taller: '',
+  })
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+  const create = useCreateService()
+
+  const canSubmit = !!form.fecha && !!form.tipo_service
+
+  async function handle() {
+    setError('')
+    try {
+      await create.mutateAsync({
+        vehiculo_id:        vehiculo.id,
+        fecha:              form.fecha,
+        tipo_service:       form.tipo_service,
+        descripcion:        form.descripcion.trim() || null,
+        km_al_service:      form.km_al_service ? Number(form.km_al_service) : null,
+        proximo_service_km: form.proximo_service_km ? Number(form.proximo_service_km) : null,
+        costo:              form.costo ? Number(form.costo) : null,
+        taller:             form.taller.trim() || null,
+      })
+      onClose()
+    } catch (e) { setError(e?.message ?? 'No pudimos guardar') }
+  }
+
+  return (
+    <Modal
+      open onClose={onClose} size="md"
+      title={`Registrar service — ${vehiculo.patente || 'S/P'}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>Cancelar</Button>
+          <Button onClick={handle} loading={create.isPending} disabled={!canSubmit}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="Fecha"
+          type="date"
+          value={form.fecha}
+          onChange={e => set('fecha', e.target.value)}
+        />
+        <Select
+          label="Tipo de service"
+          value={form.tipo_service}
+          onChange={v => set('tipo_service', v)}
+          options={TIPOS_SERVICE}
+        />
+        <div className="sm:col-span-2">
+          <Input
+            label="Descripción"
+            value={form.descripcion}
+            onChange={e => set('descripcion', e.target.value)}
+            placeholder="Cambio de aceite y filtro"
+          />
+        </div>
+        <Input
+          label="KM al service"
+          type="number"
+          min="0"
+          value={form.km_al_service}
+          onChange={e => set('km_al_service', e.target.value)}
+          hint="Se actualizará el KM del vehículo si es mayor"
+        />
+        <Input
+          label="Próximo service en KM"
+          type="number"
+          min="0"
+          value={form.proximo_service_km}
+          onChange={e => set('proximo_service_km', e.target.value)}
+        />
+        <Input
+          label="Costo (ARS)"
+          type="number"
+          min="0"
+          value={form.costo}
+          onChange={e => set('costo', e.target.value)}
+        />
+        <Input
+          label="Taller"
+          value={form.taller}
+          onChange={e => set('taller', e.target.value)}
+          placeholder="Nombre del taller"
+        />
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">{error}</div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
@@ -505,7 +771,7 @@ function CombustibleTab({ municipioId }) {
       )}
 
       {modalNew && (
-        <CombustibleFormModal
+        <CombustibleFormModalTab
           vehiculos={vehiculos}
           onClose={() => setModalNew(false)}
         />
@@ -514,7 +780,7 @@ function CombustibleTab({ municipioId }) {
   )
 }
 
-function CombustibleFormModal({ vehiculos, onClose }) {
+function CombustibleFormModalTab({ vehiculos, onClose }) {
   const [form, setForm] = useState({
     vehiculo_id: '', fecha: todayArgYMD(), litros: '', km_al_cargar: '',
     tipo_combustible: 'nafta', costo_total: '', proveedor: '',
@@ -650,13 +916,13 @@ function ServiceTab({ municipioId }) {
       )}
 
       {modalNew && (
-        <ServiceFormModal vehiculos={vehiculos} onClose={() => setModalNew(false)} />
+        <ServiceFormModalTab vehiculos={vehiculos} onClose={() => setModalNew(false)} />
       )}
     </div>
   )
 }
 
-function ServiceFormModal({ vehiculos, onClose }) {
+function ServiceFormModalTab({ vehiculos, onClose }) {
   const [form, setForm] = useState({
     vehiculo_id: '', fecha: todayArgYMD(), tipo_service: 'aceite',
     descripcion: '', km_al_service: '', proximo_service_km: '',

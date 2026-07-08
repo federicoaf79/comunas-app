@@ -189,10 +189,23 @@ async function updateVehiculoKm({ id, km }) {
   if (error) throw error
 }
 
+async function updateVehiculo({ id, ...data }) {
+  const { error } = await supabase
+    .from('vehiculos').update(data).eq('id', id)
+  if (error) throw error
+}
+
 export function useCreateVehiculo() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: createVehiculo,
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['vehiculos'] }),
+  })
+}
+export function useUpdateVehiculo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: updateVehiculo,
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['vehiculos'] }),
   })
 }
