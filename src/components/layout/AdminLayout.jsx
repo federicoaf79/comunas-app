@@ -289,6 +289,7 @@ const NAV_GESTION = [
       { to: '/admin/rendicion',                      label: 'Rendición',  modulo: 'rendicion' },
       { to: '/admin/inventario',                     label: 'Inventario', modulo: 'inventario' },
       { to: '/admin/flota',                          label: 'Flota',      modulo: 'flota' },
+      { to: '/admin/seguros',                        label: 'Seguros',    modulo: 'seguros' },
       { to: '/admin/patrimonio',                     label: 'Patrimonio', modulo: 'patrimonio' },
       { to: '/admin/obras-publicas',                 label: 'Obras públicas' },
     ],

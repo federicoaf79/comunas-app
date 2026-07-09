@@ -34,6 +34,7 @@ import DependenciaGeneral  from './pages/admin/DependenciaGeneral'
 import DependenciaGestion  from './pages/admin/DependenciaGestion'
 import Inventario          from './pages/admin/Inventario'
 import Flota               from './pages/admin/Flota'
+import Seguros             from './pages/admin/Seguros'
 import Patrimonio          from './pages/admin/Patrimonio'
 import ObrasPublicas       from './pages/admin/ObrasPublicas'
 import AyudaSocial         from './pages/admin/AyudaSocial'
@@ -199,6 +200,7 @@ const router = createBrowserRouter([
                   { path: '/admin/dependencia-gestion/:dependenciaId', element: <DependenciaGestion /> },
                   { path: '/admin/inventario',           element: <Inventario /> },
                   { path: '/admin/flota',                element: <Flota /> },
+                  { path: '/admin/seguros',              element: <Seguros /> },
                   { path: '/admin/patrimonio',           element: <Patrimonio /> },
                   { path: '/admin/obras-publicas',       element: <ObrasPublicas /> },
                   { path: '/admin/noticias',             element: <Noticias /> },

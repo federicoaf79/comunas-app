@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import {
@@ -7,6 +8,7 @@ import {
   TIPOS_VEHICULO, ESTADOS_VEHICULO, TIPOS_COMBUSTIBLE, TIPOS_SERVICE,
   diasParaVencer,
 } from '../../hooks/useFlota'
+import { useSeguroByVehiculo } from '../../hooks/useSeguros'
 import Tabs from '../../components/ui/Tabs'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
@@ -385,6 +387,7 @@ function VehiculoFormModal({ municipioId, dependencias, vehiculo, onClose }) {
 function VehiculoDetalleDrawer({ vehiculo, dependencias, municipioId, onClose }) {
   const combQ = useCombustibleLog({ vehiculoId: vehiculo.id, limit: 20 })
   const servQ = useServiceVehiculos({ vehiculoId: vehiculo.id, limit: 20 })
+  const { data: seguro, isLoading: loadingSeguro } = useSeguroByVehiculo(vehiculo.id)
   const [modalEdit, setModalEdit] = useState(false)
   const [modalCombustible, setModalCombustible] = useState(false)
   const [modalService, setModalService] = useState(false)
@@ -462,6 +465,41 @@ function VehiculoDetalleDrawer({ vehiculo, dependencias, municipioId, onClose })
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          <section>
+            <h3 className="font-sora text-sm font-bold text-primary mb-2">Seguro</h3>
+            {loadingSeguro ? (
+              <Spinner size="sm" />
+            ) : seguro ? (
+              <div className="rounded-lg border border-border bg-white p-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-primary">{seguro.compania}</div>
+                    <div className="text-xs text-primary-500 font-mono">N° {seguro.numero_poliza}</div>
+                    <div className="mt-1 text-xs text-primary-400">
+                      Vigencia: {dateOf(seguro.vigencia_desde)} → {dateOf(seguro.vigencia_hasta)}
+                    </div>
+                  </div>
+                  <Link
+                    to="/admin/seguros"
+                    className="shrink-0 text-xs font-semibold text-accent hover:underline ml-2"
+                  >
+                    Ver póliza →
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-white p-3 text-center">
+                <p className="text-xs text-primary-400 mb-2">Sin seguro asociado</p>
+                <Link
+                  to="/admin/seguros"
+                  className="text-xs font-semibold text-accent hover:underline"
+                >
+                  Ir a Seguros →
+                </Link>
+              </div>
             )}
           </section>
         </div>
