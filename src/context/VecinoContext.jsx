@@ -53,21 +53,29 @@ export function VecinoProvider({ children }) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (user && !cancelled) {
-          // Hay sesión de Auth → buscar vecino vinculado
-          const { data: vecino } = await supabase
-            .from('vecinos')
-            .select('*')
-            .eq('user_id', user.id)
-            .single()
+          // Solo buscar vecino si estamos en rutas del portal
+          // NO ejecutar en /admin, /superadmin o /login para evitar queries innecesarias
+          const path = window.location.pathname
+          const isPortalRoute = path.startsWith('/portal')
+          const isAdminRoute = path.startsWith('/admin') || path.startsWith('/superadmin') || path.startsWith('/login')
 
-          if (vecino) {
-            const sessionData = {
-              ...vecino,
-              auth_mode: 'supabase',
-              user_email: user.email,
+          if (isPortalRoute && !isAdminRoute) {
+            // Hay sesión de Auth → buscar vecino vinculado
+            const { data: vecino } = await supabase
+              .from('vecinos')
+              .select('*')
+              .eq('user_id', user.id)
+              .maybeSingle()  // maybeSingle() no falla si no encuentra nada
+
+            if (vecino) {
+              const sessionData = {
+                ...vecino,
+                auth_mode: 'supabase',
+                user_email: user.email,
+              }
+              saveSession(sessionData)
+              setSessionState(sessionData)
             }
-            saveSession(sessionData)
-            setSessionState(sessionData)
           }
         }
       } catch (e) {
@@ -117,25 +125,32 @@ export function VecinoProvider({ children }) {
           saveSession(null)
           setSessionState(null)
         } else if (event === 'SIGNED_IN' && session?.user) {
-          // Cargar vecino vinculado
-          try {
-            const { data: vecino } = await supabase
-              .from('vecinos')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .single()
+          // Solo cargar vecino si estamos en rutas del portal
+          const path = window.location.pathname
+          const isPortalRoute = path.startsWith('/portal')
+          const isAdminRoute = path.startsWith('/admin') || path.startsWith('/superadmin') || path.startsWith('/login')
 
-            if (vecino) {
-              const sessionData = {
-                ...vecino,
-                auth_mode: 'supabase',
-                user_email: session.user.email,
+          if (isPortalRoute && !isAdminRoute) {
+            // Cargar vecino vinculado
+            try {
+              const { data: vecino } = await supabase
+                .from('vecinos')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .maybeSingle()  // maybeSingle() no falla si no encuentra nada
+
+              if (vecino) {
+                const sessionData = {
+                  ...vecino,
+                  auth_mode: 'supabase',
+                  user_email: session.user.email,
+                }
+                saveSession(sessionData)
+                setSessionState(sessionData)
               }
-              saveSession(sessionData)
-              setSessionState(sessionData)
+            } catch (e) {
+              console.warn('[VecinoContext] Error cargando vecino tras signin:', e)
             }
-          } catch (e) {
-            console.warn('[VecinoContext] Error cargando vecino tras signin:', e)
           }
         }
       }
