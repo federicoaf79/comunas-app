@@ -165,7 +165,7 @@ export function useVecinos({ search = '', barrio = '', zona = '', portal_estado 
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vecinos'] }),
   })
 
-  const updateVecino = useMutation({
+  const update = useMutation({
     mutationFn: ({ id, ...data }) => updateVecino(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vecinos'] }),
   })
@@ -183,7 +183,7 @@ export function useVecinos({ search = '', barrio = '', zona = '', portal_estado 
     error:      query.error,
     refetch:    query.refetch,
     create,
-    updateVecino,
+    updateVecino: update,
   }
 }
 
