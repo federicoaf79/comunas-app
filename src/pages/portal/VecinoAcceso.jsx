@@ -86,6 +86,7 @@ function LoginTab({ setVecinoSession, navigate }) {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [showRecovery, setShowRecovery] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -133,6 +134,10 @@ function LoginTab({ setVecinoSession, navigate }) {
 
   const canSubmit = !!email.trim() && !!password
 
+  if (showRecovery) {
+    return <RecoveryForm onBack={() => setShowRecovery(false)} />
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <Input
@@ -153,6 +158,14 @@ function LoginTab({ setVecinoSession, navigate }) {
         autoComplete="current-password"
       />
 
+      <button
+        type="button"
+        onClick={() => setShowRecovery(true)}
+        className="self-end text-xs font-semibold text-[#C9A84C] hover:underline"
+      >
+        ¿Olvidaste tu contraseña?
+      </button>
+
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
           {error}
@@ -171,6 +184,96 @@ function LoginTab({ setVecinoSession, navigate }) {
   )
 }
 
+function RecoveryForm({ onBack }) {
+  const [email, setEmail] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setSuccess(false)
+    setSubmitting(true)
+
+    try {
+      const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/portal/reset-password`,
+      })
+
+      if (recoveryError) throw recoveryError
+
+      setSuccess(true)
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos enviar el email de recuperación')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="rounded-md border border-[#1D4ED8] bg-[#1D4ED8]/10 p-3 text-sm text-[#0F1C35]">
+          <p className="font-sora font-semibold">✉️ Email enviado</p>
+          <p className="mt-1 text-xs">
+            Revisá tu casilla. Te enviamos un link para restablecer tu contraseña.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-xs font-semibold text-[#C9A84C] hover:underline"
+        >
+          ← Volver al ingreso
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div>
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-2 text-xs font-semibold text-[#C9A84C] hover:underline"
+        >
+          ← Volver
+        </button>
+        <p className="text-sm text-[#0F1C35]">
+          Ingresá tu email y te enviaremos un link para restablecer tu contraseña.
+        </p>
+      </div>
+
+      <Input
+        label="Email"
+        type="email"
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        required
+        autoComplete="email"
+        placeholder="tu@email.com"
+      />
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
+          {error}
+        </div>
+      )}
+
+      <Button
+        type="submit"
+        loading={submitting}
+        disabled={!email.trim()}
+        className="w-full"
+      >
+        Enviar link de recuperación
+      </Button>
+    </form>
+  )
+}
+
 // ═════════════════════════════════════════════════════════════
 // TAB: Registrarse con Supabase Auth
 // ═════════════════════════════════════════════════════════════
@@ -183,6 +286,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
   const [telefono, setTelefono] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [pendiente, setPendiente] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -190,7 +294,25 @@ function RegistroTab({ setVecinoSession, navigate }) {
     setSubmitting(true)
 
     try {
-      // 1. Crear cuenta en Supabase Auth
+      // 1. Leer configuración de registro
+      const { data: configData } = await supabase
+        .from('configuracion_portal')
+        .select('valor')
+        .eq('clave', 'registro_portal')
+        .maybeSingle()
+
+      let config = { modo: 'abierto', requiere_aprobacion: false }
+      if (configData?.valor) {
+        try {
+          config = typeof configData.valor === 'string'
+            ? JSON.parse(configData.valor)
+            : configData.valor
+        } catch {}
+      }
+
+      const portalEstado = config.requiere_aprobacion ? 'pendiente' : 'activo'
+
+      // 2. Crear cuenta en Supabase Auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -204,7 +326,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
 
       const userId = authData.user.id
 
-      // 2. Buscar si existe vecino con ese DNI
+      // 3. Buscar si existe vecino con ese DNI
       const { data: existingVecino } = await supabase
         .from('vecinos')
         .select('*')
@@ -217,7 +339,10 @@ function RegistroTab({ setVecinoSession, navigate }) {
         // Vincular user_id al vecino existente
         const { data: updated, error: updateError } = await supabase
           .from('vecinos')
-          .update({ user_id: userId })
+          .update({
+            user_id: userId,
+            portal_estado: portalEstado,
+          })
           .eq('id', existingVecino.id)
           .select()
           .single()
@@ -239,7 +364,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
             apellido,
             nombre_completo: nombre.trim(),
             telefono: telefono.trim(),
-            portal_estado: 'activo',
+            portal_estado: portalEstado,
           })
           .select()
           .single()
@@ -248,14 +373,17 @@ function RegistroTab({ setVecinoSession, navigate }) {
         vecinoFinal = newVecino
       }
 
-      // 3. Establecer sesión
-      setVecinoSession({
-        ...vecinoFinal,
-        auth_mode: 'supabase',
-        user_email: authData.user.email,
-      })
-
-      navigate('/portal/mi-cuenta', { replace: true })
+      // 4. Manejar según estado
+      if (vecinoFinal.portal_estado === 'pendiente') {
+        setPendiente(true)
+      } else {
+        setVecinoSession({
+          ...vecinoFinal,
+          auth_mode: 'supabase',
+          user_email: authData.user.email,
+        })
+        navigate('/portal/mi-cuenta', { replace: true })
+      }
     } catch (e) {
       setError(e?.message ?? 'Error al crear cuenta. Probá de nuevo.')
     } finally {
@@ -264,6 +392,29 @@ function RegistroTab({ setVecinoSession, navigate }) {
   }
 
   const canSubmit = !!email.trim() && !!password && !!dni.trim() && !!nombre.trim()
+
+  if (pendiente) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="rounded-md border border-[#C9A84C] bg-[#C9A84C]/10 p-3 text-sm text-[#0F1C35]">
+          <p className="font-sora font-semibold">✅ Cuenta creada</p>
+          <p className="mt-2 text-xs">
+            Tu cuenta fue creada exitosamente. Un administrador la revisará antes de que puedas acceder al portal.
+          </p>
+          <p className="mt-2 text-xs">
+            Te notificaremos por email cuando esté lista.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/portal')}
+          className="text-center text-xs font-semibold text-[#C9A84C] hover:underline"
+        >
+          Volver al portal →
+        </button>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">

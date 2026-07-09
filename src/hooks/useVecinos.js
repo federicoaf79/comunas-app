@@ -9,7 +9,7 @@ const TIMEOUT_MS = 8000
 // COLS mínimas para el listado del CRM. Si en algún momento se
 // necesitan campos adicionales en otra vista (detalle, edición),
 // se hace un select propio con sus columnas.
-const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono, zona'
+const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono, zona, email, portal_estado'
 
 // Columnas para la ficha de detalle del vecino — incluye datos
 // personales que el listado no necesita (email, dirección, sexo, etc.).
@@ -28,7 +28,7 @@ function escapeLike(s) {
 //
 // Timeout de 8s: si el fetch no responde, el AbortController dispara
 // y la query falla con un error claro en lugar de quedar colgada.
-export async function fetchVecinos(municipioId, { search = '', barrio = '', zona = '', page = 0 } = {}) {
+export async function fetchVecinos(municipioId, { search = '', barrio = '', zona = '', portal_estado = '', page = 0 } = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
@@ -45,6 +45,7 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', zona
   if (municipioId != null) q = q.eq('municipio_id', municipioId)
   if (barrio)              q = q.eq('barrio', barrio)
   if (zona)                q = q.eq('zona', zona)
+  if (portal_estado)       q = q.eq('portal_estado', portal_estado)
 
   if (search.trim()) {
     const pattern = `%${escapeLike(search.trim())}%`
@@ -133,10 +134,10 @@ export async function updateVecino(id, data) {
 // superadmin sin municipio asignado cae al primer municipio activo.
 // Sin este fallback, el listado quedaba sin datos para superadmin
 // porque la RLS o el query devolvían 0 filas.
-export function useVecinos({ search = '', barrio = '', zona = '', page = 0 } = {}) {
+export function useVecinos({ search = '', barrio = '', zona = '', portal_estado = '', page = 0 } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
 
   // La query se dispara apenas haya perfil cargado. NO requiere
   // municipio: superadmin con municipio_id = null debe ver todos
@@ -149,8 +150,8 @@ export function useVecinos({ search = '', barrio = '', zona = '', page = 0 } = {
     // descartamos cualquier issue con object identity en la key.
     // Para municipioId null usamos el sentinel '__ALL__' para que
     // el key sea estable y no colisione con un uuid real.
-    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, zona, page],
-    queryFn:  () => fetchVecinos(municipioId, { search, barrio, zona, page }),
+    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, zona, portal_estado, page],
+    queryFn:  () => fetchVecinos(municipioId, { search, barrio, zona, portal_estado, page }),
     enabled,
   })
 
@@ -164,8 +165,8 @@ export function useVecinos({ search = '', barrio = '', zona = '', page = 0 } = {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vecinos'] }),
   })
 
-  const update = useMutation({
-    mutationFn: ({ id, data }) => updateVecino(id, data),
+  const updateVecino = useMutation({
+    mutationFn: ({ id, ...data }) => updateVecino(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['vecinos'] }),
   })
 
@@ -182,7 +183,7 @@ export function useVecinos({ search = '', barrio = '', zona = '', page = 0 } = {
     error:      query.error,
     refetch:    query.refetch,
     create,
-    update,
+    updateVecino,
   }
 }
 

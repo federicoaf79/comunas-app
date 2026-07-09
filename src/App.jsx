@@ -60,6 +60,7 @@ import VideosPage          from './pages/portal/VideosPage'
 import TramitesPortal      from './pages/portal/TramitesPortal'
 import HistoriaPage        from './pages/portal/HistoriaPage'
 import VecinoAcceso        from './pages/portal/VecinoAcceso'
+import ResetPassword       from './pages/portal/ResetPassword'
 import VecinoDashboard     from './pages/portal/VecinoDashboard'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
@@ -145,6 +146,7 @@ const router = createBrowserRouter([
   // En comunas.lat → redirige a / (landing)
   // En admin.comunas.lat → redirige a /login
   { path: '/portal/acceso', element: <LandingDomainGuard><AdminDomainRedirect><VecinoAcceso /></AdminDomainRedirect></LandingDomainGuard> },
+  { path: '/portal/reset-password', element: <LandingDomainGuard><AdminDomainRedirect><ResetPassword /></AdminDomainRedirect></LandingDomainGuard> },
   {
     element: (
       <LandingDomainGuard>

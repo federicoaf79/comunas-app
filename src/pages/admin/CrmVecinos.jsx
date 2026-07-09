@@ -52,6 +52,7 @@ export default function CrmVecinos() {
   const [debouncedQ, setDebouncedQ] = useState('')
   const [barrio, setBarrio]     = useState('')
   const [zona, setZona]         = useState('')
+  const [portalEstado, setPortalEstado] = useState('')
   const [open, setOpen]         = useState(false)
 
   // Debounce de la búsqueda — evita una query por tecla.
@@ -61,10 +62,11 @@ export default function CrmVecinos() {
   }, [q])
 
   const {
-    rows, total, isLoading, isFetching, error, create,
-  } = useVecinos({ search: debouncedQ, barrio, zona, page: 0 })
+    rows, total, isLoading, isFetching, error, create, updateVecino,
+  } = useVecinos({ search: debouncedQ, barrio, zona, portal_estado: portalEstado, page: 0 })
 
-  const hasFilters  = !!debouncedQ.trim() || !!barrio || !!zona
+  const pendientesCount = rows.filter(v => v.portal_estado === 'pendiente').length
+  const hasFilters  = !!debouncedQ.trim() || !!barrio || !!zona || !!portalEstado
   const showRows    = !isLoading && !error
   const empty       = showRows && rows.length === 0
 
@@ -106,6 +108,17 @@ export default function CrmVecinos() {
           placeholder="Todas las zonas"
           options={ZONA_OPTS}
           className="min-w-[160px]"
+        />
+        <Select
+          value={portalEstado}
+          onChange={setPortalEstado}
+          placeholder="Estado portal"
+          options={[
+            { value: 'pendiente', label: `Pendientes (${pendientesCount})` },
+            { value: 'activo', label: 'Activos' },
+            { value: 'rechazado', label: 'Rechazados' },
+          ]}
+          className="min-w-[180px]"
         />
       </div>
 
@@ -150,12 +163,14 @@ export default function CrmVecinos() {
               <Th>Barrio</Th>
               <Th>Teléfono</Th>
               <Th>Email</Th>
+              <Th>Portal</Th>
+              <Th className="w-px">Acciones</Th>
             </tr>
           </THead>
           <tbody>
             {rows.map(v => (
-              <Tr key={v.id} onClick={() => navigate(`/admin/crm/${v.id}`)}>
-                <Td>
+              <Tr key={v.id}>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">
                   <div className="flex items-center gap-3">
                     <Avatar name={avatarName(v)} size="sm" />
                     <span className="font-medium text-primary">
@@ -163,11 +178,59 @@ export default function CrmVecinos() {
                     </span>
                   </div>
                 </Td>
-                <Td>{v.dni || '—'}</Td>
-                <Td><ZonaBadge zona={v.zona} /></Td>
-                <Td>{v.barrio || '—'}</Td>
-                <Td>{v.telefono || '—'}</Td>
-                <Td className="text-primary-400">{v.email || '—'}</Td>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.dni || '—'}</Td>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer"><ZonaBadge zona={v.zona} /></Td>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.barrio || '—'}</Td>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.telefono || '—'}</Td>
+                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer text-primary-400">{v.email || '—'}</Td>
+                <Td>
+                  {v.portal_estado === 'pendiente' && (
+                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-100">
+                      Pendiente
+                    </span>
+                  )}
+                  {v.portal_estado === 'activo' && (
+                    <span className="inline-flex items-center rounded-full bg-ok-50 px-2 py-0.5 text-[11px] font-semibold text-ok-700 ring-1 ring-inset ring-ok-100">
+                      Activo
+                    </span>
+                  )}
+                  {v.portal_estado === 'rechazado' && (
+                    <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-danger ring-1 ring-inset ring-red-100">
+                      Rechazado
+                    </span>
+                  )}
+                  {!v.portal_estado && <span className="text-primary-300">—</span>}
+                </Td>
+                <Td>
+                  {v.portal_estado === 'pendiente' && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (confirm('¿Aprobar acceso al portal para este vecino?')) {
+                            await updateVecino.mutateAsync({ id: v.id, portal_estado: 'activo' })
+                          }
+                        }}
+                        className="rounded bg-ok px-2 py-1 text-[10px] font-semibold text-white hover:bg-ok/90"
+                        disabled={updateVecino.isPending}
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation()
+                          if (confirm('¿Rechazar acceso al portal para este vecino?')) {
+                            await updateVecino.mutateAsync({ id: v.id, portal_estado: 'rechazado' })
+                          }
+                        }}
+                        className="rounded bg-danger px-2 py-1 text-[10px] font-semibold text-white hover:bg-danger/90"
+                        disabled={updateVecino.isPending}
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  )}
+                </Td>
               </Tr>
             ))}
           </tbody>
