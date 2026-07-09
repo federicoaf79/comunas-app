@@ -211,7 +211,7 @@ export default function Usuarios() {
   const isAdminComuna = hasRole('admin_comuna')
   const canManageUsers = isSuperadmin || isAdminComuna
 
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
 
   const rolesAsignables = useMemo(
     () => rolesAsignablesPara(perfil?.roles ?? []),

@@ -644,7 +644,7 @@ export default function AdminLayout() {
   // declara su `modulo` — si no existe en modulos_config (o la
   // tabla todavía está vacía para el municipio), tieneModulo cae
   // a true para no romper la navegación legacy.
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const { data: modulos } = useModulosActivos(municipioId)
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])

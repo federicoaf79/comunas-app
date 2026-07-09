@@ -138,7 +138,7 @@ async function fetchVecinosPorSegmento({ segmento, municipioId }) {
 
 export function useVecinosPorSegmento(segmento) {
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const enabled = !!perfil && !!segmento && segmento !== 'manual'
 
   return useQuery({
@@ -155,7 +155,7 @@ export function useVecinosPorSegmento(segmento) {
 // para alimentar el grupo "Por barrio" del select.
 export function useBarriosDeVecinos() {
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   return useQuery({
     queryKey: ['barrios-de-vecinos', municipioId ?? '__ALL__'],
     queryFn:  async () => {

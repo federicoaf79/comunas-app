@@ -59,7 +59,7 @@ export async function fetchAuditLog({
 
 export function useAuditLog(filtros = {}) {
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   const isSuperadmin = (perfil?.roles ?? []).includes('superadmin')
   // superadmin puede ver el log de todos los municipios; admin_comuna
   // siempre va con su municipio efectivo.
@@ -90,7 +90,7 @@ export function useAuditLog(filtros = {}) {
 // usuario_id distintos con login hoy). Usa la misma RLS que el log.
 export function useAccesosHoy() {
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   return useQuery({
     queryKey: ['audit-accesos-hoy', municipioId ?? '__ALL__'],
     queryFn: async () => {
@@ -125,7 +125,7 @@ export function useAccesosHoy() {
 // Hook para el KPI mensual.
 export function useAccesosMes() {
   const { perfil } = useAuth()
-  const municipioId = useEffectiveMunicipioId()
+  const { municipioId } = useEffectiveMunicipioId()
   return useQuery({
     queryKey: ['audit-accesos-mes', municipioId ?? '__ALL__'],
     queryFn: async () => {
