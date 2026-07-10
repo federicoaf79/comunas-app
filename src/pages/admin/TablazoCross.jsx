@@ -8,6 +8,7 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import CalendarioSemanal from '../../components/admin/CalendarioSemanal'
+import TurnoDetalleModal from '../../components/admin/TurnoDetalleModal'
 
 // Colores estándar por tipo de evento — alineados con Sala Primeros Auxilios /
 // Juez de Paz / SUM para que el operador reconozca de un vistazo
@@ -225,7 +226,7 @@ function HistoricoBadge({ small = false }) {
 }
 
 // Fila completa para Vista Día (con acciones inline al hover).
-function TurnoRow({ turno, onConfirmar, onCancelar }) {
+function TurnoRow({ turno, onConfirmar, onCancelar, onClick }) {
   const isFamiliar = !!turno.metadata?.para_familiar
   const nombrePrincipal = isFamiliar
     ? (turno.metadata.familiar_nombre || vecinoNombre(turno.vecino))
@@ -235,7 +236,12 @@ function TurnoRow({ turno, onConfirmar, onCancelar }) {
   const depCls    = depBadgeClass(turno.dependencia?.tipo)
 
   return (
-    <li className="group flex flex-wrap items-start gap-3 p-4 transition-colors hover:bg-primary-50/40">
+    <li
+      className={`group flex flex-wrap items-start gap-3 p-4 transition-colors hover:bg-primary-50/40 ${
+        onClick ? 'cursor-pointer' : ''
+      }`}
+      onClick={onClick ? () => onClick(turno) : undefined}
+    >
       <span
         className={
           'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ring-1 ring-inset ' +
@@ -342,6 +348,9 @@ function ReservaRow({ reserva }) {
 function VistaDia({
   fecha, dependenciaId, estado, isHistorico, municipioId, soloReservas,
 }) {
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState(null)
+  const [modalDetalleOpen, setModalDetalleOpen] = useState(false)
+
   // Si el usuario eligió "SUM / Reservas" en el filtro, omitimos el
   // fetch de turnos. useTurnos sigue habilitado pero con un
   // dependenciaId imposible para devolver vacío sin pegar a la red.
@@ -395,6 +404,11 @@ function VistaDia({
       }))
       .sort((a, b) => a.hora.localeCompare(b.hora))
   }, [turnos, reservas, skipTurnos])
+
+  function handleClickTurno(turno) {
+    setTurnoSeleccionado(turno)
+    setModalDetalleOpen(true)
+  }
 
   async function handleConfirmar(id) {
     try {
@@ -502,6 +516,7 @@ function VistaDia({
                     <TurnoRow
                       key={`t-${t.id}`}
                       turno={t}
+                      onClick={handleClickTurno}
                       onConfirmar={canConfirmar ? () => handleConfirmar(t.id) : null}
                       onCancelar={canCancelar  ? () => handleCancelar(t.id)  : null}
                     />
@@ -512,6 +527,15 @@ function VistaDia({
           ))}
         </div>
       )}
+
+      {/* Modal de detalle del turno */}
+      <TurnoDetalleModal
+        turno={turnoSeleccionado}
+        isOpen={modalDetalleOpen}
+        onClose={() => setModalDetalleOpen(false)}
+        onConfirmar={handleConfirmar}
+        onCancelar={handleCancelar}
+      />
     </div>
   )
 }
@@ -521,6 +545,9 @@ function VistaDia({
 // ─────────────────────────────────────────────────────────────────
 
 function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }) {
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState(null)
+  const [modalDetalleOpen, setModalDetalleOpen] = useState(false)
+
   // Para alinearnos con el estándar Mon-Sun de CalendarioSemanal,
   // calculamos el lunes de la semana que contiene `fecha` y armamos
   // el rango Lun-Dom. La grilla del componente se encarga de la
@@ -533,7 +560,7 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
   const skipTurnos       = soloReservas
   const mostrarReservas  = !dependenciaId || soloReservas
 
-  const { turnos = [], isLoading: turnosLoading, isFetching: turnosFetching, error: turnosError } = useTurnos({
+  const { turnos = [], isLoading: turnosLoading, isFetching: turnosFetching, error: turnosError, updateEstado, cancel } = useTurnos({
     fechaFrom:     skipTurnos ? undefined : fechaFrom,
     fechaTo:       skipTurnos ? undefined : fechaTo,
     dependenciaId: skipTurnos ? undefined : (dependenciaId || undefined),
@@ -550,6 +577,34 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
     () => (mostrarReservas ? (reservasQ.data ?? []) : []),
     [mostrarReservas, reservasQ.data],
   )
+
+  function handleEventoClick(evento) {
+    if (evento.tipo === 'turno') {
+      // Buscar el turno completo en el array original usando evento.id
+      const turnoCompleto = turnos.find(t => t.id === evento.id)
+      if (turnoCompleto) {
+        setTurnoSeleccionado(turnoCompleto)
+        setModalDetalleOpen(true)
+      }
+    }
+    // Para reservas SUM, de momento no hacemos nada (o se puede añadir modal similar)
+  }
+
+  async function handleConfirmar(id) {
+    try {
+      await updateEstado.mutateAsync({ id, estado: 'confirmado' })
+    } catch (e) {
+      alert(`No se pudo confirmar: ${e.message}`)
+    }
+  }
+
+  async function handleCancelar(id) {
+    try {
+      await cancel.mutateAsync(id)
+    } catch (e) {
+      alert(`No se pudo cancelar: ${e.message}`)
+    }
+  }
 
   // Eventos unificados para CalendarioSemanal. Color por tipo:
   // turnos se mapean al color de SU dependencia; reservas SUM van
@@ -638,6 +693,16 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
         weekLabel={`${shortDateOf(weekStart)} – ${shortDateOf(weekEnd)}`}
         leyenda={leyenda}
         eventos={eventos}
+        onEventoClick={handleEventoClick}
+      />
+
+      {/* Modal de detalle del turno */}
+      <TurnoDetalleModal
+        turno={turnoSeleccionado}
+        isOpen={modalDetalleOpen}
+        onClose={() => setModalDetalleOpen(false)}
+        onConfirmar={handleConfirmar}
+        onCancelar={handleCancelar}
       />
     </div>
   )
