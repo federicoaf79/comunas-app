@@ -19,8 +19,10 @@ const TIMEOUT_MS = 8000
 
 const COLS = `
   id, municipio_id, vecino_id, tipo, descripcion, ubicacion,
-  estado, prioridad, canal, created_at, updated_at,
-  vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono )
+  estado, prioridad, canal, fotos_urls, dependencia_asignada_id, notas_admin,
+  created_at, updated_at,
+  vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono ),
+  dependencia:dependencia_asignada_id ( id, nombre, tipo )
 `
 
 function withTimeout() {
@@ -113,5 +115,54 @@ export function useUpdateReclamoEstado() {
   return useMutation({
     mutationFn: ({ id, estado }) => updateReclamoEstado(id, estado),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['reclamos'] }),
+  })
+}
+
+// Hook para actualizar campos admin (estado, dependencia, notas)
+export async function updateReclamoAdmin(id, updates) {
+  const { data: row, error } = await supabase
+    .from('reclamos')
+    .update(updates)
+    .eq('id', id)
+    .select(COLS)
+    .single()
+  if (error) {
+    console.error('[useReclamos] updateReclamoAdmin error:', error)
+    throw error
+  }
+  return row
+}
+
+export function useUpdateReclamoAdmin() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...updates }) => updateReclamoAdmin(id, updates),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['reclamos'] }),
+  })
+}
+
+// Hook para obtener reclamos de un vecino específico
+export function useReclamosVecino(vecinoId) {
+  return useQuery({
+    queryKey: ['reclamos', 'vecino', vecinoId ?? '__none__'],
+    queryFn: async () => {
+      if (!vecinoId) return []
+      const { signal, clear } = withTimeout()
+      try {
+        const { data, error } = await supabase
+          .from('reclamos')
+          .select(COLS)
+          .eq('vecino_id', vecinoId)
+          .order('created_at', { ascending: false })
+          .abortSignal(signal)
+        clear()
+        if (error) throw error
+        return data ?? []
+      } catch (e) {
+        clear()
+        throw e
+      }
+    },
+    enabled: !!vecinoId,
   })
 }

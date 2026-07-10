@@ -46,6 +46,7 @@ import ConfigPortal        from './pages/admin/ConfigPortal'
 import ConfigGeneral       from './pages/admin/ConfigGeneral'
 import GestionDependencias from './pages/admin/GestionDependencias'
 import ImportadorVecinos   from './pages/admin/ImportadorVecinos'
+import Reclamos            from './pages/admin/Reclamos'
 import PortalPublico       from './pages/portal/PortalPublico'
 import AgendaPublica       from './pages/portal/AgendaPublica'
 import AgendaPublicaPage   from './pages/admin/AgendaPublicaPage'
@@ -62,6 +63,8 @@ import HistoriaPage        from './pages/portal/HistoriaPage'
 import VecinoAcceso        from './pages/portal/VecinoAcceso'
 import ResetPassword       from './pages/portal/ResetPassword'
 import VecinoDashboard     from './pages/portal/VecinoDashboard'
+import NuevoReclamoPortal  from './pages/portal/NuevoReclamoPortal'
+import MisReclamosPortal   from './pages/portal/MisReclamosPortal'
 import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
@@ -157,6 +160,8 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/portal/mi-cuenta', element: <VecinoDashboard /> },
+      { path: '/portal/reclamos/nuevo', element: <NuevoReclamoPortal /> },
+      { path: '/portal/reclamos', element: <MisReclamosPortal /> },
     ],
   },
 
@@ -189,6 +194,7 @@ const router = createBrowserRouter([
                   { path: '/admin/turnos',     element: <Navigate to="/admin/tablero" replace /> },
                   { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
+                  { path: '/admin/reclamos', element: <Reclamos /> },
                   { path: '/admin/sala',                       element: <SalaPrimerosAuxilios /> },
                   { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
                   { path: '/admin/cic-salud',                  element: <CicSalud /> },
