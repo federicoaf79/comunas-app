@@ -375,7 +375,7 @@ function VistaDia({
     const eventos = []
     if (!skipTurnos) {
       for (const t of (turnos ?? [])) {
-        const hora = timeOf(t.fecha_hora) || '—'
+        const hora = t.hora_inicio || '—'
         eventos.push({ kind: 'turno', hora, sortKey: hora, data: t })
       }
     }
@@ -406,8 +406,12 @@ function VistaDia({
       if (telefono) {
         const nombre    = turno.vecino?.nombre ?? turno.vecino?.nombre_completo ?? 'Vecino'
         const dep       = turno.dependencia?.nombre ?? turno.dependencia_nombre ?? 'la dependencia'
-        const fechaHora = turno.fecha_hora
-          ? new Date(turno.fecha_hora).toLocaleString('es-AR', {
+        // Construir fecha_hora ISO desde fecha + hora_inicio para parsearlo
+        const fechaHoraISO = turno.fecha && turno.hora_inicio
+          ? `${turno.fecha}T${turno.hora_inicio}:00-03:00`
+          : null
+        const fechaHora = fechaHoraISO
+          ? new Date(fechaHoraISO).toLocaleString('es-AR', {
               timeZone: 'America/Argentina/Buenos_Aires',
               weekday: 'long', day: 'numeric', month: 'long',
               hour: '2-digit', minute: '2-digit',
@@ -559,7 +563,8 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
         out.push({
           id:          t.id,
           tipo:        'turno',
-          fecha_hora:  t.fecha_hora,
+          fecha:       t.fecha,
+          hora:        t.hora_inicio,
           titulo:      vecinoNombre(t.vecino),
           subtitulo:   t.dependencia?.nombre ?? t.dependencia_nombre ?? 'Turno',
           estado:      t.estado,
