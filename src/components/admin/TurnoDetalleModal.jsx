@@ -111,7 +111,7 @@ export default function TurnoDetalleModal({ turno, isOpen, onClose, onConfirmar,
 
   return (
     <Modal
-      isOpen={isOpen}
+      open={isOpen}
       onClose={onClose}
       title="Detalle del turno"
       size="lg"
