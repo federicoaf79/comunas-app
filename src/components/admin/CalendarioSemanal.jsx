@@ -162,7 +162,11 @@ function CalendarioBloque({ evento, top, height, bg, fg, onClick }) {
       <button
         type="button"
         title={tooltip}
-        onClick={() => onClick(evento)}
+        onClick={(e) => {
+          e.stopPropagation()
+          console.log('[DEBUG CalendarioBloque] Click detectado en evento:', evento)
+          onClick(evento)
+        }}
         className={cls + ' text-left'}
         style={style}
       >
