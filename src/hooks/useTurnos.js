@@ -49,6 +49,17 @@ export async function fetchTurnos({
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
+  // 🔍 DEBUG LOG - Query params
+  console.log('[DEBUG fetchTurnos] QUERY PARAMS:', {
+    municipioId,
+    dependenciaId,
+    fecha,
+    fechaFrom,
+    fechaTo,
+    estado,
+    tabla: 'turnos_agenda'
+  })
+
   try {
     let q = supabase
       .from('turnos_agenda')
@@ -70,6 +81,16 @@ export async function fetchTurnos({
     if (fechaTo)   q = q.lte('fecha', fechaTo)
 
     const { data, error } = await q
+
+    // 🔍 DEBUG LOG - Resultado crudo de Supabase
+    console.log('[DEBUG fetchTurnos] SUPABASE RESULT:', {
+      rowCount: data?.length ?? 0,
+      hasError: !!error,
+      error: error,
+      firstRow: data?.[0] ?? null,
+      allRows: data
+    })
+
     clearTimeout(timeoutId)
     if (error) {
       console.error('[useTurnos] fetchTurnos error:', error)
