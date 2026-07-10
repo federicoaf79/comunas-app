@@ -81,11 +81,14 @@ async function fetchVecinosPorSegmento({ segmento, municipioId }) {
   // Segmentos por dependencia — JOIN turnos + dep tipo.
   if (segmento === 'sala_pa' || segmento === 'juez') {
     const { startISO, endISO } = dentroDeRango()
+    // Convertir ISOs a fecha (solo YYYY-MM-DD)
+    const startDate = startISO.split('T')[0]
+    const endDate = endISO.split('T')[0]
     let qT = supabase
-      .from('turnos')
+      .from('turnos_agenda')
       .select('vecino_id, dependencia:dependencia_id ( tipo )')
-      .gte('fecha_hora', startISO)
-      .lte('fecha_hora', endISO)
+      .gte('fecha', startDate)
+      .lte('fecha', endDate)
     if (municipioId) qT = qT.eq('municipio_id', municipioId)
     const { data: turnos, error: tErr } = await qT
     if (tErr) throw tErr

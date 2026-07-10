@@ -10,7 +10,8 @@
       "Bash(npx eslint *)",
       "Bash(npx vite *)",
       "Bash(git fetch *)",
-      "Bash(git ls-remote *)"
+      "Bash(git ls-remote *)",
+      "Artifact"
     ]
   }
 }

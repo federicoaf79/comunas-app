@@ -26,16 +26,17 @@ async function buscarTurnos(input) {
   if (!q) return []
 
   const COLS = `
-    id, numero_turno, fecha_hora, estado, canal,
+    id, numero_turno, fecha, hora_inicio, estado, canal,
     dependencia:dependencia_id ( id, nombre )
   `
 
   // 1) por numero_turno (la columna podría ser int o text — PostgREST coerce).
   const { data: byNumero } = await supabase
-    .from('turnos')
+    .from('turnos_agenda')
     .select(COLS)
     .eq('numero_turno', q)
-    .order('fecha_hora', { ascending: false })
+    .order('fecha', { ascending: false })
+    .order('hora_inicio', { ascending: false })
   if (byNumero && byNumero.length > 0) return byNumero
 
   // 2) por DNI: lookup vecino → turnos por vecino_id.
@@ -47,10 +48,11 @@ async function buscarTurnos(input) {
   if (!vecino || vecino.length === 0) return []
 
   const { data: byDni } = await supabase
-    .from('turnos')
+    .from('turnos_agenda')
     .select(COLS)
     .eq('vecino_id', vecino[0].id)
-    .order('fecha_hora', { ascending: false })
+    .order('fecha', { ascending: false })
+    .order('hora_inicio', { ascending: false })
     .limit(5)
   return byDni ?? []
 }
@@ -119,7 +121,7 @@ export default function ConsultarTurnoFormPortal() {
                     {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
                   </p>
                   <p className="mt-1 text-xs text-primary-400">
-                    {dateTimeOf(t.fecha_hora)} · {dep}
+                    {t.fecha} {t.hora_inicio} · {dep}
                   </p>
                 </div>
                 <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>

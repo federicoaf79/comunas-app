@@ -220,7 +220,7 @@ async function closeAtencion({ atencionId, registradoPor, estado = 'cerrada' }) 
   // 4) marcar el turno como atendido (best-effort)
   if (atencion.turno_id) {
     const { error: tErr } = await supabase
-      .from('turnos').update({ estado: 'atendido' }).eq('id', atencion.turno_id)
+      .from('turnos_agenda').update({ estado: 'atendido' }).eq('id', atencion.turno_id)
     if (tErr) console.warn('[useAtenciones] update turno→atendido falló:', tErr.message)
   }
 

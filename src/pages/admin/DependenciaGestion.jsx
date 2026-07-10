@@ -369,7 +369,7 @@ function TabEquipo({ dep }) {
 // ─────────────────────────────────────────────────────────────────
 
 const TURNOS_COLS = `
-  id, fecha_hora, estado, dependencia_id, municipio_id,
+  id, fecha, hora_inicio, hora_fin, estado, dependencia_id, municipio_id,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre )
 `
 
@@ -381,10 +381,11 @@ function TabTurnos({ dep, dependenciaId }) {
     queryKey: ['dependencia-gestion-turnos', dependenciaId],
     queryFn:  async () => {
       const { data, error } = await supabase
-        .from('turnos')
+        .from('turnos_agenda')
         .select(TURNOS_COLS)
         .eq('dependencia_id', dependenciaId)
-        .order('fecha_hora', { ascending: false })
+        .order('fecha', { ascending: false })
+        .order('hora_inicio', { ascending: false })
         .limit(50)
       if (error) {
         console.warn('[DependenciaGestion] turnos:', error.message)

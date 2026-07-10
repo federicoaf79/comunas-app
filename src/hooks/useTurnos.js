@@ -12,8 +12,9 @@ const TIMEOUT_MS = 8000
 // muestra '—'.
 const TURNO_SELECT = `
   id, municipio_id, dependencia_id, vecino_id, profesional_id,
-  fecha_hora, estado, canal, numero_turno, calendar_event_id,
-  recordatorio_enviado, motivo, especialidad, metadata, created_at,
+  fecha, hora_inicio, hora_fin, estado, canal, numero_turno,
+  calendar_event_id, recordatorio_enviado, motivo, especialidad,
+  metadata, created_at,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre, telefono ),
   profesional:profesional_id ( id, nombre ),
   dependencia:dependencia_id ( id, nombre )
@@ -41,9 +42,7 @@ function normalizeTurno(t) {
 // =============================================================
 
 // fetchTurnos({ municipioId, dependenciaId, fecha, fechaFrom, fechaTo, estado })
-// Las fechas son YYYY-MM-DD en horario Argentina. Se convierten al
-// rango UTC equivalente con offset -03:00 explícito para que el
-// timestamptz se compare correctamente.
+// Las fechas son YYYY-MM-DD en horario Argentina.
 export async function fetchTurnos({
   municipioId, dependenciaId, fecha, fechaFrom, fechaTo, estado,
 } = {}) {
@@ -52,24 +51,23 @@ export async function fetchTurnos({
 
   try {
     let q = supabase
-      .from('turnos')
+      .from('turnos_agenda')
       .select(TURNO_SELECT)
-      .order('fecha_hora', { ascending: true })
+      .order('fecha', { ascending: true })
+      .order('hora_inicio', { ascending: true })
       .abortSignal(controller.signal)
 
     if (municipioId)   q = q.eq('municipio_id', municipioId)
     if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
     if (estado)        q = q.eq('estado', estado)
 
-    // Filtro por día único (Argentina).
+    // Filtro por día único
     if (fecha) {
-      q = q
-        .gte('fecha_hora', `${fecha}T00:00:00${ARG_OFFSET}`)
-        .lte('fecha_hora', `${fecha}T23:59:59.999${ARG_OFFSET}`)
+      q = q.eq('fecha', fecha)
     }
-    // Filtro por rango (Argentina).
-    if (fechaFrom) q = q.gte('fecha_hora', `${fechaFrom}T00:00:00${ARG_OFFSET}`)
-    if (fechaTo)   q = q.lte('fecha_hora', `${fechaTo}T23:59:59.999${ARG_OFFSET}`)
+    // Filtro por rango
+    if (fechaFrom) q = q.gte('fecha', fechaFrom)
+    if (fechaTo)   q = q.lte('fecha', fechaTo)
 
     const { data, error } = await q
     clearTimeout(timeoutId)
@@ -96,10 +94,11 @@ export async function fetchTurnosByVecino(vecinoId) {
 
   try {
     const { data, error } = await supabase
-      .from('turnos')
+      .from('turnos_agenda')
       .select(TURNO_SELECT)
       .eq('vecino_id', vecinoId)
-      .order('fecha_hora', { ascending: false })
+      .order('fecha', { ascending: false })
+      .order('hora_inicio', { ascending: false })
       .abortSignal(controller.signal)
     clearTimeout(timeoutId)
     if (error) {
@@ -119,9 +118,23 @@ export async function fetchTurnosByVecino(vecinoId) {
 }
 
 export async function createTurno(data) {
+  // Si viene fecha_hora (timestamp), descomponerlo en fecha + hora_inicio + hora_fin
+  let payload = { ...data }
+  if (data.fecha_hora) {
+    const dt = new Date(data.fecha_hora)
+    const fecha = dt.toISOString().split('T')[0]
+    const hora_inicio = dt.toTimeString().slice(0, 5) // HH:MM
+    // hora_fin: +30 min por defecto si no se especifica
+    const dtFin = new Date(dt.getTime() + 30 * 60 * 1000)
+    const hora_fin = dtFin.toTimeString().slice(0, 5)
+
+    delete payload.fecha_hora
+    payload = { ...payload, fecha, hora_inicio, hora_fin }
+  }
+
   const { data: row, error } = await supabase
-    .from('turnos')
-    .insert(data)
+    .from('turnos_agenda')
+    .insert(payload)
     .select(TURNO_SELECT)
     .single()
   if (error) {
@@ -135,7 +148,7 @@ export async function createTurno(data) {
     const eventId = await createCalendarEvent(turno, turno.profesional)
     if (eventId) {
       const { data: updated } = await supabase
-        .from('turnos')
+        .from('turnos_agenda')
         .update({ calendar_event_id: eventId })
         .eq('id', turno.id)
         .select(TURNO_SELECT)
@@ -151,7 +164,7 @@ export async function createTurno(data) {
 
 export async function updateTurnoEstado(id, estado) {
   const { data: row, error } = await supabase
-    .from('turnos')
+    .from('turnos_agenda')
     .update({ estado })
     .eq('id', id)
     .select(TURNO_SELECT)
@@ -167,13 +180,13 @@ export async function cancelarTurno(id) {
   // Leer calendar_event_id antes del UPDATE para poder borrarlo
   // del Calendar después.
   const { data: existing } = await supabase
-    .from('turnos')
+    .from('turnos_agenda')
     .select('id, calendar_event_id')
     .eq('id', id)
     .single()
 
   const { data: row, error } = await supabase
-    .from('turnos')
+    .from('turnos_agenda')
     .update({ estado: 'cancelado', calendar_event_id: null })
     .eq('id', id)
     .select(TURNO_SELECT)
@@ -277,7 +290,7 @@ export function useTurnos({
 //
 // Lo consume el Dashboard cuando "turnos hoy" viene vacío: en vez
 // de mostrar un empty state seco, busca los próximos 5 turnos no
-// cancelados con fecha_hora > now() y los lista para que el
+// cancelados con fecha >= hoy y los lista para que el
 // operador vea el siguiente día con actividad.
 //
 // Solo se dispara cuando `enabled === true` (por defecto false) —
@@ -288,12 +301,14 @@ async function fetchProximosTurnos({ municipioId, limit = 5 }) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
+    const hoy = new Date().toISOString().split('T')[0] // YYYY-MM-DD
     let q = supabase
-      .from('turnos')
+      .from('turnos_agenda')
       .select(TURNO_SELECT)
-      .gt('fecha_hora', new Date().toISOString())
+      .gte('fecha', hoy)
       .neq('estado', 'cancelado')
-      .order('fecha_hora', { ascending: true })
+      .order('fecha', { ascending: true })
+      .order('hora_inicio', { ascending: true })
       .limit(limit)
       .abortSignal(controller.signal)
     if (municipioId) q = q.eq('municipio_id', municipioId)

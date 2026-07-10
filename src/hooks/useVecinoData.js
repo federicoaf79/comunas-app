@@ -11,19 +11,20 @@ import { supabaseAnon } from '../lib/supabaseAnon'
 // =============================================================
 
 const TURNO_COLS = `
-  id, fecha_hora, estado, canal, numero_turno, motivo, metadata,
+  id, fecha, hora_inicio, hora_fin, estado, canal, numero_turno, motivo, metadata,
   dependencia:dependencia_id ( id, nombre )
 `
 
 // Mis turnos — todos los turnos del vecino (futuros + históricos),
-// orden DESC por fecha_hora. El componente decide cómo agruparlos.
+// orden DESC por fecha + hora_inicio. El componente decide cómo agruparlos.
 async function fetchTurnosByVecino(vecinoId) {
   if (!vecinoId) return []
   const { data, error } = await supabaseAnon
-    .from('turnos')
+    .from('turnos_agenda')
     .select(TURNO_COLS)
     .eq('vecino_id', vecinoId)
-    .order('fecha_hora', { ascending: false })
+    .order('fecha', { ascending: false })
+    .order('hora_inicio', { ascending: false })
     .limit(50)
   if (error) throw error
   return data ?? []

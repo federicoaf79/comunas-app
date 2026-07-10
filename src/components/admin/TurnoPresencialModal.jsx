@@ -224,21 +224,30 @@ export default function TurnoPresencialModal({
     }
     setSaving(true)
     try {
-      const fecha = todayArgYMD()
-      const fecha_hora = `${fecha}T${form.hora}:00${ARG_OFFSET}`
+      const fechaHoy = todayArgYMD()
+      const fecha_hora = `${fechaHoy}T${form.hora}:00${ARG_OFFSET}`
+      // Descomponer fecha_hora en fecha + hora_inicio + hora_fin
+      const dt = new Date(fecha_hora)
+      const fecha = dt.toISOString().split('T')[0]
+      const hora_inicio = dt.toTimeString().slice(0, 5) // HH:MM
+      const dtFin = new Date(dt.getTime() + 30 * 60 * 1000) // +30 min
+      const hora_fin = dtFin.toTimeString().slice(0, 5)
+
       const payload = {
         municipio_id:   dependencia.municipio_id ?? municipioId ?? null,
         dependencia_id: dependencia.id,
         vecino_id:      vecino.id,
         profesional_id: profesionalId ?? null,
-        fecha_hora,
+        fecha,
+        hora_inicio,
+        hora_fin,
         estado:         'confirmado',
         canal:          'presencial',
         especialidad:   form.especialidad || 'general',
         motivo:         form.motivo.trim() || null,
       }
       const { data: row, error: tErr } = await supabase
-        .from('turnos')
+        .from('turnos_agenda')
         .insert(payload)
         .select('id')
         .single()

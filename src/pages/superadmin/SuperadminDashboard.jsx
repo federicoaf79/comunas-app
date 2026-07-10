@@ -61,7 +61,7 @@ function useGlobalMetrics() {
         ] = await Promise.all([
           supabase.from('municipios').select('id', { count: 'exact', head: true }),
           supabase.from('usuarios').select('id', { count: 'exact', head: true }),
-          supabase.from('turnos').select('id', { count: 'exact', head: true }),
+          supabase.from('turnos_agenda').select('id', { count: 'exact', head: true }),
           supabase.from('mensajes_whatsapp').select('id', { count: 'exact', head: true }),
         ])
         setMetrics({ municipios, usuarios, turnos, mensajes })
@@ -100,7 +100,7 @@ function useTenantMetrics() {
               { count: usuarios },
             ] = await Promise.all([
               supabase.from('vecinos').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
-              supabase.from('turnos').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
+              supabase.from('turnos_agenda').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
               supabase.from('mensajes_whatsapp').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
               supabase.from('usuarios').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
             ])

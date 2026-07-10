@@ -460,11 +460,20 @@ export default function SacarTurnoFormPortal() {
       // como horario tentativo. El operador la ajusta al confirmar.
       const fecha_hora = `${form.fecha}T09:00:00-03:00`
 
+      // Descomponer fecha_hora en fecha + hora_inicio + hora_fin
+      const dt = new Date(fecha_hora)
+      const fecha = dt.toISOString().split('T')[0]
+      const hora_inicio = dt.toTimeString().slice(0, 5) // HH:MM
+      const dtFin = new Date(dt.getTime() + 30 * 60 * 1000) // +30 min
+      const hora_fin = dtFin.toTimeString().slice(0, 5)
+
       const payload = {
         municipio_id:   dep.municipio_id,
         dependencia_id: dep.id,
         vecino_id:      v.id,
-        fecha_hora,
+        fecha,
+        hora_inicio,
+        hora_fin,
         estado:         requiereOrden ? 'pendiente_validacion' : 'pendiente',
         canal:          form.canal,
         motivo:         form.motivo || null,
@@ -478,9 +487,9 @@ export default function SacarTurnoFormPortal() {
       }
 
       const { data: turno, error: tErr } = await supabase
-        .from('turnos')
+        .from('turnos_agenda')
         .insert(payload)
-        .select('id, numero_turno, fecha_hora, estado')
+        .select('id, numero_turno, fecha, hora_inicio, estado')
         .single()
       if (tErr) throw tErr
 

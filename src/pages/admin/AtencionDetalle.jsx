@@ -34,7 +34,7 @@ import { dateTimeOf } from '../../lib/datetime'
 // =============================================================
 
 const TURNO_SELECT = `
-  id, fecha_hora, motivo, especialidad, estado, vecino_id, dependencia_id,
+  id, fecha, hora_inicio, hora_fin, motivo, especialidad, estado, vecino_id, dependencia_id,
   municipio_id, canal, numero_turno, metadata,
   vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, fecha_nac, telefono ),
   dependencia:dependencia_id ( id, nombre, tipo )
@@ -94,7 +94,7 @@ export default function AtencionDetalle() {
     queryKey: ['turno', 'detalle', turnoId ?? '__none__'],
     queryFn:  async () => {
       const { data, error } = await supabase
-        .from('turnos').select(TURNO_SELECT).eq('id', turnoId).maybeSingle()
+        .from('turnos_agenda').select(TURNO_SELECT).eq('id', turnoId).maybeSingle()
       if (error) throw error
       return data
     },
