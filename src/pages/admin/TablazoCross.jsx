@@ -350,7 +350,7 @@ function VistaDia({
     fecha:         skipTurnos ? undefined : fecha,
     dependenciaId: skipTurnos ? undefined : (dependenciaId || undefined),
     estado:        estado || undefined,
-  })
+  }, { municipioIdOverride: municipioId })
 
   // Reservas SUM solo cuando NO hay filtro de dependencia específico,
   // o cuando el filtro es justamente "SUM / Reservas". Si el usuario
@@ -538,7 +538,7 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
     fechaTo:       skipTurnos ? undefined : fechaTo,
     dependenciaId: skipTurnos ? undefined : (dependenciaId || undefined),
     estado:        estado || undefined,
-  })
+  }, { municipioIdOverride: municipioId })
 
   const reservasQ = useReservasRango({
     municipioId,
