@@ -17,6 +17,49 @@ function normalizarDia(dia) {
     .replace(/[̀-ͯ]/g, '')
 }
 
+// Obtener hora actual en formato HH:MM (TZ Argentina)
+function getHoraActual() {
+  const ahora = new Date()
+  const horaArgentina = ahora.toLocaleString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  return horaArgentina // Formato "HH:MM"
+}
+
+// Convierte "HH:MM" a minutos desde medianoche para comparación
+function horaAMinutos(hora) {
+  if (!hora || typeof hora !== 'string') return null
+  const [h, m] = hora.split(':').map(Number)
+  if (isNaN(h) || isNaN(m)) return null
+  return h * 60 + m
+}
+
+// Verifica si horaActual está dentro del rango [horaDesde, horaHasta]
+function estaEnHorario(horaActual, horaDesde, horaHasta) {
+  const actual = horaAMinutos(horaActual)
+  const desde = horaAMinutos(horaDesde)
+  const hasta = horaAMinutos(horaHasta)
+
+  if (actual === null || desde === null || hasta === null) return false
+
+  return actual >= desde && actual <= hasta
+}
+
+// Calcula distancia en minutos desde horaActual hasta horaDesde
+// Devuelve null si horaDesde ya pasó (es menor que horaActual)
+function minutosHastaInicio(horaActual, horaDesde) {
+  const actual = horaAMinutos(horaActual)
+  const desde = horaAMinutos(horaDesde)
+
+  if (actual === null || desde === null) return null
+  if (desde <= actual) return null // Ya pasó
+
+  return desde - actual
+}
+
 export function useMedicoGuardia(municipioId) {
   return useQuery({
     queryKey: ['medico-guardia', municipioId],
@@ -52,7 +95,28 @@ export function useMedicoGuardia(municipioId) {
         })
       })
 
-      // Retornar el primero que atiende hoy, o null
+      if (profesionalesHoy.length === 0) return null
+
+      const horaActual = getHoraActual()
+
+      // 1. Prioridad: profesional que está atendiendo AHORA
+      const enHorarioActivo = profesionalesHoy.find(prof =>
+        estaEnHorario(horaActual, prof.hora_desde, prof.hora_hasta)
+      )
+      if (enHorarioActivo) return enHorarioActivo
+
+      // 2. Fallback: próximo profesional que atienda hoy (por hora_desde más cercana)
+      const proximosHoy = profesionalesHoy
+        .map(prof => ({
+          prof,
+          minutosHasta: minutosHastaInicio(horaActual, prof.hora_desde),
+        }))
+        .filter(item => item.minutosHasta !== null) // Solo los que aún no pasaron
+        .sort((a, b) => a.minutosHasta - b.minutosHasta) // Ordenar por más cercano
+
+      if (proximosHoy.length > 0) return proximosHoy[0].prof
+
+      // 3. Si todos ya pasaron, retornar el primero de la lista (puede ser útil para mostrar "último guardía del día")
       return profesionalesHoy[0] ?? null
     },
     enabled: !!municipioId,
