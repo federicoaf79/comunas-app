@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useProfesionales, useUpsertProfesional, useDeleteProfesional } from '../../hooks/useProfesionales'
+import { useProfesionales, useUpsertProfesional, useDeleteProfesional, useProfesionalEnAgenda } from '../../hooks/useProfesionales'
 import Spinner from '../ui/Spinner'
 
 const ESPECIALIDADES = [
@@ -19,6 +19,26 @@ const EMPTY = {
   telefono: '', email: '',
   dias_atencion: [], hora_desde: '08:00', hora_hasta: '13:00',
   frecuencia_nota: '', activo: true,
+}
+
+function BadgeAgendaPublica({ profesionalId }) {
+  const { data: enAgenda = false, isLoading } = useProfesionalEnAgenda(profesionalId)
+
+  if (isLoading) return null
+
+  if (enAgenda) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-inset ring-blue-200">
+        📅 En agenda pública
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+      Sin publicar
+    </span>
+  )
 }
 
 function ProfesionalForm({ initial, municipioId, dependenciaId, onClose }) {
@@ -222,7 +242,10 @@ export default function ProfesionalesTab({ municipioId, dependenciaId }) {
                 {p.nombre.split(' ').filter(w => /^[A-ZÁ-Ú]/.test(w)).slice(0,2).map(w=>w[0]).join('')}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-sora text-sm font-bold text-primary">{p.nombre}</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-sora text-sm font-bold text-primary">{p.nombre}</p>
+                  <BadgeAgendaPublica profesionalId={p.id} />
+                </div>
                 <p className="text-xs text-primary-500">
                   {ESPECIALIDADES.find(e => e.value === p.especialidad)?.label ?? p.especialidad}
                   {p.matricula ? ` · ${p.matricula}` : ''}
