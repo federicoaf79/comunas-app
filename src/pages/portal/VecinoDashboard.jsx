@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { useTurnosVecino, useHCVecino, useReclamosVecino } from '../../hooks/useVecinoData'
+import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino } from '../../hooks/useVecinoData'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
@@ -307,46 +307,120 @@ function TurnosTab({ turnos, isLoading, error }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// B) Mi salud
+// B) Mi salud — HC completa con datos vitales y carpetas por dependencia
 // ─────────────────────────────────────────────────────────────────
 
-function ConsultaModalContent({ consulta }) {
+function DatosVitalesCard({ vecino }) {
+  const grupoSanguineo = vecino.grupo_sanguineo || 'No especificado'
+
+  let alergias = 'No especificado'
+  if (vecino.sin_alergias_conocidas) {
+    alergias = 'Sin alergias conocidas'
+  } else if (vecino.alergias && vecino.alergias.length > 0) {
+    alergias = vecino.alergias.join(', ')
+  }
+
+  const contactoEmergencia = vecino.contacto_emergencia_nombre && vecino.contacto_emergencia_telefono
+    ? `${vecino.contacto_emergencia_nombre} · ${vecino.contacto_emergencia_telefono}`
+    : 'No especificado'
+
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div className="rounded-xl bg-primary p-5 text-white shadow-lg">
+      <h3 className="font-sora text-sm font-bold uppercase tracking-wide">
+        📋 Datos vitales
+      </h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Fecha</p>
-          <p className="mt-1 text-base font-semibold text-primary">{dateTimeOf(consulta.fecha_hora)}</p>
+          <p className="text-xs uppercase tracking-wide text-white/70">Grupo sanguíneo</p>
+          <p className="mt-1 font-semibold">{grupoSanguineo}</p>
         </div>
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Atendió</p>
-          <p className="mt-1 text-base font-semibold text-primary">{consulta.profesional_nombre || '—'}</p>
+          <p className="text-xs uppercase tracking-wide text-white/70">Alergias</p>
+          <p className="mt-1 font-semibold">{alergias}</p>
         </div>
-      </div>
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Motivo</p>
-        <p className="mt-1 text-base text-primary-700">{consulta.motivo || 'Sin motivo registrado'}</p>
-      </div>
-      <div className="rounded-md border border-accent-100 bg-accent-50 p-4 text-sm text-accent-700">
-        <p className="font-semibold">Diagnóstico, indicaciones y receta</p>
-        <p className="mt-1">
-          Por privacidad no se exponen en el portal. Para acceder al detalle clínico
-          completo, presentate en la Sala de Primeros Auxilios con tu DNI.
-        </p>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-white/70">Contacto de emergencia</p>
+          <p className="mt-1 font-semibold">{contactoEmergencia}</p>
+        </div>
       </div>
     </div>
   )
 }
 
-function SaludTab({ consultas, isLoading, error }) {
-  const [verConsulta, setVerConsulta] = useState(null)
+function AtencionDocumentos({ atencionId }) {
+  const { data: documentos, isLoading } = useDocumentosAtencion(atencionId)
+
+  if (isLoading) return <Spinner size="sm" />
+  if (!documentos || documentos.length === 0) return null
+
+  const TIPOS_ICONO = {
+    receta:  '📋',
+    estudio: '🔬',
+    informe: '🏥',
+    otro:    '📄',
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {documentos.map(d => (
+        <a
+          key={d.id}
+          href={d.public_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 transition-colors hover:bg-accent-100"
+          title={d.descripcion || 'Ver documento'}
+        >
+          <span aria-hidden="true">{TIPOS_ICONO[d.tipo] ?? '📄'}</span>
+          {d.nombre_archivo}
+        </a>
+      ))}
+    </div>
+  )
+}
+
+function SaludTab({ vecino, atenciones, isLoading, error }) {
+  const [carpetaActiva, setCarpetaActiva] = useState(null)
+
+  // Agrupar atenciones por dependencia
+  const carpetas = useMemo(() => {
+    if (!atenciones || atenciones.length === 0) return []
+
+    const grupos = atenciones.reduce((acc, a) => {
+      const depId = a.dependencia_id || '__sin_dep__'
+      const depNombre = a.dependencia?.nombre || 'Sin dependencia'
+      if (!acc[depId]) {
+        acc[depId] = { id: depId, nombre: depNombre, atenciones: [] }
+      }
+      acc[depId].atenciones.push(a)
+      return acc
+    }, {})
+
+    return Object.values(grupos).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [atenciones])
+
+  // Abrir la primera carpeta por defecto
+  if (carpetas.length > 0 && !carpetaActiva) {
+    setCarpetaActiva(carpetas[0].id)
+  }
 
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi historia clínica</h2>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi salud</h2>
         <p className="text-sm text-primary-500">
-          Resumen de tus últimas atenciones en la Sala de Primeros Auxilios.
+          Información clínica y atenciones médicas.
+        </p>
+      </div>
+
+      {/* Datos vitales */}
+      <DatosVitalesCard vecino={vecino} />
+
+      {/* Historia clínica */}
+      <div>
+        <h3 className="font-sora text-base font-bold text-primary">Mi historia clínica</h3>
+        <p className="mt-0.5 text-xs text-primary-500">
+          Consultas y atenciones organizadas por servicio.
         </p>
       </div>
 
@@ -355,71 +429,85 @@ function SaludTab({ consultas, isLoading, error }) {
           <Spinner size="lg" />
         </div>
       )}
+
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
           No pudimos cargar tu historia clínica. Probá de nuevo.
         </div>
       )}
 
-      {!isLoading && !error && consultas.length === 0 && (
+      {!isLoading && !error && carpetas.length === 0 && (
         <div className="card p-8 text-center text-sm text-primary-400">
-          No tenés consultas registradas todavía.
+          No tenés atenciones registradas todavía.
         </div>
       )}
 
-      {!isLoading && !error && consultas.length > 0 && (
-        <ul className="space-y-3">
-          {consultas.map(c => (
-            <li key={c.id} className="card flex flex-wrap items-start justify-between gap-3 p-5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-primary sm:text-base">
-                  {c.motivo || 'Consulta médica'}
-                </p>
-                <p className="mt-1 text-xs text-primary-500 sm:text-sm">
-                  {dateTimeOf(c.fecha_hora)} · {c.profesional_nombre || '—'}
-                </p>
-              </div>
+      {!isLoading && !error && carpetas.length > 0 && (
+        <div className="space-y-4">
+          {/* Tabs de carpetas */}
+          <div className="flex flex-wrap gap-2">
+            {carpetas.map(c => (
               <button
-                type="button"
-                onClick={() => setVerConsulta(c)}
-                className="btn-secondary px-3 py-1.5 text-xs"
+                key={c.id}
+                onClick={() => setCarpetaActiva(c.id)}
+                className={
+                  'rounded-lg px-4 py-2 text-sm font-semibold transition-colors ' +
+                  (carpetaActiva === c.id
+                    ? 'bg-primary text-white'
+                    : 'bg-primary-50 text-primary hover:bg-primary-100')
+                }
               >
-                Ver consulta completa
+                📁 {c.nombre}
+                <span className="ml-1.5 rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">
+                  {c.atenciones.length}
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Documentos — placeholder hasta que tengamos RLS + storage para anon */}
-      <div className="card p-4 sm:p-5">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
-              Mis documentos clínicos
-            </h3>
-            <p className="mt-1 text-sm text-primary-500">
-              Estudios, recetas y otros documentos cargados por el equipo de salud.
-            </p>
+            ))}
           </div>
-        </header>
-        <div className="mt-4 rounded-md border border-dashed border-primary-200 bg-primary-50 p-5 text-center text-sm text-primary-500">
-          <p className="font-semibold text-primary-700">Próximamente</p>
-          <p className="mt-1">
-            Vas a poder consultar y subir documentos clínicos desde acá.
-            Por ahora, llevalos en mano cuando vayas a la Sala Primeros Auxilios.
-          </p>
-        </div>
-      </div>
 
-      <Modal
-        open={!!verConsulta}
-        onClose={() => setVerConsulta(null)}
-        title="Consulta completa"
-        size="md"
-      >
-        {verConsulta && <ConsultaModalContent consulta={verConsulta} />}
-      </Modal>
+          {/* Contenido de la carpeta activa */}
+          {carpetas
+            .filter(c => c.id === carpetaActiva)
+            .map(c => (
+              <div key={c.id} className="space-y-3">
+                {c.atenciones.map(a => (
+                  <div key={a.id} className="card p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-primary sm:text-base">
+                          {a.motivo || 'Consulta médica'}
+                        </p>
+                        <p className="mt-1 text-xs text-primary-500">
+                          {dateTimeOf(a.fecha_hora)} · {a.profesional?.nombre || 'Profesional no especificado'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {(a.diagnostico || a.receta) && (
+                      <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                        {a.diagnostico && (
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Diagnóstico</p>
+                            <p className="mt-1 text-primary-700">{a.diagnostico}</p>
+                          </div>
+                        )}
+                        {a.receta && (
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Receta</p>
+                            <p className="mt-1 text-primary-700">{a.receta}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Documentos adjuntos */}
+                    <AtencionDocumentos atencionId={a.id} />
+                  </div>
+                ))}
+              </div>
+            ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -725,10 +813,7 @@ export default function VecinoDashboard() {
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
   const turnosQ = useTurnosVecino(vecinoSession?.id)
-  const hcQ = useHCVecino({
-    dni:      vecinoSession?.dni,
-    telefono: vecinoSession?.telefono_login || vecinoSession?.telefono,
-  })
+  const atencionesQ = useAtencionesVecino(vecinoSession?.id)
   const reclamosQ = useReclamosVecino(vecinoSession?.id)
 
   function handleSignOut() {
@@ -756,9 +841,10 @@ export default function VecinoDashboard() {
         )}
         {tab === 'salud' && (
           <SaludTab
-            consultas={hcQ.data ?? []}
-            isLoading={hcQ.isLoading}
-            error={hcQ.error}
+            vecino={vecinoSession}
+            atenciones={atencionesQ.data ?? []}
+            isLoading={atencionesQ.isLoading}
+            error={atencionesQ.error}
           />
         )}
         {tab === 'datos'    && <DatosTab vecino={vecinoSession} />}

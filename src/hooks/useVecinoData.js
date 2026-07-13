@@ -66,7 +66,7 @@ export async function refetchVecinoById(vecinoId) {
   if (!vecinoId) return null
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
     .eq('id', vecinoId)
     .maybeSingle()
   if (error) {
@@ -94,7 +94,7 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
     .eq('dni', dniClean)
     .limit(5)
   if (error) throw error
@@ -144,5 +144,78 @@ export function useReclamosVecino(vecinoId) {
     queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__'],
     queryFn:  () => fetchReclamosByVecino(vecinoId),
     enabled:  !!vecinoId,
+  })
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Atenciones del vecino (HC completa en el portal)
+//
+// Trae todas las atenciones del vecino con joins a profesional y
+// dependencia. Para uso en el portal del vecino.
+// ─────────────────────────────────────────────────────────────────
+
+const ATENCION_COLS_PUBLIC = `
+  id, vecino_id, dependencia_id, profesional_id, fecha_hora,
+  motivo, diagnostico, receta,
+  profesional:profesional_id ( id, nombre ),
+  dependencia:dependencia_id ( id, nombre )
+`
+
+async function fetchAtencionesVecino(vecinoId) {
+  if (!vecinoId) return []
+  const { data, error } = await supabaseAnon
+    .from('atenciones')
+    .select(ATENCION_COLS_PUBLIC)
+    .eq('vecino_id', vecinoId)
+    .order('fecha_hora', { ascending: false })
+    .limit(100)
+  if (error) throw error
+  return data ?? []
+}
+
+export function useAtencionesVecino(vecinoId) {
+  return useQuery({
+    queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__'],
+    queryFn:  () => fetchAtencionesVecino(vecinoId),
+    enabled:  !!vecinoId,
+  })
+}
+
+// Documentos de una atención específica (para mostrar en el portal)
+async function fetchDocumentosAtencion(atencionId) {
+  if (!atencionId) return []
+  const { data, error } = await supabaseAnon
+    .from('hc_documentos')
+    .select('id, atencion_id, tipo, descripcion, storage_path, created_at')
+    .eq('atencion_id', atencionId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+
+  // Generar URLs públicas para cada documento
+  return (data ?? []).map(d => ({
+    ...d,
+    public_url: publicUrlFor(d.storage_path),
+    nombre_archivo: filenameFromPath(d.storage_path),
+  }))
+}
+
+function filenameFromPath(path) {
+  if (!path) return ''
+  const idx = path.lastIndexOf('/')
+  return idx === -1 ? path : path.slice(idx + 1)
+}
+
+function publicUrlFor(path) {
+  if (!path) return null
+  const { data } = supabaseAnon.storage.from('documentos-hc').getPublicUrl(path)
+  return data?.publicUrl ?? null
+}
+
+export function useDocumentosAtencion(atencionId) {
+  return useQuery({
+    queryKey: ['vecino', 'documentos', atencionId ?? '__none__'],
+    queryFn:  () => fetchDocumentosAtencion(atencionId),
+    enabled:  !!atencionId,
+    staleTime: 5 * 60 * 1000, // 5 minutos
   })
 }
