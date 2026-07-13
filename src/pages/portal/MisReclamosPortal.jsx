@@ -174,6 +174,41 @@ export default function MisReclamosPortal() {
   const { data: reclamos = [], isLoading } = useReclamosVecino(vecino?.id)
   const [reclamoSeleccionado, setReclamoSeleccionado] = useState(null)
 
+  // Restricción: solo auth_mode === 'supabase' puede ver reclamos
+  if (vecino?.auth_mode !== 'supabase') {
+    return (
+      <div className="min-h-screen bg-[#F5F4EF] py-8 px-4">
+        <div className="mx-auto max-w-2xl">
+          <button
+            onClick={() => navigate('/portal')}
+            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-[#0F1C35] transition-colors hover:text-[#C9A84C]"
+          >
+            ← Volver al inicio
+          </button>
+
+          <div className="rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10 p-6 sm:p-8">
+            <div className="mx-auto max-w-lg text-center">
+              <div className="mb-4 text-5xl">🔒</div>
+              <h2 className="font-sora text-lg font-bold text-[#0F1C35]">
+                Cuenta requerida para ver reclamos
+              </h2>
+              <p className="mt-3 text-sm text-[#0F1C35]/80">
+                Para ver tus reclamos necesitás ingresar con tu cuenta (email y contraseña).
+                Si entraste con acceso rápido, cerrá sesión y registrate o iniciá sesión con tu cuenta.
+              </p>
+              <button
+                onClick={() => navigate('/portal/acceso')}
+                className="mt-6 rounded-lg bg-[#0F1C35] px-6 py-3 font-semibold text-white transition-colors hover:bg-[#0F1C35]/90"
+              >
+                Ir a iniciar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F5F4EF]">

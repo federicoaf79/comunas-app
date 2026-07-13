@@ -380,6 +380,7 @@ function AtencionDocumentos({ atencionId }) {
 }
 
 function SaludTab({ vecino, atenciones, isLoading, error }) {
+  const navigate = useNavigate()
   const [carpetaActiva, setCarpetaActiva] = useState(null)
 
   // Agrupar atenciones por dependencia
@@ -402,6 +403,39 @@ function SaludTab({ vecino, atenciones, isLoading, error }) {
   // Abrir la primera carpeta por defecto
   if (carpetas.length > 0 && !carpetaActiva) {
     setCarpetaActiva(carpetas[0].id)
+  }
+
+  // Restricción: solo auth_mode === 'supabase' puede ver HC
+  if (vecino.auth_mode !== 'supabase') {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi salud</h2>
+          <p className="text-sm text-primary-500">
+            Información clínica y atenciones médicas.
+          </p>
+        </div>
+
+        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
+          <div className="mx-auto max-w-lg text-center">
+            <div className="mb-4 text-5xl">🔒</div>
+            <h3 className="font-sora text-lg font-bold text-primary">
+              Cuenta requerida para ver tu historia clínica
+            </h3>
+            <p className="mt-3 text-sm text-primary-700">
+              Para ver tu historia clínica necesitás ingresar con tu cuenta (email y contraseña).
+              Si entraste con acceso rápido, cerrá sesión y registrate o iniciá sesión con tu cuenta.
+            </p>
+            <button
+              onClick={() => navigate('/portal/acceso')}
+              className="btn-primary mt-6"
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        </div>
+      </section>
+    )
   }
 
   return (
@@ -809,17 +843,12 @@ export default function VecinoDashboard() {
   const { vecinoSession, clearVecinoSession } = useVecino()
   const [tab, setTab] = useState('turnos')
 
-  console.log('[VecinoDashboard] vecinoSession:', vecinoSession)
-  console.log('[VecinoDashboard] vecinoSession?.id:', vecinoSession?.id)
-
   // Los hooks van siempre antes del early return — los queries
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
   const turnosQ = useTurnosVecino(vecinoSession?.id)
   const atencionesQ = useAtencionesVecino(vecinoSession?.id)
   const reclamosQ = useReclamosVecino(vecinoSession?.id)
-
-  console.log('[VecinoDashboard] atencionesQ:', atencionesQ)
 
   function handleSignOut() {
     clearVecinoSession()
