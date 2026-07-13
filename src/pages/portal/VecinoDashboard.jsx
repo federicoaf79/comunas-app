@@ -420,10 +420,10 @@ function SaludTab({ vecino, atenciones, isLoading, error }) {
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
             <h3 className="font-sora text-lg font-bold text-primary">
-              Cuenta requerida para ver tu historia clínica
+              Cuenta requerida
             </h3>
             <p className="mt-3 text-sm text-primary-700">
-              Para ver tu historia clínica necesitás ingresar con tu cuenta (email y contraseña).
+              Para acceder a tu Historia Clínica, se requiere que tengas una cuenta registrada.
               Si entraste con acceso rápido, cerrá sesión y registrate o iniciá sesión con tu cuenta.
             </p>
             <button
@@ -678,7 +678,42 @@ function truncate(text, max = 60) {
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
 }
 
-function ReclamosTab({ reclamos, isLoading, error }) {
+function ReclamosTab({ vecino, reclamos, isLoading, error }) {
+  const navigate = useNavigate()
+
+  // Restricción: solo auth_mode === 'supabase' puede ver reclamos
+  if (vecino?.auth_mode !== 'supabase') {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reclamos</h2>
+          <p className="text-sm text-primary-500">
+            Denuncias y reclamos que registraste en el municipio.
+          </p>
+        </div>
+
+        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
+          <div className="mx-auto max-w-lg text-center">
+            <div className="mb-4 text-5xl">🔒</div>
+            <h3 className="font-sora text-lg font-bold text-primary">
+              Cuenta requerida
+            </h3>
+            <p className="mt-3 text-sm text-primary-700">
+              Para acceder a tus reclamos, se requiere que tengas una cuenta registrada.
+              Si entraste con acceso rápido, cerrá sesión y registrate o iniciá sesión con tu cuenta.
+            </p>
+            <button
+              onClick={() => navigate('/portal/acceso')}
+              className="btn-primary mt-6"
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="space-y-4">
       <div>
@@ -884,6 +919,7 @@ export default function VecinoDashboard() {
         {tab === 'datos'    && <DatosTab vecino={vecinoSession} />}
         {tab === 'reclamos' && (
           <ReclamosTab
+            vecino={vecinoSession}
             reclamos={reclamosQ.data ?? []}
             isLoading={reclamosQ.isLoading}
             error={reclamosQ.error}
