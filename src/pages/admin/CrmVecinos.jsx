@@ -169,11 +169,8 @@ export default function CrmVecinos() {
           </THead>
           <tbody>
             {rows.map(v => (
-              <Tr key={v.id}>
-                <Td onClick={() => {
-                  console.log('[CrmVecinos] onClick disparado para vecino:', v.id, v.nombre_completo || `${v.nombre} ${v.apellido}`)
-                  navigate(`/admin/crm/${v.id}`)
-                }} className="cursor-pointer">
+              <Tr key={v.id} onClick={() => navigate(`/admin/crm/${v.id}`)}>
+                <Td>
                   <div className="flex items-center gap-3">
                     <Avatar name={avatarName(v)} size="sm" />
                     <span className="font-medium text-primary">
@@ -181,11 +178,11 @@ export default function CrmVecinos() {
                     </span>
                   </div>
                 </Td>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.dni || '—'}</Td>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer"><ZonaBadge zona={v.zona} /></Td>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.barrio || '—'}</Td>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">{v.telefono || '—'}</Td>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer text-primary-400">{v.email || '—'}</Td>
+                <Td>{v.dni || '—'}</Td>
+                <Td><ZonaBadge zona={v.zona} /></Td>
+                <Td>{v.barrio || '—'}</Td>
+                <Td>{v.telefono || '—'}</Td>
+                <Td className="text-primary-400">{v.email || '—'}</Td>
                 <Td>
                   {v.portal_estado === 'pendiente' && (
                     <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-100">
