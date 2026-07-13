@@ -316,11 +316,11 @@ function ConsultaModalContent({ consulta }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Fecha</p>
-          <p className="mt-1 text-base font-semibold text-primary">{dateTimeOf(consulta.fecha)}</p>
+          <p className="mt-1 text-base font-semibold text-primary">{dateTimeOf(consulta.fecha_hora)}</p>
         </div>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Atendió</p>
-          <p className="mt-1 text-base font-semibold text-primary">{consulta.medico_nombre || '—'}</p>
+          <p className="mt-1 text-base font-semibold text-primary">{consulta.profesional_nombre || '—'}</p>
         </div>
       </div>
       <div>
@@ -376,7 +376,7 @@ function SaludTab({ consultas, isLoading, error }) {
                   {c.motivo || 'Consulta médica'}
                 </p>
                 <p className="mt-1 text-xs text-primary-500 sm:text-sm">
-                  {dateTimeOf(c.fecha)} · {c.medico_nombre || '—'}
+                  {dateTimeOf(c.fecha_hora)} · {c.profesional_nombre || '—'}
                 </p>
               </div>
               <button

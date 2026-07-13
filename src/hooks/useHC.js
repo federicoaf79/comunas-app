@@ -4,18 +4,17 @@ import { useAuth } from '../context/AuthContext'
 
 const TIMEOUT_MS = 8000
 
-// Select con joins para resolver nombre del médico y de la dependencia
-// en una sola ida. Se requieren policies de SELECT en `usuarios` y
+// Select con joins para resolver nombre del profesional y de la dependencia
+// en una sola ida. Se requieren policies de SELECT en `profesionales` y
 // `dependencias` para que las filas joineadas sean visibles; si el
 // caller no tiene acceso, el join devuelve null y mostramos '—'.
 //
-// hc_consultas en producción NO tiene `municipio_id` (la tenancy
-// se resuelve vía dependencia/vecino). El campo de prescripción
-// se llama `receta`, no `indicaciones`.
+// atenciones tiene los campos: id, vecino_id, dependencia_id, profesional_id,
+// fecha_hora, motivo, diagnostico, receta, signos_vitales.
 const CONSULTA_SELECT = `
-  id, vecino_id, dependencia_id, medico_id, fecha,
-  motivo, diagnostico, receta,
-  medico:medico_id ( id, nombre ),
+  id, vecino_id, dependencia_id, profesional_id, fecha_hora,
+  motivo, diagnostico, receta, signos_vitales,
+  profesional:profesional_id ( id, nombre ),
   dependencia:dependencia_id ( id, nombre )
 `
 
@@ -26,7 +25,7 @@ const DOCUMENTO_COLS = 'id, vecino_id, municipio_id, consulta_id, tipo, descripc
 function normalizeConsulta(c) {
   return {
     ...c,
-    medico:             c.medico?.nombre ?? null,
+    profesional:        c.profesional?.nombre ?? null,
     dependencia_nombre: c.dependencia?.nombre ?? null,
   }
 }
@@ -39,10 +38,10 @@ export async function fetchConsultas(vecinoId) {
 
   try {
     const { data, error } = await supabase
-      .from('hc_consultas')
+      .from('atenciones')
       .select(CONSULTA_SELECT)
       .eq('vecino_id', vecinoId)
-      .order('fecha', { ascending: false })
+      .order('fecha_hora', { ascending: false })
       .abortSignal(controller.signal)
     clearTimeout(timeoutId)
     if (error) {
@@ -63,7 +62,7 @@ export async function fetchConsultas(vecinoId) {
 
 export async function createConsulta(data) {
   const { data: row, error } = await supabase
-    .from('hc_consultas')
+    .from('atenciones')
     .insert(data)
     .select(CONSULTA_SELECT)
     .single()
@@ -154,18 +153,19 @@ export function useHC(vecinoId) {
     // formData: { motivo, diagnostico, receta }
     mutationFn: async (formData) => {
       // Resolvemos municipio sólo para poder buscar la dependencia
-      // (CAPS) por defecto. NO se inserta en hc_consultas porque la
+      // (CAPS) por defecto. NO se inserta en atenciones porque la
       // tabla no tiene `municipio_id`.
       const municipio_id   = await resolveMunicipioForVecino(perfil, vecinoId)
       const dependencia_id = await resolveDependenciaForMunicipio(perfil, municipio_id)
-      // medico_id hardcodeado al usuario actual (placeholder hasta que
-      // tengamos el flujo real de selección de médico).
-      const medico_id      = perfil?.id
+      // profesional_id hardcodeado al usuario actual (placeholder hasta que
+      // tengamos el flujo real de selección de profesional).
+      const profesional_id = perfil?.id
 
       return createConsulta({
         vecino_id: vecinoId,
         dependencia_id,
-        medico_id,
+        profesional_id,
+        fecha_hora:  new Date().toISOString(),
         motivo:      formData.motivo      ?? null,
         diagnostico: formData.diagnostico ?? null,
         receta:      formData.receta      ?? null,

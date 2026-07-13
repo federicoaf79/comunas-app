@@ -7,12 +7,12 @@ function formatFecha(iso) {
 }
 
 export default function ConsultaCard({ consulta }) {
-  const meta = [consulta.medico, consulta.dependencia_nombre].filter(Boolean).join(' · ')
+  const meta = [consulta.profesional, consulta.dependencia_nombre].filter(Boolean).join(' · ')
   return (
     <div className="card p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-primary">{consulta.motivo || 'Consulta'}</p>
-        <span className="text-xs text-primary-400">{formatFecha(consulta.fecha)}</span>
+        <span className="text-xs text-primary-400">{formatFecha(consulta.fecha_hora)}</span>
       </div>
       {meta && <p className="mt-1 text-xs text-primary-400">{meta}</p>}
       <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
