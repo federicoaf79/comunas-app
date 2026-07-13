@@ -8,6 +8,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+// Mapeo de día de semana (número) a texto en minúsculas sin tilde
+// (formato usado en tabla profesionales.dias_atencion)
+const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   if (req.method !== 'GET') return res.status(405).end()
@@ -31,16 +35,18 @@ export default async function handler(req, res) {
     // Fecha a consultar (default: hoy)
     const fechaConsulta = fecha ?? new Date().toISOString().split('T')[0]
     const diaSemana = new Date(fechaConsulta).getDay() // 0=Dom, 1=Lun...
+    const diaNombre = DIAS_SEMANA[diaSemana]           // 'lunes', 'martes', etc.
 
-    // Obtener médicos/agentes de guardia para esa dependencia
-    const { data: agentes } = await supabase
-      .from('medicos_agenda')
-      .select('id, nombre, especialidad, hora_inicio, hora_fin')
+    // Obtener profesionales activos que atienden ese día en esa dependencia
+    const { data: profesionales } = await supabase
+      .from('profesionales')
+      .select('id, nombre, especialidad, hora_desde, hora_hasta, duracion_turno_min')
       .eq('municipio_id', muni.id)
       .eq('dependencia_id', dependencia_id)
-      .contains('dias_semana', [diaSemana])
+      .eq('activo', true)
+      .contains('dias_atencion', [diaNombre])
 
-    if (!agentes?.length) {
+    if (!profesionales?.length) {
       return res.status(200).json({
         disponibles: [],
         mensaje: 'No hay agenda para ese día'
@@ -49,28 +55,25 @@ export default async function handler(req, res) {
 
     // Obtener turnos ya ocupados ese día
     const { data: turnosOcupados } = await supabase
-      .from('turnos')
-      .select('fecha_hora')
-      .eq('municipio_id', muni.id)
+      .from('turnos_agenda')
+      .select('fecha, hora_inicio')
       .eq('dependencia_id', dependencia_id)
-      .gte('fecha_hora', `${fechaConsulta}T00:00:00`)
-      .lte('fecha_hora', `${fechaConsulta}T23:59:59`)
-      .in('estado', ['pendiente', 'confirmado', 'en_curso'])
+      .eq('fecha', fechaConsulta)
+      .in('estado', ['pendiente', 'confirmado'])
 
-    const horasOcupadas = turnosOcupados?.map(t =>
-      t.fecha_hora.slice(11, 16)
-    ) ?? []
+    const horasOcupadas = turnosOcupados?.map(t => t.hora_inicio) ?? []
 
-    // Generar slots de 30 minutos por agente
+    // Generar slots por profesional usando su duracion_turno_min
     const slots = []
-    for (const agente of agentes) {
-      const [hIni, mIni] = agente.hora_inicio.split(':').map(Number)
-      const [hFin, mFin] = agente.hora_fin.split(':').map(Number)
+    for (const profesional of profesionales) {
+      const [hIni, mIni] = profesional.hora_desde.split(':').map(Number)
+      const [hFin, mFin] = profesional.hora_hasta.split(':').map(Number)
+      const duracion = profesional.duracion_turno_min || 30 // default 30 si null
 
       let cursor = hIni * 60 + mIni
       const fin = hFin * 60 + mFin
 
-      while (cursor + 30 <= fin) {
+      while (cursor + duracion <= fin) {
         const hh = String(Math.floor(cursor / 60)).padStart(2, '0')
         const mm = String(cursor % 60).padStart(2, '0')
         const hora = `${hh}:${mm}`
@@ -80,10 +83,11 @@ export default async function handler(req, res) {
             hora,
             fecha: fechaConsulta,
             fecha_hora: `${fechaConsulta}T${hora}:00-03:00`,
-            agente: agente.nombre,
+            profesional: profesional.nombre,
+            especialidad: profesional.especialidad,
           })
         }
-        cursor += 30
+        cursor += duracion
       }
     }
 
