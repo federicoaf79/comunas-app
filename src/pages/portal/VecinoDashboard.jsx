@@ -809,12 +809,17 @@ export default function VecinoDashboard() {
   const { vecinoSession, clearVecinoSession } = useVecino()
   const [tab, setTab] = useState('turnos')
 
+  console.log('[VecinoDashboard] vecinoSession:', vecinoSession)
+  console.log('[VecinoDashboard] vecinoSession?.id:', vecinoSession?.id)
+
   // Los hooks van siempre antes del early return — los queries
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
   const turnosQ = useTurnosVecino(vecinoSession?.id)
   const atencionesQ = useAtencionesVecino(vecinoSession?.id)
   const reclamosQ = useReclamosVecino(vecinoSession?.id)
+
+  console.log('[VecinoDashboard] atencionesQ:', atencionesQ)
 
   function handleSignOut() {
     clearVecinoSession()

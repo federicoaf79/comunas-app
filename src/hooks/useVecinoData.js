@@ -163,12 +163,19 @@ const ATENCION_COLS_PUBLIC = `
 
 async function fetchAtencionesVecino(vecinoId) {
   if (!vecinoId) return []
+
+  console.log('[fetchAtencionesVecino] vecinoId:', vecinoId)
+
   const { data, error } = await supabaseAnon
     .from('atenciones')
     .select(ATENCION_COLS_PUBLIC)
     .eq('vecino_id', vecinoId)
     .order('fecha_hora', { ascending: false })
     .limit(100)
+
+  console.log('[fetchAtencionesVecino] data:', data)
+  console.log('[fetchAtencionesVecino] error:', error)
+
   if (error) throw error
   return data ?? []
 }
