@@ -170,7 +170,10 @@ export default function CrmVecinos() {
           <tbody>
             {rows.map(v => (
               <Tr key={v.id}>
-                <Td onClick={() => navigate(`/admin/crm/${v.id}`)} className="cursor-pointer">
+                <Td onClick={() => {
+                  console.log('[CrmVecinos] onClick disparado para vecino:', v.id, v.nombre_completo || `${v.nombre} ${v.apellido}`)
+                  navigate(`/admin/crm/${v.id}`)
+                }} className="cursor-pointer">
                   <div className="flex items-center gap-3">
                     <Avatar name={avatarName(v)} size="sm" />
                     <span className="font-medium text-primary">

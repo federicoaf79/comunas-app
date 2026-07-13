@@ -29,6 +29,8 @@ export default function VecinoDetail() {
   const { vecino: v, isLoading, error } = useVecino(id)
   const [tab, setTab] = useState('datos')
 
+  console.log('[VecinoDetail] Componente montado/actualizado - id:', id, 'isLoading:', isLoading, 'error:', error, 'vecino:', v)
+
   if (isLoading) {
     return (
       <div className="card flex items-center justify-center p-10">
