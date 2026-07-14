@@ -311,7 +311,7 @@ export default function SacarTurnoFormPortal() {
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
     const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
     fetch(
-      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${portalMunicipioId}&activa=eq.true&modulo_turnos=eq.true&select=id,municipio_id,tipo,nombre,slug&order=nombre.asc`,
+      `${SUPABASE_URL}/rest/v1/dependencias?municipio_id=eq.${portalMunicipioId}&activa=eq.true&modulo_turnos=eq.true&tipo=not.in.(polideportivo,deporte)&select=id,municipio_id,tipo,nombre,slug&order=nombre.asc`,
       {
         headers: {
           apikey: SUPABASE_ANON_KEY,

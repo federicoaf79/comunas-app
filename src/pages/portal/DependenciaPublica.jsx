@@ -23,7 +23,9 @@ import Spinner from '../../components/ui/Spinner'
 
 // Tipos de dependencia que aceptan turnos online — alineado con
 // DEP_OPTIONS de SacarTurnoFormPortal.
-const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'polideportivo', 'deporte', 'odontologia'])
+// NOTA: 'polideportivo' y 'deporte' NO usan el formulario genérico,
+// tienen su propio flujo de reservas (/portal/polideportivo/reservar).
+const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'odontologia'])
 
 // Fallback de horario por tipo cuando la dependencia no tiene
 // `horario_atencion` cargado en la DB.
@@ -317,10 +319,14 @@ export default function DependenciaPublica() {
                   <div className="mt-5 flex flex-wrap gap-3">
                     {aceptaTurnos && (
                       <Link
-                        to={`/portal/turno?dep=${encodeURIComponent(tipoMatch)}`}
+                        to={
+                          tipoMatch === 'polideportivo' || tipoMatch === 'deporte'
+                            ? '/portal/polideportivo/reservar'
+                            : `/portal/turno?dep=${encodeURIComponent(tipoMatch)}`
+                        }
                         className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-all hover:bg-accent-600 hover:text-white active:scale-95"
                       >
-                        Sacar turno
+                        {tipoMatch === 'polideportivo' || tipoMatch === 'deporte' ? 'Reservar cancha' : 'Sacar turno'}
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                         </svg>
@@ -576,10 +582,14 @@ export default function DependenciaPublica() {
               <BackLink />
               {aceptaTurnos && (
                 <Link
-                  to={`/portal/turno?dep=${encodeURIComponent(tipoMatch)}`}
+                  to={
+                    tipoMatch === 'polideportivo' || tipoMatch === 'deporte'
+                      ? '/portal/polideportivo/reservar'
+                      : `/portal/turno?dep=${encodeURIComponent(tipoMatch)}`
+                  }
                   className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-primary-900 shadow-sm transition-all hover:bg-accent-600 hover:text-white active:scale-95"
                 >
-                  Sacar turno
+                  {tipoMatch === 'polideportivo' || tipoMatch === 'deporte' ? 'Reservar cancha' : 'Sacar turno'}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" />
                   </svg>
