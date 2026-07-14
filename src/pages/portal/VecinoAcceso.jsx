@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
 import { supabase } from '../../lib/supabase'
@@ -180,6 +180,19 @@ function LoginTab({ setVecinoSession, navigate }) {
       >
         Ingresar
       </Button>
+
+      {/* Link a acceso rápido */}
+      <div className="mt-4 text-center">
+        <Link
+          to="/acceso"
+          className="inline-flex items-center gap-2 text-xs font-medium text-primary-600 hover:text-accent"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          ¿Solo necesitás sacar un turno rápido? →
+        </Link>
+      </div>
     </form>
   )
 }

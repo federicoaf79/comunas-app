@@ -107,7 +107,7 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
-    to:    '/mi-cuenta/acceso',
+    to:    '/portal/acceso',
     label: 'Mi cuenta',
     desc:  'Turnos, salud y datos personales',
     icon: (
@@ -409,10 +409,10 @@ function IngresarButton({ onClick, mobile = false }) {
     target = adminRoute
     label  = 'Panel →'
   } else if (isVecinoLogued) {
-    target = '/mi-cuenta'
+    target = '/portal/mi-cuenta'
     label  = `Hola ${firstName(vecinoSession)} →`
   } else {
-    target = '/acceso'
+    target = '/portal/acceso'
     label  = 'Ingresar'
   }
 
