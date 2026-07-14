@@ -134,6 +134,12 @@ async function main() {
       logSuccess(`Usuario ya existe: ${EMAIL}`)
       logSuccess(`User ID: ${existingUser.id}`)
       console.log('   ℹ️  Reutilizando usuario existente (idempotencia)')
+
+      // Resetear password a la generada en este script para que el output sea correcto
+      await supabase.auth.admin.updateUserById(existingUser.id, {
+        password: PASSWORD
+      })
+      logSuccess(`Password actualizada`)
     } else {
       // Crear nuevo usuario
       const { data: newUser, error: authError } = await supabase.auth.admin.createUser({
