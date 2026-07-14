@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino } from '../../hooks/useVecinoData'
+import { useReservasVecino } from '../../hooks/useReservasDeportivas'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
@@ -42,6 +43,7 @@ const TABS = [
   { key: 'salud',    label: 'Mi salud',     short: 'Salud' },
   { key: 'datos',    label: 'Mis datos',    short: 'Datos' },
   { key: 'reclamos', label: 'Mis reclamos', short: 'Reclamos' },
+  { key: 'reservas', label: 'Mis reservas', short: 'Reservas' },
   { key: 'familia',  label: 'Mi familia',   short: 'Familia' },
 ]
 
@@ -716,11 +718,16 @@ function ReclamosTab({ vecino, reclamos, isLoading, error }) {
 
   return (
     <section className="space-y-4">
-      <div>
-        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reclamos</h2>
-        <p className="text-sm text-primary-500">
-          Denuncias y reclamos que registraste en el municipio.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reclamos</h2>
+          <p className="text-sm text-primary-500">
+            Denuncias y reclamos que registraste en el municipio.
+          </p>
+        </div>
+        <Link to="/portal/reclamos/nuevo" className="btn-accent shrink-0">
+          + Nuevo reclamo
+        </Link>
       </div>
 
       {isLoading && (
@@ -740,9 +747,6 @@ function ReclamosTab({ vecino, reclamos, isLoading, error }) {
           <p className="text-sm text-primary-500">
             No tenés reclamos registrados.
           </p>
-          <Link to="/portal/turno" className="btn-accent mt-4 inline-flex">
-            Hacer un reclamo
-          </Link>
         </div>
       )}
 
@@ -792,7 +796,134 @@ function ReclamosTab({ vecino, reclamos, isLoading, error }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// E) Mi familia — turnos sacados para familiares
+// E) Mis reservas — reservas deportivas del Polideportivo
+// ─────────────────────────────────────────────────────────────────
+
+const ESTADO_RESERVA_CLASS = {
+  pendiente:  'inline-flex items-center gap-1 rounded-full bg-accent/20 px-3 py-1 text-xs font-semibold text-accent-800',
+  confirmado: 'inline-flex items-center gap-1 rounded-full bg-ok/20 px-3 py-1 text-xs font-semibold text-ok-800',
+  cancelado:  'inline-flex items-center gap-1 rounded-full bg-danger/20 px-3 py-1 text-xs font-semibold text-danger-800',
+  atendido:   'inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary',
+}
+
+const ESTADO_RESERVA_LABEL = {
+  pendiente:  '⏳ Pendiente',
+  confirmado: '✅ Confirmado',
+  cancelado:  '❌ Cancelado',
+  atendido:   '✔️ Completado',
+}
+
+function ReservasTab({ vecino, reservas, isLoading, error }) {
+  const navigate = useNavigate()
+
+  // Guard: requiere cuenta completa (no acceso rápido)
+  if (vecino.auth_mode !== 'supabase') {
+    return (
+      <section className="space-y-4">
+        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
+          <div className="mx-auto max-w-lg text-center">
+            <div className="mb-4 text-5xl">🔒</div>
+            <h3 className="font-sora text-lg font-bold text-primary">
+              Cuenta completa requerida
+            </h3>
+            <p className="mt-3 text-sm text-primary-700">
+              El acceso rápido (DNI + teléfono) no permite gestionar reservas.
+              Para acceder a tus reservas, cerrá sesión y registrate o iniciá sesión con tu cuenta.
+            </p>
+            <button
+              onClick={() => navigate('/portal/acceso')}
+              className="btn-primary mt-6"
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reservas</h2>
+          <p className="text-sm text-primary-500">
+            Historial de reservas del Polideportivo Municipal.
+          </p>
+        </div>
+        <Link to="/portal/polideportivo/reservar" className="btn-accent shrink-0">
+          + Nueva reserva
+        </Link>
+      </div>
+
+      {isLoading && (
+        <div className="card flex items-center justify-center p-8">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          No pudimos cargar tus reservas. Probá de nuevo.
+        </div>
+      )}
+
+      {!isLoading && !error && reservas.length === 0 && (
+        <div className="card p-8 text-center">
+          <p className="text-sm text-primary-500">
+            No tenés reservas registradas todavía.
+          </p>
+        </div>
+      )}
+
+      {!isLoading && !error && reservas.length > 0 && (
+        <div className="space-y-3">
+          {reservas.map(r => (
+            <div key={r.id} className="card p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-primary sm:text-base">
+                      {dateOf(r.fecha)}
+                    </p>
+                    <span className="text-xs text-primary-500 sm:text-sm">
+                      {timeOf(r.hora_inicio)} - {timeOf(r.hora_fin)}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1 text-xs text-primary-600 sm:text-sm">
+                    {r.espacio?.nombre && (
+                      <p>
+                        <span className="font-medium">Espacio:</span> {r.espacio.nombre}
+                      </p>
+                    )}
+                    {r.motivo && (
+                      <p>
+                        <span className="font-medium">Actividad:</span> {r.motivo}
+                      </p>
+                    )}
+                    {r.observaciones && (
+                      <p>
+                        <span className="font-medium">Observaciones:</span> {r.observaciones}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <span className={ESTADO_RESERVA_CLASS[r.estado] ?? ESTADO_RESERVA_CLASS.pendiente}>
+                    {ESTADO_RESERVA_LABEL[r.estado] ?? r.estado}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// F) Mi familia — turnos sacados para familiares
 // ─────────────────────────────────────────────────────────────────
 
 function FamiliaTab({ turnos, isLoading, error }) {
@@ -884,6 +1015,7 @@ export default function VecinoDashboard() {
   const turnosQ = useTurnosVecino(vecinoSession?.id)
   const atencionesQ = useAtencionesVecino(vecinoSession?.id)
   const reclamosQ = useReclamosVecino(vecinoSession?.id)
+  const reservasQ = useReservasVecino(vecinoSession?.id)
 
   function handleSignOut() {
     clearVecinoSession()
@@ -923,6 +1055,14 @@ export default function VecinoDashboard() {
             reclamos={reclamosQ.data ?? []}
             isLoading={reclamosQ.isLoading}
             error={reclamosQ.error}
+          />
+        )}
+        {tab === 'reservas' && (
+          <ReservasTab
+            vecino={vecinoSession}
+            reservas={reservasQ.data ?? []}
+            isLoading={reservasQ.isLoading}
+            error={reservasQ.error}
           />
         )}
         {tab === 'familia'  && (
