@@ -62,10 +62,12 @@ import TramitesPortal      from './pages/portal/TramitesPortal'
 import HistoriaPage        from './pages/portal/HistoriaPage'
 import VecinoAcceso        from './pages/portal/VecinoAcceso'
 import ResetPassword       from './pages/portal/ResetPassword'
-import VecinoDashboard     from './pages/portal/VecinoDashboard'
-import NuevoReclamoPortal  from './pages/portal/NuevoReclamoPortal'
-import MisReclamosPortal   from './pages/portal/MisReclamosPortal'
-import SuperadminDashboard from './pages/superadmin/SuperadminDashboard'
+import VecinoDashboard        from './pages/portal/VecinoDashboard'
+import NuevoReclamoPortal     from './pages/portal/NuevoReclamoPortal'
+import MisReclamosPortal      from './pages/portal/MisReclamosPortal'
+import ReservarPolideportivo  from './pages/portal/ReservarPolideportivo'
+import MisReservas            from './pages/portal/MisReservas'
+import SuperadminDashboard    from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
 import SuperadminDominios from './pages/superadmin/Dominios'
@@ -162,6 +164,8 @@ const router = createBrowserRouter([
       { path: '/portal/mi-cuenta', element: <VecinoDashboard /> },
       { path: '/portal/reclamos/nuevo', element: <NuevoReclamoPortal /> },
       { path: '/portal/reclamos', element: <MisReclamosPortal /> },
+      { path: '/portal/polideportivo/reservar', element: <ReservarPolideportivo /> },
+      { path: '/portal/mis-reservas', element: <MisReservas /> },
     ],
   },
 

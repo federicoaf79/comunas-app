@@ -96,6 +96,17 @@ const ACCESOS_RAPIDOS = [
     ),
   },
   {
+    to:    '/portal/polideportivo/reservar',
+    label: 'Reservar Cancha',
+    desc:  'Polideportivo Municipal',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" className="h-8 w-8">
+        <circle cx="12" cy="12" r="9" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12c4 0 6 4 6 9M21 12c-4 0-6 4-6 9M3 12c4 0 6-4 6-9M21 12c-4 0-6-4-6-9" />
+      </svg>
+    ),
+  },
+  {
     to:    '/mi-cuenta/acceso',
     label: 'Mi cuenta',
     desc:  'Turnos, salud y datos personales',
@@ -649,7 +660,7 @@ function AccesosRapidos() {
     <section aria-labelledby="accesos-h2" className="border-b border-border bg-white">
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
         <h2 id="accesos-h2" className="sr-only">Accesos rápidos</h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
           {ACCESOS_RAPIDOS.map(a => {
             const inner = (
               <>

@@ -11,7 +11,8 @@
       "Bash(npx vite *)",
       "Bash(git fetch *)",
       "Bash(git ls-remote *)",
-      "Artifact"
+      "Artifact",
+      "PowerShell(npm run *)"
     ]
   }
 }

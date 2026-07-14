@@ -13,6 +13,9 @@ import {
 import {
   useInventario, useCreateInventarioItem, useUpdateInventarioItem,
 } from '../../hooks/useInventario'
+import {
+  useReservasPolideportivo, useActualizarEstadoReserva,
+} from '../../hooks/useReservasDeportivas'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -1275,26 +1278,175 @@ function ReclamosTab({ municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Tab: Reservas canchas (deporte) — placeholder simple
+// Tab: Reservas canchas (deporte) — sistema funcional
 // ─────────────────────────────────────────────────────────────────
 
-function ReservasCanchasTab() {
+function ReservasCanchasTab({ municipioId, dependenciaId }) {
+  const [filtroEstado, setFiltroEstado] = useState('')
+  const [filtroFecha, setFiltroFecha] = useState('')
+
+  const { data: reservas = [], isLoading } = useReservasPolideportivo(
+    dependenciaId,
+    { estado: filtroEstado || undefined, fecha: filtroFecha || undefined }
+  )
+
+  const actualizarEstado = useActualizarEstadoReserva()
+
+  const handleCambiarEstado = async (id, nuevoEstado) => {
+    if (!window.confirm(`¿Confirmar cambio a "${ESTADO_TURNO_LABEL[nuevoEstado]}"?`)) return
+    try {
+      await actualizarEstado.mutateAsync({ id, estado: nuevoEstado })
+    } catch (err) {
+      alert(`Error: ${err.message}`)
+    }
+  }
+
+  if (isLoading) return <Spinner />
+
   return (
-    <div className="card p-10 text-center">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="mx-auto h-12 w-12 text-primary-300">
-        <circle cx="12" cy="12" r="9" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 12c4 0 6 4 6 9M21 12c-4 0-6 4-6 9M3 12c4 0 6-4 6-9M21 12c-4 0-6-4-6-9" />
-      </svg>
-      <p className="mt-3 font-sora text-base font-semibold text-primary">
-        Reservas de canchas
-      </p>
-      <p className="mt-1 text-sm text-primary-500">
-        Próximamente — calendario de reservas para canchas y espacios deportivos.
-      </p>
-      <p className="mt-3 text-xs text-primary-400">
-        Por ahora gestioná las reservas de eventos en{' '}
-        <Link to="/admin/sum" className="font-semibold text-primary hover:underline">/admin/sum</Link>.
-      </p>
+    <div className="space-y-4">
+      {/* Header con filtros */}
+      <div className="card p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <label className="mb-1 block text-xs font-medium text-primary">
+              Estado
+            </label>
+            <Select
+              value={filtroEstado}
+              onChange={e => setFiltroEstado(e.target.value)}
+              className="w-full"
+            >
+              <option value="">Todos</option>
+              <option value="pendiente">Pendientes</option>
+              <option value="confirmado">Confirmados</option>
+              <option value="cancelado">Cancelados</option>
+            </Select>
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="mb-1 block text-xs font-medium text-primary">
+              Fecha
+            </label>
+            <input
+              type="date"
+              value={filtroFecha}
+              onChange={e => setFiltroFecha(e.target.value)}
+              className="input w-full"
+            />
+          </div>
+          {(filtroEstado || filtroFecha) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setFiltroEstado(''); setFiltroFecha('') }}
+              className="mt-5"
+            >
+              Limpiar
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabla de reservas */}
+      {reservas.length === 0 ? (
+        <div className="card p-8 text-center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="mx-auto h-12 w-12 text-primary-300">
+            <circle cx="12" cy="12" r="9" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 12c4 0 6 4 6 9M21 12c-4 0-6 4-6 9M3 12c4 0 6-4 6-9M21 12c-4 0-6-4-6-9" />
+          </svg>
+          <p className="mt-3 text-sm text-primary-500">
+            {filtroEstado || filtroFecha
+              ? 'No hay reservas con los filtros aplicados'
+              : 'No hay reservas registradas todavía'}
+          </p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Fecha</Th>
+                <Th>Horario</Th>
+                <Th>Vecino</Th>
+                <Th>Actividad</Th>
+                <Th>Espacio</Th>
+                <Th>Estado</Th>
+                <Th className="text-right">Acciones</Th>
+              </Tr>
+            </THead>
+            <tbody>
+              {reservas.map(r => (
+                <Tr key={r.id}>
+                  <Td>{dateOf(r.fecha)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {timeOf(r.hora_inicio)} - {timeOf(r.hora_fin)}
+                  </Td>
+                  <Td>
+                    <div className="text-sm font-medium text-primary">
+                      {r.vecino?.nombre_completo}
+                    </div>
+                    {r.vecino?.telefono && (
+                      <div className="text-xs text-primary-500">
+                        {r.vecino.telefono}
+                      </div>
+                    )}
+                  </Td>
+                  <Td>
+                    <div className="text-sm">{r.motivo || '—'}</div>
+                    {r.observaciones && (
+                      <div className="text-xs text-primary-500 mt-0.5">
+                        {r.observaciones}
+                      </div>
+                    )}
+                  </Td>
+                  <Td>
+                    <span className="text-xs text-primary-500">
+                      {r.espacio?.nombre}
+                    </span>
+                  </Td>
+                  <Td>
+                    {r.estado === 'pendiente' && <span className="badge-warning">Pendiente</span>}
+                    {r.estado === 'confirmado' && <span className="badge-ok">Confirmado</span>}
+                    {r.estado === 'cancelado' && <span className="badge-danger">Cancelado</span>}
+                    {r.estado === 'atendido' && <span className="badge-ok">Completado</span>}
+                  </Td>
+                  <Td className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {r.estado === 'pendiente' && (
+                        <>
+                          <Button
+                            size="xs"
+                            variant="primary"
+                            onClick={() => handleCambiarEstado(r.id, 'confirmado')}
+                          >
+                            Confirmar
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="danger"
+                            onClick={() => handleCambiarEstado(r.id, 'cancelado')}
+                          >
+                            Cancelar
+                          </Button>
+                        </>
+                      )}
+                      {r.estado === 'confirmado' && (
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() => handleCambiarEstado(r.id, 'cancelado')}
+                        >
+                          Cancelar
+                        </Button>
+                      )}
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+      )}
     </div>
   )
 }
@@ -1453,7 +1605,7 @@ export default function DependenciaGeneral() {
             {seccion === 'contacto'       && <ContactoTab dep={dep} />}
             {seccion === 'beneficiarios'  && <BeneficiariosTab municipioId={municipioId} />}
             {seccion === 'reclamos'       && <ReclamosTab      municipioId={municipioId} />}
-            {seccion === 'reservas'       && <ReservasCanchasTab />}
+            {seccion === 'reservas'       && <ReservasCanchasTab municipioId={municipioId} dependenciaId={dep?.id} />}
             {seccion === 'calendario'     && <CalendarioEscolarTab />}
           </div>
 
