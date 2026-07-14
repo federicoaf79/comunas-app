@@ -15,7 +15,7 @@ export function useEspaciosDeportivos(municipioId, { enabled = true } = {}) {
   return useQuery({
     queryKey: ['espacios_deportivos', municipioId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('espacios_deportivos')
         .select('*')
         .eq('municipio_id', municipioId)
@@ -93,7 +93,7 @@ export function useReservasVecino(vecinoId, { enabled = true } = {}) {
   return useQuery({
     queryKey: ['reservas_vecino', vecinoId],
     queryFn: async () => {
-      const { data, error } = await supabasePublic
+      const { data, error } = await supabase
         .from('turnos_agenda')
         .select(`
           id, fecha, hora_inicio, hora_fin, estado, motivo, observaciones,
@@ -169,7 +169,7 @@ export function useCrearReservaDeportiva() {
       }
 
       // Validación server-side: verificar solapamiento
-      const { data: reservasExistentes } = await supabasePublic
+      const { data: reservasExistentes } = await supabase
         .from('turnos_agenda')
         .select('id, hora_inicio, hora_fin')
         .eq('espacio_id', payload.espacio_id)
@@ -190,7 +190,7 @@ export function useCrearReservaDeportiva() {
       }
 
       // Insertar reserva
-      const { data, error } = await supabasePublic
+      const { data, error } = await supabase
         .from('turnos_agenda')
         .insert({
           municipio_id: payload.municipio_id,
