@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino } from '../../hooks/useVecinoData'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
+import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
@@ -1012,9 +1013,14 @@ export default function VecinoDashboard() {
   // Los hooks van siempre antes del early return — los queries
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
-  const turnosQ = useTurnosVecino(vecinoSession?.id)
-  const atencionesQ = useAtencionesVecino(vecinoSession?.id)
-  const reclamosQ = useReclamosVecino(vecinoSession?.id)
+  //
+  // IMPORTANTE: VecinoDashboard es para vecinos con auth_mode='supabase'
+  // (cuenta completa, con sesión auth real). Usamos el cliente autenticado
+  // `supabase` en vez de `supabaseAnon` para que las RLS con
+  // current_vecino_id() funcionen correctamente.
+  const turnosQ = useTurnosVecino(vecinoSession?.id, supabase)
+  const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase)
+  const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase)
   const reservasQ = useReservasVecino(vecinoSession?.id)
 
   function handleSignOut() {

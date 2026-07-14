@@ -1,13 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabaseAnon } from '../lib/supabaseAnon'
+import { supabase } from '../lib/supabase'
 
 // =============================================================
 // Hooks de datos del Portal del Vecino
 //
-// Todos consultan vía supabaseAnon — las RLS de portal público
-// (migration 20250507000002_portal_publico.sql) habilitan SELECT
-// anon en vecinos/turnos/dependencias. La HC se accede vía RPC
-// `consultas_publicas_por_vecino` que valida DNI + teléfono.
+// IMPORTANTE: Estos hooks ahora aceptan un parámetro `client`
+// opcional para usar el cliente autenticado (supabase) en vez
+// de supabaseAnon. El dashboard de cuenta completa (VecinoDashboard)
+// debe pasar `supabase` para que las RLS con current_vecino_id()
+// funcionen correctamente. El acceso rápido (sin sesión) sigue
+// usando supabaseAnon por defecto.
 // =============================================================
 
 const TURNO_COLS = `
@@ -17,9 +20,9 @@ const TURNO_COLS = `
 
 // Mis turnos — todos los turnos del vecino (futuros + históricos),
 // orden DESC por fecha + hora_inicio. El componente decide cómo agruparlos.
-async function fetchTurnosByVecino(vecinoId) {
+async function fetchTurnosByVecino(vecinoId, client = supabaseAnon) {
   if (!vecinoId) return []
-  const { data, error } = await supabaseAnon
+  const { data, error } = await client
     .from('turnos_agenda')
     .select(TURNO_COLS)
     .eq('vecino_id', vecinoId)
@@ -30,10 +33,11 @@ async function fetchTurnosByVecino(vecinoId) {
   return data ?? []
 }
 
-export function useTurnosVecino(vecinoId) {
+export function useTurnosVecino(vecinoId, client = supabaseAnon) {
+  const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
-    queryKey: ['vecino', 'turnos', vecinoId ?? '__none__'],
-    queryFn:  () => fetchTurnosByVecino(vecinoId),
+    queryKey: ['vecino', 'turnos', vecinoId ?? '__none__', clientType],
+    queryFn:  () => fetchTurnosByVecino(vecinoId, client),
     enabled:  !!vecinoId,
   })
 }
@@ -127,9 +131,9 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 const RECLAMO_COLS_PUBLIC =
   'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at'
 
-async function fetchReclamosByVecino(vecinoId) {
+async function fetchReclamosByVecino(vecinoId, client = supabaseAnon) {
   if (!vecinoId) return []
-  const { data, error } = await supabaseAnon
+  const { data, error } = await client
     .from('reclamos')
     .select(RECLAMO_COLS_PUBLIC)
     .eq('vecino_id', vecinoId)
@@ -139,10 +143,11 @@ async function fetchReclamosByVecino(vecinoId) {
   return data ?? []
 }
 
-export function useReclamosVecino(vecinoId) {
+export function useReclamosVecino(vecinoId, client = supabaseAnon) {
+  const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
-    queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__'],
-    queryFn:  () => fetchReclamosByVecino(vecinoId),
+    queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__', clientType],
+    queryFn:  () => fetchReclamosByVecino(vecinoId, client),
     enabled:  !!vecinoId,
   })
 }
@@ -161,9 +166,9 @@ const ATENCION_COLS_PUBLIC = `
   dependencia:dependencia_id ( id, nombre )
 `
 
-async function fetchAtencionesVecino(vecinoId) {
+async function fetchAtencionesVecino(vecinoId, client = supabaseAnon) {
   if (!vecinoId) return []
-  const { data, error } = await supabaseAnon
+  const { data, error } = await client
     .from('atenciones')
     .select(ATENCION_COLS_PUBLIC)
     .eq('vecino_id', vecinoId)
@@ -173,10 +178,11 @@ async function fetchAtencionesVecino(vecinoId) {
   return data ?? []
 }
 
-export function useAtencionesVecino(vecinoId) {
+export function useAtencionesVecino(vecinoId, client = supabaseAnon) {
+  const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
-    queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__'],
-    queryFn:  () => fetchAtencionesVecino(vecinoId),
+    queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__', clientType],
+    queryFn:  () => fetchAtencionesVecino(vecinoId, client),
     enabled:  !!vecinoId,
   })
 }
