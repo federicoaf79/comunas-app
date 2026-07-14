@@ -21,11 +21,11 @@ import Spinner from '../../components/ui/Spinner'
 //   7) Banner gold para admin si la dep está vacía
 // =============================================================
 
-// Tipos de dependencia que aceptan turnos online — alineado con
-// DEP_OPTIONS de SacarTurnoFormPortal.
-// NOTA: 'polideportivo' y 'deporte' NO usan el formulario genérico,
-// tienen su propio flujo de reservas (/portal/polideportivo/reservar).
-const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'odontologia'])
+// Tipos de dependencia que aceptan turnos online (o reservas).
+// NOTA: 'polideportivo' y 'deporte' usan flujo dedicado de reservas
+// (/portal/polideportivo/reservar) en vez del formulario genérico de turnos.
+// La lógica condicional en los botones detecta el tipo y redirige al flujo correcto.
+const TIPOS_CON_TURNOS = new Set(['caps', 'salud', 'juzgado', 'sum', 'social', 'ayuda_social', 'intendencia', 'admin', 'polideportivo', 'deporte', 'odontologia'])
 
 // Fallback de horario por tipo cuando la dependencia no tiene
 // `horario_atencion` cargado en la DB.
