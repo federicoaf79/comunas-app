@@ -21,8 +21,10 @@ export default async function handler(req, res) {
 
   try {
     const ahora = new Date()
-    const desde = new Date(ahora.getTime() + 23 * 60 * 60 * 1000)
-    const hasta = new Date(ahora.getTime() + 25 * 60 * 60 * 1000)
+    // Ventana ampliada para compensar ejecución única diaria (plan Vercel Hobby)
+    // 20-28hs = ventana de 8 horas para cubrir recordatorios "24hs antes"
+    const desde = new Date(ahora.getTime() + 20 * 60 * 60 * 1000)
+    const hasta = new Date(ahora.getTime() + 28 * 60 * 60 * 1000)
     const fechaObjetivo = desde.toISOString().split('T')[0]
     const fechaObjetivo2 = hasta.toISOString().split('T')[0]
 
@@ -46,7 +48,7 @@ export default async function handler(req, res) {
     const resultados = []
 
     for (const turno of turnos ?? []) {
-      // Filtrar por ventana exacta de 23-25hs
+      // Filtrar por ventana exacta de 20-28hs
       const fechaHora = new Date(`${turno.fecha}T${turno.hora_inicio}:00-03:00`)
       if (fechaHora < desde || fechaHora > hasta) continue
 

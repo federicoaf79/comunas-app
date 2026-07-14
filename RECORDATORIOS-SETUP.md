@@ -50,20 +50,34 @@ Para que los recordatorios automáticos funcionen, deben configurarse las siguie
 
 ## ⏰ Configuración del Schedule
 
-**Actual:** `0 * * * *` (cada hora en punto)
+**Actual:** `0 9 * * *` (una vez al día a las 9am UTC = 6am Argentina)
 
-### Si el plan de Vercel es FREE:
-El plan Free solo permite **1 ejecución diaria** de cron jobs.
+### Plan Vercel Hobby/Free:
+Los planes Hobby y Free permiten **1 ejecución diaria** de cron jobs.
 
-**Cambiar a:** `0 9 * * *` (una vez al día a las 9am UTC)
+**Schedule configurado:** `0 9 * * *`
+- 9am UTC = 6am Argentina (UTC-3)
+- Horario de mañana para dar margen sobre turnos del día siguiente
 
-**Y ajustar la ventana en `cron-recordatorios.js`:**
+**Ventana ampliada en `cron-recordatorios.js`:**
 ```javascript
 const desde = new Date(ahora.getTime() + 20 * 60 * 60 * 1000) // 20hs
 const hasta = new Date(ahora.getTime() + 28 * 60 * 60 * 1000) // 28hs
 ```
 
-Esto cubre una ventana de 8 horas para compensar la ejecución única diaria.
+**Cobertura:** Ventana de 8 horas (20-28hs) para compensar la ejecución única diaria.
+Cualquier turno programado entre +20hs y +28hs desde la ejecución del cron recibirá su recordatorio.
+
+### Plan Pro (opcional):
+Si se upgradea a Vercel Pro, se puede volver a ejecución horaria:
+```json
+"schedule": "0 * * * *"  // Cada hora
+```
+Y ajustar ventana:
+```javascript
+const desde = new Date(ahora.getTime() + 23 * 60 * 60 * 1000) // 23hs
+const hasta = new Date(ahora.getTime() + 25 * 60 * 60 * 1000) // 25hs
+```
 
 ---
 
