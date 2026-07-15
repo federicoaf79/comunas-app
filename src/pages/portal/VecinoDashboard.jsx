@@ -1010,6 +1010,15 @@ export default function VecinoDashboard() {
   const { vecinoSession, clearVecinoSession } = useVecino()
   const [tab, setTab] = useState('turnos')
 
+  // DEBUG: Log inicial del componente
+  console.log('[VecinoDashboard] RENDER', {
+    vecinoSession,
+    hasSession: !!vecinoSession,
+    vecinoId: vecinoSession?.id,
+    authMode: vecinoSession?.auth_mode,
+    tab
+  })
+
   // Los hooks van siempre antes del early return — los queries
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
@@ -1022,6 +1031,14 @@ export default function VecinoDashboard() {
   const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase)
   const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase)
   const reservasQ = useReservasVecino(vecinoSession?.id)
+
+  // DEBUG: Log estado de queries
+  console.log('[VecinoDashboard] QUERIES', {
+    turnos: { isLoading: turnosQ.isLoading, error: turnosQ.error, dataLength: turnosQ.data?.length },
+    atenciones: { isLoading: atencionesQ.isLoading, error: atencionesQ.error, dataLength: atencionesQ.data?.length },
+    reclamos: { isLoading: reclamosQ.isLoading, error: reclamosQ.error, dataLength: reclamosQ.data?.length },
+    reservas: { isLoading: reservasQ.isLoading, error: reservasQ.error, dataLength: reservasQ.data?.length }
+  })
 
   function handleSignOut() {
     clearVecinoSession()

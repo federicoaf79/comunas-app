@@ -39,8 +39,13 @@ const ARG_OFFSET = '-03:00' // Timezone Argentina
 // Mis turnos — todos los turnos del vecino (futuros + históricos),
 // orden DESC por fecha + hora_inicio. El componente decide cómo agruparlos.
 async function fetchTurnosByVecino(vecinoId, clientType) {
-  if (!vecinoId) return []
+  console.log('[fetchTurnosByVecino] CALLED', { vecinoId, clientType })
+  if (!vecinoId) {
+    console.log('[fetchTurnosByVecino] NO vecinoId, returning []')
+    return []
+  }
   const client = clientType === 'auth' ? supabase : supabaseAnon
+  console.log('[fetchTurnosByVecino] FETCHING from DB...')
   const { data, error } = await client
     .from('turnos_agenda')
     .select(TURNO_COLS)
@@ -48,7 +53,11 @@ async function fetchTurnosByVecino(vecinoId, clientType) {
     .order('fecha', { ascending: false })
     .order('hora_inicio', { ascending: false })
     .limit(50)
-  if (error) throw error
+  if (error) {
+    console.error('[fetchTurnosByVecino] ERROR', error)
+    throw error
+  }
+  console.log('[fetchTurnosByVecino] SUCCESS', { rowCount: data?.length })
   // Normalizar turnos para que tengan fecha_hora
   return (data ?? []).map(normalizarTurno)
 }
@@ -57,10 +66,12 @@ export function useTurnosVecino(vecinoId, client = supabaseAnon) {
   // Determinar el tipo de cliente una sola vez, evitando recalcular en cada render
   // Usamos un string estable como parte de la queryKey
   const clientType = client === supabase ? 'auth' : 'anon'
+  const enabled = !!vecinoId
+  console.log('[useTurnosVecino] HOOK CALLED', { vecinoId, clientType, enabled })
   return useQuery({
     queryKey: ['vecino', 'turnos', vecinoId ?? '__none__', clientType],
     queryFn:  () => fetchTurnosByVecino(vecinoId, clientType),
-    enabled:  !!vecinoId,
+    enabled,
   })
 }
 
@@ -154,6 +165,7 @@ const RECLAMO_COLS_PUBLIC =
   'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at'
 
 async function fetchReclamosByVecino(vecinoId, clientType) {
+  console.log('[fetchReclamosByVecino] CALLED', { vecinoId, clientType })
   if (!vecinoId) return []
   const client = clientType === 'auth' ? supabase : supabaseAnon
   const { data, error } = await client
@@ -162,7 +174,11 @@ async function fetchReclamosByVecino(vecinoId, clientType) {
     .eq('vecino_id', vecinoId)
     .order('created_at', { ascending: false })
     .limit(50)
-  if (error) throw error
+  if (error) {
+    console.error('[fetchReclamosByVecino] ERROR', error)
+    throw error
+  }
+  console.log('[fetchReclamosByVecino] SUCCESS', { rowCount: data?.length })
   return data ?? []
 }
 
@@ -190,6 +206,7 @@ const ATENCION_COLS_PUBLIC = `
 `
 
 async function fetchAtencionesVecino(vecinoId, clientType) {
+  console.log('[fetchAtencionesVecino] CALLED', { vecinoId, clientType })
   if (!vecinoId) return []
   const client = clientType === 'auth' ? supabase : supabaseAnon
   const { data, error } = await client
@@ -198,7 +215,11 @@ async function fetchAtencionesVecino(vecinoId, clientType) {
     .eq('vecino_id', vecinoId)
     .order('fecha_hora', { ascending: false })
     .limit(100)
-  if (error) throw error
+  if (error) {
+    console.error('[fetchAtencionesVecino] ERROR', error)
+    throw error
+  }
+  console.log('[fetchAtencionesVecino] SUCCESS', { rowCount: data?.length })
   return data ?? []
 }
 

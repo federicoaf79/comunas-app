@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 // =============================================================
@@ -43,9 +43,12 @@ function saveSession(vecino) {
 export function VecinoProvider({ children }) {
   const [vecinoSession, setSessionState] = useState(() => loadSession())
   const [authLoading, setAuthLoading] = useState(true)
+  const useEffectCounter = useRef(0)
 
   // Al montar, verificar si hay sesión de Supabase Auth
   useEffect(() => {
+    useEffectCounter.current++
+    console.log('[VecinoContext] useEffect #1 (restoreAuthSession) RUN COUNT:', useEffectCounter.current)
     let cancelled = false
 
     async function restoreAuthSession() {
@@ -113,6 +116,8 @@ export function VecinoProvider({ children }) {
 
   // Sincronización entre pestañas
   useEffect(() => {
+    const counter = ++useEffectCounter.current
+    console.log('[VecinoContext] useEffect #2 (storage sync) RUN COUNT:', counter)
     function onStorage(e) {
       if (e.key !== STORAGE_KEY) return
       setSessionState(e.newValue ? loadSession() : null)
