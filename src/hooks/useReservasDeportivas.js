@@ -96,7 +96,7 @@ export function useReservasVecino(vecinoId, { enabled = true } = {}) {
       const { data, error } = await supabase
         .from('turnos_agenda')
         .select(`
-          id, fecha, hora_inicio, hora_fin, estado, motivo, observaciones,
+          id, fecha, hora_inicio, hora_fin, estado, motivo,
           espacio:espacio_id ( id, nombre, tipo ),
           dependencia:dependencia_id ( id, nombre )
         `)
@@ -124,7 +124,7 @@ export function useReservasPolideportivo(dependenciaId, filtros = {}, { enabled 
       let query = supabase
         .from('turnos_agenda')
         .select(`
-          id, fecha, hora_inicio, hora_fin, estado, motivo, observaciones,
+          id, fecha, hora_inicio, hora_fin, estado, motivo,
           vecino:vecino_id ( id, nombre_completo, telefono ),
           espacio:espacio_id ( id, nombre, tipo ),
           dependencia:dependencia_id ( id, nombre )
@@ -202,7 +202,7 @@ export function useCrearReservaDeportiva() {
           hora_fin: payload.hora_fin,
           estado: 'pendiente',
           motivo: payload.deporte || 'Actividad deportiva',
-          observaciones: payload.observaciones || null,
+          // observaciones no existe en turnos_agenda
         })
         .select()
         .single()
