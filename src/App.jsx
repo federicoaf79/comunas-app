@@ -106,17 +106,6 @@ function RootRedirect() {
   )
 }
 
-// Wrapper para rutas de admin que necesitan AuthProvider
-// AuthProvider solo se monta cuando se accede a rutas /admin o /superadmin,
-// evitando el intento de cargar perfil de 'usuarios' en rutas del portal vecino
-function AdminRoutes() {
-  return (
-    <AuthProvider>
-      <Outlet />
-    </AuthProvider>
-  )
-}
-
 const router = createBrowserRouter([
   {
     element: <RootLayout />,
@@ -127,16 +116,9 @@ const router = createBrowserRouter([
   //   - Redirige a /portal en subdominios de municipio
   //   - Redirige a /login en admin.comunas.lat
   { path: '/', element: <RootRedirect /> },
-
-  // Rutas de autenticación — necesitan AuthProvider para signIn/signUp
-  {
-    element: <AdminRoutes />,
-    children: [
-      { path: '/acceso',   element: <Acceso /> },
-      { path: '/login',    element: <Login /> },
-      { path: '/register', element: <Register /> },
-    ],
-  },
+  { path: '/acceso',   element: <Acceso /> },
+  { path: '/login',    element: <Login /> },
+  { path: '/register', element: <Register /> },
   { path: '/portal', element: (
     <LandingDomainGuard>
       <AdminDomainRedirect>
@@ -189,17 +171,13 @@ const router = createBrowserRouter([
 
   // Rutas protegidas.
   // AdminDomainGuard: en admin.comunas.lat solo permite acceso a superadmin
-  // AuthProvider se monta aquí (no globalmente) para evitar intentar
-  // cargar perfil de 'usuarios' en rutas del portal del vecino
   {
-    element: <AdminRoutes />,
-    children: [{
-      element: (
-        <AdminDomainGuard>
-          <AuthGuard />
-        </AdminDomainGuard>
-      ),
-      children: [
+    element: (
+      <AdminDomainGuard>
+        <AuthGuard />
+      </AdminDomainGuard>
+    ),
+    children: [
       {
         element: <AppShell />,
         children: [
@@ -272,7 +250,6 @@ const router = createBrowserRouter([
         ],
       },
     ],
-    }],
   },
 
   { path: '*', element: <NotFound /> },
@@ -283,9 +260,11 @@ const router = createBrowserRouter([
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <VecinoProvider>
-        <RouterProvider router={router} />
-      </VecinoProvider>
+      <AuthProvider>
+        <VecinoProvider>
+          <RouterProvider router={router} />
+        </VecinoProvider>
+      </AuthProvider>
     </QueryClientProvider>
   )
 }
