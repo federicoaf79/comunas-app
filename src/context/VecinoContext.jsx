@@ -95,16 +95,20 @@ export function VecinoProvider({ children }) {
   }, [])
 
   const clearVecinoSession = useCallback(async () => {
-    // Si es sesión de Auth, hacer signOut
+    // Limpiar estado local primero (síncrono)
+    saveSession(null)
+    setSessionState(null)
+
+    // Si es sesión de Auth, hacer signOut (asíncrono)
     if (vecinoSession?.auth_mode === 'supabase') {
       try {
-        await supabase.auth.signOut()
+        // signOut con scope 'local' para limpiar solo esta pestaña
+        // (no enviar request al servidor ni afectar otras sesiones)
+        await supabase.auth.signOut({ scope: 'local' })
       } catch (e) {
         console.warn('[VecinoContext] Error en signOut:', e)
       }
     }
-    saveSession(null)
-    setSessionState(null)
   }, [vecinoSession])
 
   // Sincronización entre pestañas

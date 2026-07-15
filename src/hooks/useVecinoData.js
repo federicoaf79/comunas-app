@@ -18,10 +18,29 @@ const TURNO_COLS = `
   dependencia:dependencia_id ( id, nombre )
 `
 
+// Combina fecha + hora_inicio en un timestamp ISO para compatibilidad
+// con componentes que esperan fecha_hora (e.g. VecinoDashboard)
+function normalizarTurno(t) {
+  if (!t) return t
+  // Si ya tiene fecha_hora, devolverlo tal cual
+  if (t.fecha_hora) return t
+  // Combinar fecha + hora_inicio → fecha_hora
+  if (t.fecha && t.hora_inicio) {
+    return {
+      ...t,
+      fecha_hora: `${t.fecha}T${t.hora_inicio}:00${ARG_OFFSET}`
+    }
+  }
+  return t
+}
+
+const ARG_OFFSET = '-03:00' // Timezone Argentina
+
 // Mis turnos — todos los turnos del vecino (futuros + históricos),
 // orden DESC por fecha + hora_inicio. El componente decide cómo agruparlos.
-async function fetchTurnosByVecino(vecinoId, client = supabaseAnon) {
+async function fetchTurnosByVecino(vecinoId, clientType) {
   if (!vecinoId) return []
+  const client = clientType === 'auth' ? supabase : supabaseAnon
   const { data, error } = await client
     .from('turnos_agenda')
     .select(TURNO_COLS)
@@ -30,14 +49,17 @@ async function fetchTurnosByVecino(vecinoId, client = supabaseAnon) {
     .order('hora_inicio', { ascending: false })
     .limit(50)
   if (error) throw error
-  return data ?? []
+  // Normalizar turnos para que tengan fecha_hora
+  return (data ?? []).map(normalizarTurno)
 }
 
 export function useTurnosVecino(vecinoId, client = supabaseAnon) {
+  // Determinar el tipo de cliente una sola vez, evitando recalcular en cada render
+  // Usamos un string estable como parte de la queryKey
   const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
     queryKey: ['vecino', 'turnos', vecinoId ?? '__none__', clientType],
-    queryFn:  () => fetchTurnosByVecino(vecinoId, client),
+    queryFn:  () => fetchTurnosByVecino(vecinoId, clientType),
     enabled:  !!vecinoId,
   })
 }
@@ -131,8 +153,9 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 const RECLAMO_COLS_PUBLIC =
   'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at'
 
-async function fetchReclamosByVecino(vecinoId, client = supabaseAnon) {
+async function fetchReclamosByVecino(vecinoId, clientType) {
   if (!vecinoId) return []
+  const client = clientType === 'auth' ? supabase : supabaseAnon
   const { data, error } = await client
     .from('reclamos')
     .select(RECLAMO_COLS_PUBLIC)
@@ -147,7 +170,7 @@ export function useReclamosVecino(vecinoId, client = supabaseAnon) {
   const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
     queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__', clientType],
-    queryFn:  () => fetchReclamosByVecino(vecinoId, client),
+    queryFn:  () => fetchReclamosByVecino(vecinoId, clientType),
     enabled:  !!vecinoId,
   })
 }
@@ -166,8 +189,9 @@ const ATENCION_COLS_PUBLIC = `
   dependencia:dependencia_id ( id, nombre )
 `
 
-async function fetchAtencionesVecino(vecinoId, client = supabaseAnon) {
+async function fetchAtencionesVecino(vecinoId, clientType) {
   if (!vecinoId) return []
+  const client = clientType === 'auth' ? supabase : supabaseAnon
   const { data, error } = await client
     .from('atenciones')
     .select(ATENCION_COLS_PUBLIC)
@@ -182,7 +206,7 @@ export function useAtencionesVecino(vecinoId, client = supabaseAnon) {
   const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
     queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__', clientType],
-    queryFn:  () => fetchAtencionesVecino(vecinoId, client),
+    queryFn:  () => fetchAtencionesVecino(vecinoId, clientType),
     enabled:  !!vecinoId,
   })
 }
