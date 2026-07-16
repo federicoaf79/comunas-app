@@ -8,6 +8,7 @@ import { useDependencias } from '../../hooks/useTurnos'
 import {
   useBeneficiarios, useCreateBeneficiario, useUpdateBeneficiarioEstado,
   usePagos, useCreatePago,
+  useEntregas, useCreateEntrega,
 } from '../../hooks/useBeneficiarios'
 import Tabs from '../../components/ui/Tabs'
 import Button from '../../components/ui/Button'
@@ -23,7 +24,7 @@ import { dateOf, todayArgYMD } from '../../lib/datetime'
 
 // =============================================================
 // /admin/ayuda-social — módulo Ayuda Social.
-// 3 tabs: Beneficiarios | Pagos y entregas | Resumen
+// 4 tabs: Beneficiarios | Pagos y entregas | Bolsines | Resumen
 // =============================================================
 
 // currentMonthYYYYMM no existe en datetime.js — implementación inline
@@ -36,6 +37,7 @@ const fmtMoney = new Intl.NumberFormat('es-AR', {
 const TABS = [
   { value: 'beneficiarios', label: 'Beneficiarios' },
   { value: 'pagos',         label: 'Pagos y entregas' },
+  { value: 'bolsines',      label: 'Bolsines' },
   { value: 'resumen',       label: 'Resumen' },
 ]
 
@@ -134,6 +136,7 @@ export default function AyudaSocial() {
 
       {tab === 'beneficiarios' && <BeneficiariosTab municipioId={municipioId} canEdit={canEdit} />}
       {tab === 'pagos'         && <PagosTab municipioId={municipioId} canEdit={canEdit} />}
+      {tab === 'bolsines'      && <BolsinesTab municipioId={municipioId} canEdit={canEdit} />}
       {tab === 'resumen'       && <ResumenTab municipioId={municipioId} />}
     </div>
   )
@@ -396,7 +399,129 @@ function PagosTab({ municipioId, canEdit }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 3: Resumen
+// TAB 3: Bolsines (entregas de productos/servicios)
+// ─────────────────────────────────────────────────────────────────
+
+function BolsinesTab({ municipioId, canEdit }) {
+  const [mes, setMes]           = useState(currentMonthYYYYMM())
+  const [programa, setPrograma] = useState('')
+  const [modalNew, setModalNew] = useState(false)
+
+  const { data: entregas = [], isLoading } = useEntregas({
+    mes: mes || undefined,
+    programa: programa || undefined,
+  })
+
+  // Desglose por variante (calculado client-side)
+  const desglose = useMemo(() => {
+    const map = new Map()
+    entregas.forEach(e => {
+      const v = e.variante || 'Sin variante'
+      map.set(v, (map.get(v) || 0) + 1)
+    })
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1])
+  }, [entregas])
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input
+            label="Mes"
+            type="month"
+            value={mes}
+            onChange={e => setMes(e.target.value)}
+          />
+          <Input
+            label="Programa"
+            value={programa}
+            onChange={e => setPrograma(e.target.value)}
+            placeholder="Buscar programa..."
+          />
+        </div>
+        {canEdit && (
+          <Button onClick={() => setModalNew(true)}>
+            + Registrar entrega
+          </Button>
+        )}
+      </div>
+
+      <div className="rounded-md border border-ok-100 bg-ok-50 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-medium text-ok-700">
+            {entregas.length} entrega{entregas.length === 1 ? '' : 's'} en el período
+          </span>
+          {desglose.length > 0 && (
+            <span className="text-ok-700">
+              {desglose.map(([v, count], i) => (
+                <span key={v}>
+                  {i > 0 && ' · '}
+                  <strong>{v}</strong>: {count}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+      ) : entregas.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-primary-400">
+          No hay entregas registradas en este período.
+        </div>
+      ) : (
+        <Table>
+          <THead>
+            <Tr>
+              <Th>Fecha</Th>
+              <Th>Vecino</Th>
+              <Th>Programa</Th>
+              <Th>Variante</Th>
+              <Th className="text-right">Cantidad</Th>
+              <Th>Notas</Th>
+            </Tr>
+          </THead>
+          <tbody>
+            {entregas.map(e => (
+              <Tr key={e.id}>
+                <Td className="whitespace-nowrap">{dateOf(e.fecha)}</Td>
+                <Td>
+                  <div>
+                    <p className="font-medium text-primary">
+                      {e.vecino?.nombre_completo ?? '—'}
+                    </p>
+                    <p className="text-xs text-primary-400">
+                      DNI {e.vecino?.dni ?? '—'}
+                    </p>
+                  </div>
+                </Td>
+                <Td>{e.programa ?? '—'}</Td>
+                <Td>{e.variante ?? '—'}</Td>
+                <Td className="whitespace-nowrap text-right font-semibold tabular-nums">
+                  {e.cantidad ? `${e.cantidad} ${e.unidad ?? ''}`.trim() : '—'}
+                </Td>
+                <Td className="max-w-xs truncate text-xs text-primary-500">
+                  {e.notas || '—'}
+                </Td>
+              </Tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+
+      {modalNew && (
+        <BolsonFormModal
+          municipioId={municipioId}
+          onClose={() => setModalNew(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TAB 4: Resumen
 // ─────────────────────────────────────────────────────────────────
 
 function ResumenTab({ municipioId }) {
@@ -814,6 +939,168 @@ function PagoFormModal({ municipioId, onClose }) {
             onChange={v => set('nivel', v)}
             placeholder="Seleccionar..."
             options={NIVELES}
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">
+            {error}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function BolsonFormModal({ municipioId, onClose }) {
+  const { user } = useAuth()
+  const createMut = useCreateEntrega()
+  const [dni, setDni] = useState('')
+  const [form, setForm] = useState({
+    programa: 'Bolsón Alimentario',
+    variante: '',
+    cantidad: '',
+    unidad: 'integrantes',
+    fecha: todayArgYMD(),
+    notas: '',
+  })
+  const [error, setError] = useState('')
+
+  // Lookup de vecino por DNI (mismo patrón que BeneficiarioFormModal)
+  const vecinoQ = useQuery({
+    queryKey: ['vecino-por-dni', municipioId ?? '__ALL__', dni],
+    queryFn: async () => {
+      if (!dni || dni.length < 7) return null
+      const { data, error } = await supabase
+        .from('vecinos')
+        .select('id, nombre_completo, dni, telefono')
+        .eq('dni', dni)
+        .eq('municipio_id', municipioId)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!dni && dni.length >= 7 && !!municipioId,
+  })
+  const vecino = vecinoQ.data
+
+  function set(k, v) {
+    setForm(f => ({ ...f, [k]: v }))
+  }
+
+  const canSubmit = vecino && form.programa.trim()
+
+  async function handle() {
+    if (!canSubmit) return
+    setError('')
+    try {
+      await createMut.mutateAsync({
+        municipio_id: municipioId,
+        vecino_id: vecino.id,
+        programa: form.programa.trim(),
+        variante: form.variante.trim() || null,
+        cantidad: form.cantidad ? Number(form.cantidad) : null,
+        unidad: form.unidad.trim() || null,
+        fecha: form.fecha,
+        notas: form.notas.trim() || null,
+        registrado_por: user?.id,
+      })
+      onClose()
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos guardar')
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="lg"
+      title="Registrar entrega"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={createMut.isPending}>
+            Cancelar
+          </Button>
+          <Button onClick={handle} loading={createMut.isPending} disabled={!canSubmit}>
+            Guardar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <Input
+            label="DNI del vecino"
+            value={dni}
+            onChange={e => setDni(e.target.value)}
+            placeholder="32145678"
+            required
+          />
+          {vecinoQ.isLoading && <p className="mt-1 text-xs text-primary-500">Buscando...</p>}
+          {vecino && (
+            <p className="mt-1 text-sm text-ok-700">
+              ✓ {vecino.nombre_completo} — Tel: {vecino.telefono ?? 'sin teléfono'}
+            </p>
+          )}
+          {dni && !vecinoQ.isLoading && !vecino && (
+            <p className="mt-1 text-xs text-danger">
+              No se encontró vecino con ese DNI
+            </p>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Programa"
+            value={form.programa}
+            onChange={e => set('programa', e.target.value)}
+            placeholder="Ej: Bolsón Alimentario"
+            required
+          />
+          <Input
+            label="Variante (opcional)"
+            value={form.variante}
+            onChange={e => set('variante', e.target.value)}
+            placeholder="Ej: Grande, Mediano"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Input
+            label="Cantidad (opcional)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.cantidad}
+            onChange={e => set('cantidad', e.target.value)}
+            placeholder="Ej: 4"
+          />
+          <Input
+            label="Unidad (opcional)"
+            value={form.unidad}
+            onChange={e => set('unidad', e.target.value)}
+            placeholder="Ej: integrantes"
+          />
+          <Input
+            label="Fecha"
+            type="date"
+            value={form.fecha}
+            onChange={e => set('fecha', e.target.value)}
+            required
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-primary-700">
+            Notas (opcional)
+          </label>
+          <textarea
+            value={form.notas}
+            onChange={e => set('notas', e.target.value)}
+            rows={3}
+            className="input"
+            placeholder="Observaciones adicionales..."
           />
         </div>
 
