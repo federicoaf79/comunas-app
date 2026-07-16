@@ -155,7 +155,7 @@ export function AuthProvider({ children }) {
     init()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (event === 'SIGNED_OUT') {
           clearCachedPerfil()
           setUser(null)
@@ -167,27 +167,34 @@ export function AuthProvider({ children }) {
         }
 
         if (event === 'SIGNED_IN' && session?.user) {
-          setUser(session.user)
+          // Diferir el trabajo async con setTimeout para salir de la
+          // cadena síncrona de notificación de Supabase — si se hace
+          // await fetchPerfil() directamente acá, se genera un deadlock
+          // (Supabase espera a que este callback termine antes de resolver
+          // signInWithPassword(), pero fetchPerfil espera al cliente).
+          setTimeout(async () => {
+            setUser(session.user)
 
-          // Mismo patrón: cache primero, fetch en background.
-          const cached = loadCachedPerfil()
-          if (cached && cached.id === session.user.id) {
-            setPerfil(cached)
+            // Mismo patrón: cache primero, fetch en background.
+            const cached = loadCachedPerfil()
+            if (cached && cached.id === session.user.id) {
+              setPerfil(cached)
+              setLoading(false)
+              refreshPerfilInBackground(session.user.id)
+              return
+            }
+
+            // Login fresco sin cache — esperamos el fetch.
+            const p = await fetchPerfil(session.user.id)
+            if (p) {
+              setPerfil(p)
+              saveCachedPerfil(p)
+            } else {
+              setPerfil(null)
+              clearCachedPerfil()
+            }
             setLoading(false)
-            refreshPerfilInBackground(session.user.id)
-            return
-          }
-
-          // Login fresco sin cache — esperamos el fetch.
-          const p = await fetchPerfil(session.user.id)
-          if (p) {
-            setPerfil(p)
-            saveCachedPerfil(p)
-          } else {
-            setPerfil(null)
-            clearCachedPerfil()
-          }
-          setLoading(false)
+          }, 0)
           return
         }
 
