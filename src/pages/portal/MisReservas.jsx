@@ -46,7 +46,7 @@ export default function MisReservas() {
             <p className="mt-2 text-sm text-primary-600">
               El acceso rápido (DNI + teléfono) no permite gestionar reservas.
             </p>
-            <Button onClick={() => navigate('/portal/registro')} className="mt-4">
+            <Button onClick={() => navigate('/register')} className="mt-4">
               Crear cuenta
             </Button>
           </div>

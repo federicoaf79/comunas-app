@@ -67,7 +67,7 @@ export default function ReservarPolideportivo() {
               El acceso rápido (DNI + teléfono) no permite hacer reservas.
             </p>
             <Button
-              onClick={() => navigate('/portal/registro')}
+              onClick={() => navigate('/register')}
               className="mt-4"
             >
               Crear cuenta
