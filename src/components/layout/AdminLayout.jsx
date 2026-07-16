@@ -157,7 +157,7 @@ const CIC_BLUEPRINT = [
       </svg>
     ),
   },
-  { tipo: 'social',  label: 'Ayuda Social', basePath: '/admin/dependencia/social',
+  { tipo: 'social',  label: 'Ayuda Social', basePath: '/admin/ayuda-social',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-9-9c-1.5-3 0-7 4-7 2.5 0 4 1.5 5 3 1-1.5 2.5-3 5-3 4 0 5.5 4 4 7-2 4.5-9 9-9 9z" />
@@ -234,10 +234,12 @@ function subitemsParaTipo(tipo, basePath) {
   }
   if (t === 'social' || t === 'ayuda_social') {
     return [
-      { to: basePath,                        label: 'Beneficiarios',   kind: 'gestion' },
-      { to: `${basePath}?tab=landing`,       label: 'Landing pública', kind: 'gestion' },
-      { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',          kind: 'gestion' },
-      { to: `${basePath}?tab=admin`,         label: 'Administración',  kind: 'admin' },
+      { to: basePath,                        label: 'Beneficiarios',    kind: 'gestion' },
+      { to: `${basePath}?tab=pagos`,         label: 'Pagos y entregas', kind: 'gestion' },
+      { to: `${basePath}?tab=bolsines`,      label: 'Bolsines',         kind: 'gestion' },
+      { to: `${basePath}?tab=resumen`,       label: 'Resumen',          kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,       label: 'Landing pública',  kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,        label: 'Bot IA',           kind: 'gestion' },
     ]
   }
   if (t === 'odontologia') {
