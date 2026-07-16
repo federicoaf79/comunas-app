@@ -351,7 +351,7 @@ function DatosVitalesCard({ vecino }) {
 }
 
 function AtencionDocumentos({ atencionId }) {
-  const { data: documentos, isLoading } = useDocumentosAtencion(atencionId)
+  const { data: documentos, isLoading } = useDocumentosAtencion(atencionId, supabase)
 
   if (isLoading) return <Spinner size="sm" />
   if (!documentos || documentos.length === 0) return null
@@ -372,7 +372,7 @@ function AtencionDocumentos({ atencionId }) {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 transition-colors hover:bg-accent-100"
-          title={d.descripcion || 'Ver documento'}
+          title={d.nombre || 'Ver documento'}
         >
           <span aria-hidden="true">{TIPOS_ICONO[d.tipo] ?? '📄'}</span>
           {d.nombre_archivo}

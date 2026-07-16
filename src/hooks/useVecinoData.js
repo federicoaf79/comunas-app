@@ -237,11 +237,12 @@ export function useAtencionesVecino(vecinoId, client = supabaseAnon, ready = tru
 }
 
 // Documentos de una atención específica (para mostrar en el portal)
-async function fetchDocumentosAtencion(atencionId) {
+async function fetchDocumentosAtencion(atencionId, clientType) {
   if (!atencionId) return []
-  const { data, error } = await supabaseAnon
+  const client = clientType === 'auth' ? supabase : supabaseAnon
+  const { data, error } = await client
     .from('hc_documentos')
-    .select('id, atencion_id, tipo, descripcion, storage_path, created_at')
+    .select('id, atencion_id, vecino_id, tipo, nombre, storage_path, fecha, created_at')
     .eq('atencion_id', atencionId)
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -266,10 +267,12 @@ function publicUrlFor(path) {
   return data?.publicUrl ?? null
 }
 
-export function useDocumentosAtencion(atencionId) {
+export function useDocumentosAtencion(atencionId, client = supabaseAnon) {
+  // Determinar el tipo de cliente una sola vez, evitando recalcular en cada render
+  const clientType = client === supabase ? 'auth' : 'anon'
   return useQuery({
-    queryKey: ['vecino', 'documentos', atencionId ?? '__none__'],
-    queryFn:  () => fetchDocumentosAtencion(atencionId),
+    queryKey: ['vecino', 'documentos', atencionId ?? '__none__', clientType],
+    queryFn:  () => fetchDocumentosAtencion(atencionId, clientType),
     enabled:  !!atencionId,
     staleTime: 5 * 60 * 1000, // 5 minutos
   })
