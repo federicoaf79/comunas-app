@@ -129,38 +129,46 @@ export function VecinoProvider({ children }) {
   // Listener de cambios en Auth state
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (event === 'SIGNED_OUT') {
           saveSession(null)
           setSessionState(null)
-        } else if (event === 'SIGNED_IN' && session?.user) {
-          // Solo cargar vecino si estamos en rutas del portal
-          const path = window.location.pathname
-          const isPortalRoute = path.startsWith('/portal')
-          const isAdminRoute = path.startsWith('/admin') || path.startsWith('/superadmin') || path.startsWith('/login')
+          return
+        }
 
-          if (isPortalRoute && !isAdminRoute) {
-            // Cargar vecino vinculado
-            try {
-              const { data: vecino } = await supabase
-                .from('vecinos')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .maybeSingle()  // maybeSingle() no falla si no encuentra nada
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Diferir el trabajo async con setTimeout para salir de la
+          // cadena síncrona de notificación de Supabase — si se hace la
+          // consulta directamente acá, se genera un deadlock (Supabase
+          // espera a que este callback termine antes de resolver
+          // signInWithPassword(), pero la consulta espera al cliente).
+          setTimeout(async () => {
+            const path = window.location.pathname
+            const isPortalRoute = path.startsWith('/portal')
+            const isAdminRoute = path.startsWith('/admin') || path.startsWith('/superadmin') || path.startsWith('/login')
 
-              if (vecino) {
-                const sessionData = {
-                  ...vecino,
-                  auth_mode: 'supabase',
-                  user_email: session.user.email,
+            if (isPortalRoute && !isAdminRoute) {
+              try {
+                const { data: vecino } = await supabase
+                  .from('vecinos')
+                  .select('*')
+                  .eq('user_id', session.user.id)
+                  .maybeSingle()
+
+                if (vecino) {
+                  const sessionData = {
+                    ...vecino,
+                    auth_mode: 'supabase',
+                    user_email: session.user.email,
+                  }
+                  saveSession(sessionData)
+                  setSessionState(sessionData)
                 }
-                saveSession(sessionData)
-                setSessionState(sessionData)
+              } catch (e) {
+                console.warn('[VecinoContext] Error cargando vecino tras signin:', e)
               }
-            } catch (e) {
-              console.warn('[VecinoContext] Error cargando vecino tras signin:', e)
             }
-          }
+          }, 0)
         }
       }
     )
