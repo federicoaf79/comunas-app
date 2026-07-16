@@ -56,8 +56,19 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const intentionalSignOut    = useRef(false)
   const [sessionExpired, setSessionExpired] = useState(false)
+  // Cache de usuarios que NO tienen perfil en tabla 'usuarios'
+  // (ej: vecinos con sesión Supabase Auth pero sin row en 'usuarios').
+  // Evita reintentar fetchPerfil en cada re-render cuando ya sabemos
+  // que el usuario NO es staff.
+  const noPerfilCache = useRef(new Set())
 
   const fetchPerfil = useCallback(async (userId) => {
+    // Si ya sabemos que este usuario NO tiene perfil, retornar null
+    // inmediatamente sin hacer la query. Esto evita errores 406
+    // repetidos en consola para sesiones de vecino.
+    if (noPerfilCache.current.has(userId)) {
+      return null
+    }
     // Query 1: perfil base, sin joins. Sin envoltorio de timeout —
     // Supabase maneja sus propios reintentos sobre el fetch global.
     const { data: perfilData, error: perfilError } = await supabase
@@ -67,6 +78,16 @@ export function AuthProvider({ children }) {
       .single()
 
     if (perfilError) {
+      // PGRST116 = "no rows returned" — el usuario no existe en tabla 'usuarios'.
+      // Esto es ESPERADO para vecinos con sesión Supabase Auth (tienen user_id
+      // en tabla 'vecinos', pero NO row en 'usuarios'). Cachear este resultado
+      // negativo para NO volver a intentar fetchPerfil para el mismo userId.
+      if (perfilError.code === 'PGRST116') {
+        noPerfilCache.current.add(userId)
+        return null
+      }
+      // Otros errores (red, timeout, permisos) SÍ se loguean y NO se cachean
+      // (podría ser transitorio y queremos reintentar).
       console.error('[AuthContext] Error cargando perfil:', perfilError)
       return null
     }
@@ -261,6 +282,9 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     intentionalSignOut.current = true
     clearCachedPerfil()
+    // Limpiar cache de "usuarios sin perfil" al hacer signOut
+    // (podría ser un usuario diferente en el próximo login)
+    noPerfilCache.current.clear()
     await supabase.auth.signOut()
   }, [])
 
