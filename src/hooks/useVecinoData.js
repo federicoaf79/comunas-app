@@ -62,12 +62,12 @@ async function fetchTurnosByVecino(vecinoId, clientType) {
   return (data ?? []).map(normalizarTurno)
 }
 
-export function useTurnosVecino(vecinoId, client = supabaseAnon) {
+export function useTurnosVecino(vecinoId, client = supabaseAnon, ready = true) {
   // Determinar el tipo de cliente una sola vez, evitando recalcular en cada render
   // Usamos un string estable como parte de la queryKey
   const clientType = client === supabase ? 'auth' : 'anon'
-  const enabled = !!vecinoId
-  console.log('[useTurnosVecino] HOOK CALLED', { vecinoId, clientType, enabled })
+  const enabled = !!vecinoId && ready
+  console.log('[useTurnosVecino] HOOK CALLED', { vecinoId, clientType, ready, enabled })
   return useQuery({
     queryKey: ['vecino', 'turnos', vecinoId ?? '__none__', clientType],
     queryFn:  () => fetchTurnosByVecino(vecinoId, clientType),
@@ -182,12 +182,14 @@ async function fetchReclamosByVecino(vecinoId, clientType) {
   return data ?? []
 }
 
-export function useReclamosVecino(vecinoId, client = supabaseAnon) {
+export function useReclamosVecino(vecinoId, client = supabaseAnon, ready = true) {
   const clientType = client === supabase ? 'auth' : 'anon'
+  const enabled = !!vecinoId && ready
+  console.log('[useReclamosVecino] HOOK CALLED', { vecinoId, clientType, ready, enabled })
   return useQuery({
     queryKey: ['vecino', 'reclamos', vecinoId ?? '__none__', clientType],
     queryFn:  () => fetchReclamosByVecino(vecinoId, clientType),
-    enabled:  !!vecinoId,
+    enabled,
   })
 }
 
@@ -223,12 +225,14 @@ async function fetchAtencionesVecino(vecinoId, clientType) {
   return data ?? []
 }
 
-export function useAtencionesVecino(vecinoId, client = supabaseAnon) {
+export function useAtencionesVecino(vecinoId, client = supabaseAnon, ready = true) {
   const clientType = client === supabase ? 'auth' : 'anon'
+  const enabled = !!vecinoId && ready
+  console.log('[useAtencionesVecino] HOOK CALLED', { vecinoId, clientType, ready, enabled })
   return useQuery({
     queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__', clientType],
     queryFn:  () => fetchAtencionesVecino(vecinoId, clientType),
-    enabled:  !!vecinoId,
+    enabled,
   })
 }
 

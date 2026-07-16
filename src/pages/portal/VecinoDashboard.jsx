@@ -1007,7 +1007,7 @@ function FamiliaTab({ turnos, isLoading, error }) {
 
 export default function VecinoDashboard() {
   const navigate = useNavigate()
-  const { vecinoSession, clearVecinoSession } = useVecino()
+  const { vecinoSession, clearVecinoSession, authLoading } = useVecino()
   const [tab, setTab] = useState('turnos')
 
   // DEBUG: Log inicial del componente
@@ -1016,6 +1016,7 @@ export default function VecinoDashboard() {
     hasSession: !!vecinoSession,
     vecinoId: vecinoSession?.id,
     authMode: vecinoSession?.auth_mode,
+    authLoading,
     tab
   })
 
@@ -1027,9 +1028,13 @@ export default function VecinoDashboard() {
   // (cuenta completa, con sesión auth real). Usamos el cliente autenticado
   // `supabase` en vez de `supabaseAnon` para que las RLS con
   // current_vecino_id() funcionen correctamente.
-  const turnosQ = useTurnosVecino(vecinoSession?.id, supabase)
-  const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase)
-  const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase)
+  //
+  // El parámetro `ready = !authLoading` evita que las queries se disparen
+  // mientras restoreAuthSession() todavía está inicializando la sesión.
+  const ready = !authLoading
+  const turnosQ = useTurnosVecino(vecinoSession?.id, supabase, ready)
+  const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase, ready)
+  const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase, ready)
   const reservasQ = useReservasVecino(vecinoSession?.id)
 
   // DEBUG: Log estado de queries
