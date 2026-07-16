@@ -33,6 +33,17 @@ function withTimeout() {
   return { signal: controller.signal, clear: () => clearTimeout(id) }
 }
 
+// Helper para calcular el primer día del mes siguiente (límite superior exclusivo)
+// Evita el bug de `${mes}-32` que causa error Postgres 22008 (date out of range)
+function primerDiaMesSiguiente(mesYYYYMM) {
+  const [anio, mes] = mesYYYYMM.split('-').map(Number)
+  // Date(año, mes, 1) con mes en base-1 (no 0-indexed) → primer día del mes siguiente
+  const fecha = new Date(anio, mes, 1)
+  const anioSig = fecha.getFullYear()
+  const mesSig = String(fecha.getMonth() + 1).padStart(2, '0')
+  return `${anioSig}-${mesSig}-01`
+}
+
 export async function fetchBeneficiarios({ municipioId, estado } = {}) {
   const { signal, clear } = withTimeout()
   try {
@@ -122,7 +133,7 @@ export async function fetchPagos({ municipioId, mes, nivel, programa } = {}) {
       .order('fecha', { ascending: false })
       .abortSignal(signal)
     if (municipioId) q = q.eq('municipio_id', municipioId)
-    if (mes)         q = q.gte('fecha', `${mes}-01`).lt('fecha', `${mes}-32`)
+    if (mes)         q = q.gte('fecha', `${mes}-01`).lt('fecha', primerDiaMesSiguiente(mes))
     if (nivel)       q = q.eq('nivel', nivel)
     if (programa)    q = q.ilike('programa', `%${programa}%`)
     const { data, error } = await q
@@ -188,7 +199,7 @@ export async function fetchEntregas({ municipioId, mes, programa } = {}) {
       .order('fecha', { ascending: false })
       .abortSignal(signal)
     if (municipioId) q = q.eq('municipio_id', municipioId)
-    if (mes)         q = q.gte('fecha', `${mes}-01`).lt('fecha', `${mes}-32`)
+    if (mes)         q = q.gte('fecha', `${mes}-01`).lt('fecha', primerDiaMesSiguiente(mes))
     if (programa)    q = q.ilike('programa', `%${programa}%`)
     const { data, error } = await q
     clear()
