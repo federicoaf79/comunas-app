@@ -6,7 +6,21 @@ import { useVecino } from '../../context/VecinoContext'
 // cuando no hay sesión. La sesión vive en localStorage (persiste)
 // y soporta Supabase Auth (email + password) o acceso rápido (DNI + tel).
 export default function VecinoGuard() {
-  const { isVecinoLogued, vecinoData, clearVecinoSession } = useVecino()
+  const { isVecinoLogued, vecinoData, clearVecinoSession, authLoading } = useVecino()
+
+  // Esperar a que termine de cargar antes de redirigir
+  // (evita loop cuando se navega desde login antes de que VecinoContext
+  // termine de cargar el vecino tras el evento SIGNED_IN)
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#F5F4EF] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#C9A84C] border-r-transparent"></div>
+          <p className="mt-4 text-sm text-[#0F1C35]/60">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!isVecinoLogued) {
     return <Navigate to="/portal/acceso" replace />

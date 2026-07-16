@@ -105,25 +105,9 @@ function LoginTab({ setVecinoSession, navigate }) {
         throw new Error('No se pudo iniciar sesión')
       }
 
-      // Buscar vecino vinculado
-      const { data: vecino, error: vecinoError } = await supabase
-        .from('vecinos')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .single()
-
-      if (vecinoError || !vecino) {
-        await supabase.auth.signOut()
-        throw new Error('No encontramos tu perfil vinculado')
-      }
-
-      // Sesión exitosa
-      setVecinoSession({
-        ...vecino,
-        auth_mode: 'supabase',
-        user_email: data.user.email,
-      })
-
+      // VecinoContext.onAuthStateChange se encarga de cargar el vecino
+      // vinculado y popular vecinoSession cuando detecta el evento SIGNED_IN.
+      // Navegamos directamente — VecinoGuard/VecinoDashboard manejan el loading.
       navigate('/portal/mi-cuenta', { replace: true })
     } catch (e) {
       setError(e?.message ?? 'Error al iniciar sesión. Verificá tus datos.')
