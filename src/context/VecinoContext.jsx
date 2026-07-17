@@ -178,6 +178,8 @@ export function VecinoProvider({ children }) {
 
   const value = useMemo(() => ({
     vecinoSession,
+    vecino: vecinoSession,  // alias para compatibilidad con código existente
+    municipioId: vecinoSession?.municipio_id,  // alias directo
     setVecinoSession,
     clearVecinoSession,
     isVecinoLogued: !!vecinoSession?.id,

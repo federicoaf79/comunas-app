@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useVecino } from '../../context/VecinoContext'
 import { useCrearSolicitud } from '../../hooks/useSolicitudesDesarrollo'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
@@ -18,7 +18,7 @@ const TIPOS_SERVICIO = [
 
 export default function SolicitarServicioDesarrollo() {
   const navigate = useNavigate()
-  const { vecino, municipioId } = useAuth()
+  const { vecino, municipioId } = useVecino()
 
   // AUTH GUARD: requiere cuenta supabase (email/password)
   if (!vecino) {

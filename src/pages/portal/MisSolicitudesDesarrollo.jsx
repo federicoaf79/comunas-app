@@ -2,7 +2,7 @@
 // Listado de solicitudes de Agencia de Desarrollo del vecino logueado
 
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useVecino } from '../../context/VecinoContext'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
@@ -18,7 +18,7 @@ const ESTADO_LABELS = {
 
 export default function MisSolicitudesDesarrollo() {
   const navigate = useNavigate()
-  const { vecino } = useAuth()
+  const { vecino } = useVecino()
 
   // AUTH GUARD
   if (!vecino) {
