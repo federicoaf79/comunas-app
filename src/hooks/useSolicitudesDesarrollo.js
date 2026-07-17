@@ -21,7 +21,7 @@ export function useSolicitudesVecino(vecinoId, { enabled = true } = {}) {
       const { data, error } = await supabase
         .from('turnos_agenda')
         .select(`
-          id, fecha, estado, motivo, notas, created_at,
+          id, fecha, estado, motivo, notas_vecino, created_at,
           dependencia:dependencia_id ( id, nombre )
         `)
         .eq('vecino_id', vecinoId)
@@ -67,7 +67,7 @@ export function useCrearSolicitud() {
           fecha: payload.fecha_preferida || null,
           estado: 'pendiente',
           motivo: payload.tipo_servicio,
-          notas: payload.notas,
+          notas_vecino: payload.notas,
         })
         .select()
         .single()

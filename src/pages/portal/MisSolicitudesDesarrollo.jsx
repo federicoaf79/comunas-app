@@ -133,9 +133,9 @@ export default function MisSolicitudesDesarrollo() {
                   )}
 
                   {/* Detalle de la solicitud */}
-                  {s.notas && (
+                  {s.notas_vecino && (
                     <div className="mt-3 rounded bg-background p-3 text-sm text-primary-600">
-                      <p className="whitespace-pre-wrap">{s.notas}</p>
+                      <p className="whitespace-pre-wrap">{s.notas_vecino}</p>
                     </div>
                   )}
 
