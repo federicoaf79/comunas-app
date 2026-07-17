@@ -67,6 +67,8 @@ import NuevoReclamoPortal     from './pages/portal/NuevoReclamoPortal'
 import MisReclamosPortal      from './pages/portal/MisReclamosPortal'
 import ReservarPolideportivo  from './pages/portal/ReservarPolideportivo'
 import MisReservas            from './pages/portal/MisReservas'
+import SolicitarServicioDesarrollo from './pages/portal/SolicitarServicioDesarrollo'
+import MisSolicitudesDesarrollo from './pages/portal/MisSolicitudesDesarrollo'
 import SuperadminDashboard    from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
@@ -166,6 +168,8 @@ const router = createBrowserRouter([
       { path: '/portal/reclamos', element: <MisReclamosPortal /> },
       { path: '/portal/polideportivo/reservar', element: <ReservarPolideportivo /> },
       { path: '/portal/mis-reservas', element: <MisReservas /> },
+      { path: '/portal/desarrollo/solicitar', element: <SolicitarServicioDesarrollo /> },
+      { path: '/portal/mis-solicitudes-desarrollo', element: <MisSolicitudesDesarrollo /> },
     ],
   },
 
