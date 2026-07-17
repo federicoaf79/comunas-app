@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useCreateReclamo } from '../../hooks/useReclamos'
 import { supabase } from '../../lib/supabase'
+import DashboardHeader from '../../components/portal/DashboardHeader'
 import Spinner from '../../components/ui/Spinner'
 
 const TIPOS_RECLAMO = [
@@ -16,9 +17,14 @@ const MAX_FOTOS = 4
 const MAX_SIZE_MB = 5
 
 export default function NuevoReclamoPortal() {
-  const { vecino } = useVecino()
+  const { vecino, clearVecinoSession } = useVecino()
   const navigate = useNavigate()
   const createMut = useCreateReclamo()
+
+  function handleSignOut() {
+    clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
 
   const [form, setForm] = useState({
     tipo: 'escombros',
@@ -177,9 +183,12 @@ export default function NuevoReclamoPortal() {
   const inputCls = 'w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]'
 
   return (
-    <div className="min-h-screen bg-[#F5F4EF] py-8 px-4">
-      <div className="mx-auto max-w-2xl">
-        {/* Header */}
+    <div className="min-h-screen bg-[#F5F4EF]">
+      {/* Header consistente con VecinoDashboard */}
+      <DashboardHeader vecino={vecino} onSignOut={handleSignOut} subtitle="Nuevo reclamo" />
+
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        {/* Breadcrumb */}
         <div className="mb-6">
           <button
             type="button"
