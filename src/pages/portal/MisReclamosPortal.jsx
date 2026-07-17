@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { useReclamosVecino } from '../../hooks/useReclamos'
+import { useReclamosVecino } from '../../hooks/useVecinoData'
+import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
 
 const ESTADO_BADGES = {
@@ -171,7 +172,7 @@ function ReclamoDetalleModal({ reclamo, onClose }) {
 export default function MisReclamosPortal() {
   const { vecino } = useVecino()
   const navigate = useNavigate()
-  const { data: reclamos = [], isLoading } = useReclamosVecino(vecino?.id)
+  const { data: reclamos = [], isLoading } = useReclamosVecino(vecino?.id, supabase, true)
   const [reclamoSeleccionado, setReclamoSeleccionado] = useState(null)
 
   // Restricción: solo auth_mode === 'supabase' puede ver reclamos
