@@ -45,7 +45,7 @@ const TABS = [
   { key: 'salud',    label: 'Mi salud',     short: 'Salud' },
   { key: 'datos',    label: 'Mis datos',    short: 'Datos' },
   { key: 'reclamos', label: 'Mis reclamos', short: 'Reclamos' },
-  { key: 'reservas', label: 'Polideportivo', short: 'Polideportivo' },
+  { key: 'reservas', label: 'Poli',         short: 'Poli' },
   { key: 'familia',  label: 'Mi familia',   short: 'Familia' },
 ]
 
