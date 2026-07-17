@@ -406,6 +406,7 @@ function BolsinesTab({ municipioId, canEdit }) {
   const [mes, setMes]           = useState(currentMonthYYYYMM())
   const [programa, setPrograma] = useState('')
   const [modalNew, setModalNew] = useState(false)
+  const [entregaDetalle, setEntregaDetalle] = useState(null)
 
   const { data: entregas = [], isLoading } = useEntregas({
     mes: mes || undefined,
@@ -484,7 +485,11 @@ function BolsinesTab({ municipioId, canEdit }) {
           </THead>
           <tbody>
             {entregas.map(e => (
-              <Tr key={e.id}>
+              <Tr
+                key={e.id}
+                onClick={() => setEntregaDetalle(e)}
+                className="cursor-pointer hover:bg-primary-50/50 transition-colors"
+              >
                 <Td className="whitespace-nowrap">{dateOf(e.fecha)}</Td>
                 <Td>
                   <div>
@@ -514,6 +519,14 @@ function BolsinesTab({ municipioId, canEdit }) {
         <BolsonFormModal
           municipioId={municipioId}
           onClose={() => setModalNew(false)}
+        />
+      )}
+
+      {entregaDetalle && (
+        <EntregaDetalleModal
+          entrega={entregaDetalle}
+          municipioId={municipioId}
+          onClose={() => setEntregaDetalle(null)}
         />
       )}
     </div>
@@ -1111,5 +1124,376 @@ function BolsonFormModal({ municipioId, onClose }) {
         )}
       </div>
     </Modal>
+  )
+}
+
+function EntregaDetalleModal({ entrega, municipioId, onClose }) {
+  const [showComprobante, setShowComprobante] = useState(false)
+
+  // Query para obtener el nombre del usuario que registró la entrega
+  const registradoPorQ = useQuery({
+    queryKey: ['usuario', entrega.registrado_por ?? '__none__'],
+    queryFn: async () => {
+      if (!entrega.registrado_por) return null
+      const { data, error } = await supabase
+        .from('usuarios')
+        .select('nombre, email')
+        .eq('id', entrega.registrado_por)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+    enabled: !!entrega.registrado_por,
+  })
+
+  const registradoPor = registradoPorQ.data
+
+  function handleImprimir() {
+    setShowComprobante(true)
+    // Esperar a que el componente se renderice antes de imprimir
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.print())
+    })
+  }
+
+  return (
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        size="lg"
+        title="Detalle de entrega"
+        footer={
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Cerrar
+            </Button>
+            <Button onClick={handleImprimir}>
+              🖨️ Imprimir comprobante
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Vecino
+              </label>
+              <p className="text-sm font-medium text-primary">
+                {entrega.vecino?.nombre_completo ?? '—'}
+              </p>
+              <p className="text-xs text-primary-500">
+                DNI {entrega.vecino?.dni ?? '—'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Fecha de entrega
+              </label>
+              <p className="text-sm font-medium text-primary">
+                {dateOf(entrega.fecha)}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Programa
+              </label>
+              <p className="text-sm font-medium text-primary">
+                {entrega.programa ?? '—'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Variante
+              </label>
+              <p className="text-sm font-medium text-primary">
+                {entrega.variante || '—'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Cantidad
+              </label>
+              <p className="text-sm font-medium text-primary">
+                {entrega.cantidad ? `${entrega.cantidad} ${entrega.unidad ?? ''}`.trim() : '—'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Registrado por
+              </label>
+              {registradoPorQ.isLoading ? (
+                <p className="text-xs text-primary-400">Cargando...</p>
+              ) : (
+                <p className="text-sm font-medium text-primary">
+                  {registradoPor?.nombre ?? 'Sistema'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {entrega.notas && (
+            <div>
+              <label className="block text-xs font-medium text-primary-400 mb-1">
+                Notas
+              </label>
+              <p className="text-sm text-primary-700">
+                {entrega.notas}
+              </p>
+            </div>
+          )}
+
+          <div className="border-t border-border pt-3">
+            <label className="block text-xs font-medium text-primary-400 mb-1">
+              Fecha de registro
+            </label>
+            <p className="text-xs text-primary-500">
+              {new Date(entrega.created_at).toLocaleString('es-AR', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}
+            </p>
+          </div>
+        </div>
+      </Modal>
+
+      {showComprobante && (
+        <ComprobanteEntrega
+          entrega={entrega}
+          registradoPor={registradoPor}
+          municipioId={municipioId}
+        />
+      )}
+    </>
+  )
+}
+
+function ComprobanteEntrega({ entrega, registradoPor, municipioId }) {
+  const fechaEmision = new Date().toLocaleDateString('es-AR', {
+    dateStyle: 'long',
+  })
+
+  return (
+    <>
+      <div className="comprobante-print">
+        <div className="comprobante-header">
+          <h1 className="comprobante-titulo">
+            Comisión Municipal Real Sayana
+          </h1>
+          <h2 className="comprobante-subtitulo">
+            Comprobante de entrega — Ayuda Social
+          </h2>
+        </div>
+
+        <div className="comprobante-body">
+          <div className="comprobante-row">
+            <div className="comprobante-field">
+              <span className="comprobante-label">Fecha de entrega:</span>
+              <span className="comprobante-value">{dateOf(entrega.fecha)}</span>
+            </div>
+            <div className="comprobante-field">
+              <span className="comprobante-label">Nº de registro:</span>
+              <span className="comprobante-value">{entrega.id.slice(0, 8).toUpperCase()}</span>
+            </div>
+          </div>
+
+          <div className="comprobante-divider"></div>
+
+          <div className="comprobante-section">
+            <h3 className="comprobante-section-title">Beneficiario</h3>
+            <div className="comprobante-row">
+              <div className="comprobante-field">
+                <span className="comprobante-label">Nombre y Apellido:</span>
+                <span className="comprobante-value">{entrega.vecino?.nombre_completo ?? '—'}</span>
+              </div>
+              <div className="comprobante-field">
+                <span className="comprobante-label">DNI:</span>
+                <span className="comprobante-value">{entrega.vecino?.dni ?? '—'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="comprobante-divider"></div>
+
+          <div className="comprobante-section">
+            <h3 className="comprobante-section-title">Detalle de la entrega</h3>
+            <div className="comprobante-row">
+              <div className="comprobante-field">
+                <span className="comprobante-label">Programa:</span>
+                <span className="comprobante-value">{entrega.programa ?? '—'}</span>
+              </div>
+              {entrega.variante && (
+                <div className="comprobante-field">
+                  <span className="comprobante-label">Variante:</span>
+                  <span className="comprobante-value">{entrega.variante}</span>
+                </div>
+              )}
+            </div>
+            {entrega.cantidad && (
+              <div className="comprobante-row">
+                <div className="comprobante-field">
+                  <span className="comprobante-label">Cantidad:</span>
+                  <span className="comprobante-value">
+                    {entrega.cantidad} {entrega.unidad ?? ''}
+                  </span>
+                </div>
+              </div>
+            )}
+            {entrega.notas && (
+              <div className="comprobante-row">
+                <div className="comprobante-field comprobante-field-full">
+                  <span className="comprobante-label">Observaciones:</span>
+                  <span className="comprobante-value">{entrega.notas}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="comprobante-divider"></div>
+
+          <div className="comprobante-firma">
+            <div className="comprobante-firma-linea"></div>
+            <p className="comprobante-firma-label">Firma del beneficiario</p>
+          </div>
+
+          <div className="comprobante-footer">
+            <p>Registrado por: {registradoPor?.nombre ?? 'Sistema'}</p>
+            <p>Fecha de emisión: {fechaEmision}</p>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        .comprobante-print { display: none; }
+
+        @media print {
+          @page { size: A4 portrait; margin: 20mm; }
+
+          body * { visibility: hidden !important; }
+          .comprobante-print, .comprobante-print * { visibility: visible !important; }
+
+          .comprobante-print {
+            display: block !important;
+            position: absolute !important;
+            left: 0;
+            top: 0;
+            width: 100%;
+            color: #000;
+            background: #fff;
+            font-family: 'Sora', system-ui, sans-serif;
+            font-size: 11pt;
+          }
+
+          .comprobante-header {
+            text-align: center;
+            border-bottom: 2pt solid #0F1C35;
+            padding-bottom: 8mm;
+            margin-bottom: 8mm;
+          }
+
+          .comprobante-titulo {
+            font-size: 16pt;
+            font-weight: bold;
+            color: #0F1C35;
+            margin-bottom: 2mm;
+          }
+
+          .comprobante-subtitulo {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #666;
+          }
+
+          .comprobante-body {
+            margin-top: 6mm;
+          }
+
+          .comprobante-row {
+            display: flex;
+            gap: 8mm;
+            margin-bottom: 4mm;
+          }
+
+          .comprobante-field {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1mm;
+          }
+
+          .comprobante-field-full {
+            flex: 1 1 100%;
+          }
+
+          .comprobante-label {
+            font-size: 9pt;
+            font-weight: 600;
+            color: #666;
+          }
+
+          .comprobante-value {
+            font-size: 11pt;
+            font-weight: 500;
+            color: #000;
+          }
+
+          .comprobante-divider {
+            border-top: 1pt solid #ddd;
+            margin: 6mm 0;
+          }
+
+          .comprobante-section {
+            margin-bottom: 6mm;
+          }
+
+          .comprobante-section-title {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #0F1C35;
+            margin-bottom: 3mm;
+            text-transform: uppercase;
+            letter-spacing: 0.5pt;
+          }
+
+          .comprobante-firma {
+            margin-top: 15mm;
+            margin-bottom: 10mm;
+          }
+
+          .comprobante-firma-linea {
+            width: 60%;
+            margin: 0 auto;
+            border-top: 1pt solid #000;
+            margin-bottom: 2mm;
+          }
+
+          .comprobante-firma-label {
+            text-align: center;
+            font-size: 10pt;
+            color: #666;
+          }
+
+          .comprobante-footer {
+            margin-top: 10mm;
+            padding-top: 4mm;
+            border-top: 1pt solid #ddd;
+            font-size: 9pt;
+            color: #666;
+            text-align: center;
+            line-height: 1.6;
+          }
+        }
+      `}</style>
+    </>
   )
 }
