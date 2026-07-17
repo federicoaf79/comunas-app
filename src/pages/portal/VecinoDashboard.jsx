@@ -45,7 +45,7 @@ const TABS = [
   { key: 'salud',    label: 'Mi salud',     short: 'Salud' },
   { key: 'datos',    label: 'Mis datos',    short: 'Datos' },
   { key: 'reclamos', label: 'Mis reclamos', short: 'Reclamos' },
-  { key: 'reservas', label: 'Mis reservas', short: 'Reservas' },
+  { key: 'reservas', label: 'Polideportivo', short: 'Polideportivo' },
   { key: 'familia',  label: 'Mi familia',   short: 'Familia' },
 ]
 
@@ -717,7 +717,7 @@ function ReclamosTab({ vecino, reclamos, isLoading, error }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// E) Mis reservas — reservas deportivas del Polideportivo
+// E) Polideportivo — reservas deportivas del Polideportivo Municipal
 // ─────────────────────────────────────────────────────────────────
 
 const ESTADO_RESERVA_CLASS = {
@@ -767,7 +767,7 @@ function ReservasTab({ vecino, reservas, isLoading, error }) {
     <section className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis reservas</h2>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Polideportivo</h2>
           <p className="text-sm text-primary-500">
             Historial de reservas del Polideportivo Municipal.
           </p>
