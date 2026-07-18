@@ -76,12 +76,16 @@ function vecinoLabel(v) {
   return v.nombre_completo || v.apellido || v.nombre || '—'
 }
 
-// "YYYY-MM-DD · HH:MM" → { fecha, hora } separados para la tabla.
-function splitFechaHora(iso) {
-  if (!iso) return { fecha: '—', hora: '—' }
-  const s = dateTimeOf(iso) // ya viene en hora Argentina
-  const [fecha, hora] = s.split(' · ')
-  return { fecha: fecha ?? '—', hora: hora ?? '—' }
+// Extrae { fecha, hora } de un turno. Si hora_inicio es null (Polideportivo/Agencia)
+// → muestra solo fecha. Si tiene hora_inicio → fecha + rango horario.
+function turnoFechaHora(t) {
+  if (!t.fecha) return { fecha: '—', hora: '—' }
+  const fecha = dateTimeOf(t.fecha).split(' · ')[0] // "DD/MM/YYYY"
+  if (!t.hora_inicio) return { fecha, hora: '—' } // sin horario fijo
+  const horaIni = t.hora_inicio.substring(0, 5) // "HH:MM"
+  const horaFin = t.hora_fin ? t.hora_fin.substring(0, 5) : ''
+  const hora = horaFin ? `${horaIni} - ${horaFin}` : horaIni
+  return { fecha, hora }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -420,7 +424,7 @@ function TabTurnos({ dep, dependenciaId }) {
           </THead>
           <tbody>
             {turnos.map(t => {
-              const { fecha, hora } = splitFechaHora(t.fecha_hora)
+              const { fecha, hora } = turnoFechaHora(t)
               return (
                 <Tr key={t.id}>
                   <Td className="whitespace-nowrap font-mono text-xs">{fecha}</Td>
