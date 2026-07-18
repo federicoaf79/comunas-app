@@ -404,19 +404,13 @@ export default function ReservarPolideportivo() {
                     </div>
                     <div className="mt-1">
                       {r.estado === 'pendiente' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent-800">
-                          Pendiente
-                        </span>
+                        <span className="estado-pendiente">Pendiente</span>
                       )}
                       {r.estado === 'confirmado' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-ok/20 px-2 py-0.5 text-xs font-semibold text-ok-800">
-                          Confirmado
-                        </span>
+                        <span className="estado-confirmado">Confirmado</span>
                       )}
                       {r.estado === 'cancelado' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-danger/20 px-2 py-0.5 text-xs font-semibold text-danger-800">
-                          Cancelado
-                        </span>
+                        <span className="estado-cancelado">Cancelado</span>
                       )}
                     </div>
                   </li>
