@@ -146,7 +146,7 @@ export default function SolicitarServicioDesarrollo() {
           </label>
           <Select
             value={tipoServicio}
-            onChange={e => setTipoServicio(e.target.value)}
+            onChange={setTipoServicio}
             required
           >
             <option value="">-- Seleccioná --</option>

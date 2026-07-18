@@ -1314,7 +1314,7 @@ function ReservasCanchasTab({ municipioId, dependenciaId }) {
             </label>
             <Select
               value={filtroEstado}
-              onChange={e => setFiltroEstado(e.target.value)}
+              onChange={setFiltroEstado}
               className="w-full"
             >
               <option value="">Todos</option>

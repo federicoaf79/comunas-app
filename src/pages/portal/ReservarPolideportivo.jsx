@@ -236,7 +236,7 @@ export default function ReservarPolideportivo() {
                 </label>
                 <Select
                   value={espacioId}
-                  onChange={e => setEspacioId(e.target.value)}
+                  onChange={setEspacioId}
                   required
                 >
                   {espacios.map(e => (
@@ -308,7 +308,7 @@ export default function ReservarPolideportivo() {
               </label>
               <Select
                 value={deporte}
-                onChange={e => setDeporte(e.target.value)}
+                onChange={setDeporte}
                 required
               >
                 <option value="">-- Seleccioná --</option>
