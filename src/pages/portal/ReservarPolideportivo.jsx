@@ -3,7 +3,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useVecino } from '../../context/VecinoContext'
+import { TABS } from './VecinoDashboard'
 import {
   useEspaciosDeportivos,
   usePolideportivoHorario,
@@ -12,6 +13,7 @@ import {
   useReservasVecino,
 } from '../../hooks/useReservasDeportivas'
 import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
+import DashboardHeader from '../../components/portal/DashboardHeader'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import Select from '../../components/ui/Select'
@@ -26,10 +28,15 @@ const DEPORTES_PREDEFINIDOS = [
 
 export default function ReservarPolideportivo() {
   const navigate = useNavigate()
-  const { vecino, municipioId } = useAuth()
+  const { vecinoSession, clearVecinoSession, municipioId } = useVecino()
+
+  function handleSignOut() {
+    clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
 
   // AUTH GUARD: requiere cuenta supabase (email/password)
-  if (!vecino) {
+  if (!vecinoSession) {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -53,7 +60,7 @@ export default function ReservarPolideportivo() {
     )
   }
 
-  if (vecino.auth_mode !== 'supabase') {
+  if (vecinoSession.auth_mode !== 'supabase') {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -85,7 +92,7 @@ export default function ReservarPolideportivo() {
   )
   const { data: espacios = [], isLoading: loadingEspacios } = useEspaciosDeportivos(municipioId)
   const { data: horarioConfig, isLoading: loadingHorario } = usePolideportivoHorario(municipioId)
-  const { data: misReservas = [], isLoading: loadingMisReservas } = useReservasVecino(vecino.id)
+  const { data: misReservas = [], isLoading: loadingMisReservas } = useReservasVecino(vecinoSession.id)
 
   // STATE
   const [espacioId, setEspacioId] = useState('')
@@ -157,7 +164,7 @@ export default function ReservarPolideportivo() {
         municipio_id: municipioId,
         dependencia_id: depPolideportivo.id,
         espacio_id: espacioId,
-        vecino_id: vecino.id,
+        vecino_id: vecinoSession.id,
         fecha,
         hora_inicio: horaInicio,
         hora_fin: horaFin,
@@ -167,7 +174,7 @@ export default function ReservarPolideportivo() {
       })
 
       alert('✅ Reserva creada exitosamente. Estado: Pendiente de confirmación.')
-      navigate('/portal/mis-reservas')
+      navigate('/portal/mi-cuenta?tab=reservas')
     } catch (err) {
       alert(`❌ Error: ${err.message}`)
     }
@@ -194,15 +201,28 @@ export default function ReservarPolideportivo() {
   }
 
   return (
-    <div className="container max-w-3xl py-6 sm:py-10">
-      <div className="mb-6">
-        <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-          Reservar Cancha
-        </h1>
-        <p className="mt-1 text-sm text-primary-500">
-          {depPolideportivo.nombre} — Completá el formulario para solicitar tu reserva
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Reservar cancha" menuItems={TABS} />
+
+      <div className="container max-w-3xl py-6 sm:py-10">
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => navigate('/portal/mi-cuenta?tab=reservas')}
+            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-ok"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Volver a mis reservas
+          </button>
+          <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
+            Reservar Cancha
+          </h1>
+          <p className="mt-1 text-sm text-primary-500">
+            {depPolideportivo.nombre} — Completá el formulario para solicitar tu reserva
+          </p>
+        </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Formulario */}
@@ -393,7 +413,7 @@ export default function ReservarPolideportivo() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate('/portal/mis-reservas')}
+                onClick={() => navigate('/portal/mi-cuenta?tab=reservas')}
                 className="mt-3 w-full"
               >
                 Ver todas
@@ -401,6 +421,7 @@ export default function ReservarPolideportivo() {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

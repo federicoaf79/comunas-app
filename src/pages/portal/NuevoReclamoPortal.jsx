@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useCreateReclamo } from '../../hooks/useReclamos'
+import { TABS } from './VecinoDashboard'
 import { supabase } from '../../lib/supabase'
 import DashboardHeader from '../../components/portal/DashboardHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -17,7 +18,7 @@ const MAX_FOTOS = 4
 const MAX_SIZE_MB = 5
 
 export default function NuevoReclamoPortal() {
-  const { vecino, clearVecinoSession } = useVecino()
+  const { vecinoSession, clearVecinoSession } = useVecino()
   const navigate = useNavigate()
   const createMut = useCreateReclamo()
 
@@ -36,7 +37,7 @@ export default function NuevoReclamoPortal() {
   const [error, setError] = useState('')
 
   // Restricción: solo auth_mode === 'supabase' puede crear reclamos
-  if (vecino?.auth_mode !== 'supabase') {
+  if (vecinoSession?.auth_mode !== 'supabase') {
     return (
       <div className="min-h-screen bg-[#F5F4EF] py-8 px-4">
         <div className="mx-auto max-w-2xl">
@@ -116,7 +117,7 @@ export default function NuevoReclamoPortal() {
       const foto = fotos[i]
       const ext = foto.file.name.split('.').pop()
       const timestamp = Date.now()
-      const path = `${vecino.id}/${timestamp}-${i}.${ext}`
+      const path = `${vecinoSession.id}/${timestamp}-${i}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from('reclamos')
@@ -157,8 +158,8 @@ export default function NuevoReclamoPortal() {
 
       // Crear reclamo
       await createMut.mutateAsync({
-        municipio_id: vecino.municipio_id,
-        vecino_id: vecino.id,
+        municipio_id: vecinoSession.municipio_id,
+        vecino_id: vecinoSession.id,
         tipo: form.tipo,
         descripcion: form.descripcion,
         ubicacion: form.direccion,
@@ -172,7 +173,7 @@ export default function NuevoReclamoPortal() {
       fotos.forEach(f => URL.revokeObjectURL(f.preview))
 
       // Navegar al dashboard del vecino (tab reclamos)
-      navigate('/portal/mi-cuenta')
+      navigate('/portal/mi-cuenta?tab=reclamos')
     } catch (err) {
       setError(err.message || 'Error al enviar el reclamo')
     } finally {
@@ -185,20 +186,20 @@ export default function NuevoReclamoPortal() {
   return (
     <div className="min-h-screen bg-[#F5F4EF]">
       {/* Header consistente con VecinoDashboard */}
-      <DashboardHeader vecino={vecino} onSignOut={handleSignOut} subtitle="Nuevo reclamo" />
+      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Nuevo reclamo" menuItems={TABS} />
 
       <div className="mx-auto max-w-2xl px-4 py-8">
         {/* Breadcrumb */}
         <div className="mb-6">
           <button
             type="button"
-            onClick={() => navigate('/portal/mi-cuenta')}
+            onClick={() => navigate('/portal/mi-cuenta?tab=reclamos')}
             className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-[#1D4ED8]"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-            Volver a mi cuenta
+            Volver a mis reclamos
           </button>
           <h1 className="font-sora text-2xl font-bold text-primary">Nuevo reclamo</h1>
           <p className="mt-1 text-sm text-primary-600">
@@ -311,7 +312,7 @@ export default function NuevoReclamoPortal() {
           <div className="flex flex-col-reverse gap-3 border-t border-border pt-6 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => navigate('/portal/mi-cuenta')}
+              onClick={() => navigate('/portal/mi-cuenta?tab=reclamos')}
               disabled={uploading}
               className="rounded-lg border border-border bg-white px-6 py-2.5 font-sora text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
             >

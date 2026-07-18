@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useCrearSolicitud } from '../../hooks/useSolicitudesDesarrollo'
+import { TABS } from './VecinoDashboard'
+import DashboardHeader from '../../components/portal/DashboardHeader'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import { todayArgYMD } from '../../lib/datetime'
@@ -18,10 +20,15 @@ const TIPOS_SERVICIO = [
 
 export default function SolicitarServicioDesarrollo() {
   const navigate = useNavigate()
-  const { vecino, municipioId } = useVecino()
+  const { vecinoSession, clearVecinoSession, municipioId } = useVecino()
+
+  function handleSignOut() {
+    clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
 
   // AUTH GUARD: requiere cuenta supabase (email/password)
-  if (!vecino) {
+  if (!vecinoSession) {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -45,7 +52,7 @@ export default function SolicitarServicioDesarrollo() {
     )
   }
 
-  if (vecino.auth_mode !== 'supabase') {
+  if (vecinoSession.auth_mode !== 'supabase') {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -94,29 +101,42 @@ export default function SolicitarServicioDesarrollo() {
     try {
       await crearSolicitud.mutateAsync({
         municipio_id: municipioId,
-        vecino_id: vecino.id,
+        vecino_id: vecinoSession.id,
         tipo_servicio: tipoServicio,
         fecha_preferida: fechaPreferida || null,
         notas: notas.trim(),
       })
 
       alert('✅ Solicitud enviada exitosamente. Estado: En lista de espera.')
-      navigate('/portal/mis-solicitudes-desarrollo')
+      navigate('/portal/mi-cuenta?tab=desarrollo')
     } catch (err) {
       alert(`❌ Error: ${err.message}`)
     }
   }
 
   return (
-    <div className="container max-w-2xl py-6 sm:py-10">
-      <div className="mb-6">
-        <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-          Solicitar Servicio Rural
-        </h1>
-        <p className="mt-1 text-sm text-primary-500">
-          Agencia de Desarrollo — Completá el formulario para enviar tu solicitud
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Nueva solicitud" menuItems={TABS} />
+
+      <div className="container max-w-2xl py-6 sm:py-10">
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => navigate('/portal/mi-cuenta?tab=desarrollo')}
+            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-ok"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            Volver a mis solicitudes
+          </button>
+          <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
+            Solicitar Servicio Rural
+          </h1>
+          <p className="mt-1 text-sm text-primary-500">
+            Agencia de Desarrollo — Completá el formulario para enviar tu solicitud
+          </p>
+        </div>
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
         {/* Tipo de servicio */}
@@ -193,6 +213,7 @@ export default function SolicitarServicioDesarrollo() {
           {crearSolicitud.isPending ? 'Enviando solicitud...' : 'Enviar Solicitud'}
         </Button>
       </form>
+      </div>
     </div>
   )
 }

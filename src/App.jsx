@@ -167,9 +167,9 @@ const router = createBrowserRouter([
       { path: '/portal/reclamos/nuevo', element: <NuevoReclamoPortal /> },
       { path: '/portal/reclamos', element: <MisReclamosPortal /> },
       { path: '/portal/polideportivo/reservar', element: <ReservarPolideportivo /> },
-      { path: '/portal/mis-reservas', element: <MisReservas /> },
+      { path: '/portal/mis-reservas', element: <Navigate to="/portal/mi-cuenta?tab=reservas" replace /> },
       { path: '/portal/desarrollo/solicitar', element: <SolicitarServicioDesarrollo /> },
-      { path: '/portal/mis-solicitudes-desarrollo', element: <MisSolicitudesDesarrollo /> },
+      { path: '/portal/mis-solicitudes-desarrollo', element: <Navigate to="/portal/mi-cuenta?tab=desarrollo" replace /> },
     ],
   },
 

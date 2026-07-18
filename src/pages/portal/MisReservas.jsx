@@ -2,18 +2,25 @@
 // Listado de reservas deportivas del vecino logueado
 
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
+import { useVecino } from '../../context/VecinoContext'
+import { TABS } from './VecinoDashboard'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
+import DashboardHeader from '../../components/portal/DashboardHeader'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { dateOf, timeOf } from '../../lib/datetime'
 
 export default function MisReservas() {
   const navigate = useNavigate()
-  const { vecino } = useAuth()
+  const { vecinoSession, clearVecinoSession } = useVecino()
+
+  function handleSignOut() {
+    clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
 
   // AUTH GUARD
-  if (!vecino) {
+  if (!vecinoSession) {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -34,7 +41,7 @@ export default function MisReservas() {
     )
   }
 
-  if (vecino.auth_mode !== 'supabase') {
+  if (vecinoSession.auth_mode !== 'supabase') {
     return (
       <div className="container max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
@@ -55,31 +62,31 @@ export default function MisReservas() {
     )
   }
 
-  const { data: reservas = [], isLoading } = useReservasVecino(vecino.id)
-
-  if (isLoading) {
-    return (
-      <div className="container max-w-3xl py-10">
-        <Spinner />
-      </div>
-    )
-  }
+  const { data: reservas = [], isLoading } = useReservasVecino(vecinoSession.id)
 
   return (
-    <div className="container max-w-4xl py-6 sm:py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-            Mis Reservas
-          </h1>
-          <p className="mt-1 text-sm text-primary-500">
-            Historial de reservas del Polideportivo
-          </p>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Mis reservas" menuItems={TABS} />
+
+      {isLoading ? (
+        <div className="container max-w-3xl py-10">
+          <Spinner />
         </div>
-        <Button onClick={() => navigate('/portal/polideportivo/reservar')}>
-          Nueva Reserva
-        </Button>
-      </div>
+      ) : (
+        <div className="container max-w-4xl py-6 sm:py-10">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
+                Mis Reservas
+              </h1>
+              <p className="mt-1 text-sm text-primary-500">
+                Historial de reservas del Polideportivo
+              </p>
+            </div>
+            <Button onClick={() => navigate('/portal/polideportivo/reservar')}>
+              Nueva Reserva
+            </Button>
+          </div>
 
       {reservas.length === 0 ? (
         <div className="card p-8 text-center">
@@ -176,6 +183,8 @@ export default function MisReservas() {
               )}
             </div>
           ))}
+        </div>
+      )}
         </div>
       )}
     </div>

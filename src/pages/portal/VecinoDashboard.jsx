@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useMemo, useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino } from '../../hooks/useVecinoData'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
+import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
 import { supabase } from '../../lib/supabase'
 import DashboardHeader from '../../components/portal/DashboardHeader'
 import Spinner from '../../components/ui/Spinner'
@@ -40,13 +41,14 @@ const VINCULO_LABEL = {
   otro:    'Otro familiar',
 }
 
-const TABS = [
-  { key: 'turnos',   label: 'Mis turnos',   short: 'Turnos' },
-  { key: 'salud',    label: 'Mi salud',     short: 'Salud' },
-  { key: 'datos',    label: 'Mis datos',    short: 'Datos' },
-  { key: 'reclamos', label: 'Mis reclamos', short: 'Reclamos' },
-  { key: 'reservas', label: 'Poli',         short: 'Poli' },
-  { key: 'familia',  label: 'Mi familia',   short: 'Familia' },
+export const TABS = [
+  { key: 'turnos',     label: 'Mis turnos',              short: 'Turnos' },
+  { key: 'salud',      label: 'Mi salud',                short: 'Salud' },
+  { key: 'datos',      label: 'Mis datos',               short: 'Datos' },
+  { key: 'reclamos',   label: 'Mis reclamos',            short: 'Reclamos' },
+  { key: 'reservas',   label: 'Poli',                    short: 'Poli' },
+  { key: 'familia',    label: 'Mi familia',              short: 'Familia' },
+  { key: 'desarrollo', label: 'Agencia de Desarrollo',   short: 'Agencia' },
 ]
 
 function nombreVecino(v) {
@@ -922,22 +924,162 @@ function FamiliaTab({ turnos, isLoading, error }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// G) Agencia de Desarrollo — solicitudes de servicios rurales
+// ─────────────────────────────────────────────────────────────────
+
+function DesarrolloTab({ vecino, solicitudes, isLoading, error }) {
+  const navigate = useNavigate()
+
+  // Guard: requiere cuenta completa (mismo que Reclamos)
+  if (vecino?.auth_mode !== 'supabase') {
+    return (
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Agencia de Desarrollo</h2>
+          <p className="text-sm text-primary-500">
+            Solicitudes de servicios rurales que registraste.
+          </p>
+        </div>
+
+        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
+          <div className="mx-auto max-w-lg text-center">
+            <div className="mb-4 text-5xl">🔒</div>
+            <h3 className="font-sora text-lg font-bold text-primary">
+              Cuenta requerida
+            </h3>
+            <p className="mt-3 text-sm text-primary-700">
+              Para acceder a tus solicitudes de la Agencia de Desarrollo, se requiere que tengas una cuenta registrada.
+              Si entraste con acceso rápido, cerrá sesión y registrate o iniciá sesión con tu cuenta.
+            </p>
+            <button
+              onClick={() => navigate('/portal/acceso')}
+              className="btn-primary mt-6"
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis solicitudes</h2>
+          <p className="text-sm text-primary-500">
+            Solicitudes de servicios rurales que registraste.
+          </p>
+        </div>
+        <Link to="/portal/desarrollo/solicitar" className="btn-accent shrink-0">
+          + Nueva solicitud
+        </Link>
+      </div>
+
+      {isLoading && (
+        <div className="card flex items-center justify-center p-8">
+          <Spinner size="lg" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          No pudimos cargar tus solicitudes. Probá de nuevo.
+        </div>
+      )}
+
+      {!isLoading && !error && solicitudes.length === 0 && (
+        <div className="card p-8 text-center">
+          <p className="text-sm text-primary-500">
+            No tenés solicitudes registradas.
+          </p>
+        </div>
+      )}
+
+      {!isLoading && !error && solicitudes.length > 0 && (
+        <div className="card overflow-hidden p-0">
+          <ul className="divide-y divide-border">
+            {solicitudes.map(s => {
+              // Mapear estados a etiquetas/clases de VecinoDashboard
+              const estadoLabel = s.estado === 'pendiente' ? 'En lista de espera'
+                : s.estado === 'confirmado' ? 'Aprobado'
+                : s.estado === 'atendido' ? 'Realizado'
+                : s.estado === 'cancelado' ? 'Dado de baja'
+                : ESTADO_LABEL[s.estado] ?? s.estado
+
+              const estadoCls = ESTADO_CLASS[s.estado] ?? 'estado-pendiente'
+
+              return (
+                <li key={s.id} className="space-y-2 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">
+                        {dateOf(s.created_at)}
+                      </p>
+                      {s.motivo && (
+                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-accent-700">
+                          {s.motivo}
+                        </p>
+                      )}
+                      {s.fecha && (
+                        <p className="mt-1 text-sm text-primary-700 sm:text-base">
+                          Fecha preferida: {dateOf(s.fecha)}
+                        </p>
+                      )}
+                      {s.notas_vecino && (
+                        <p className="mt-1 text-sm text-primary-700">
+                          {truncate(s.notas_vecino, 60)}
+                        </p>
+                      )}
+                    </div>
+                    <span className={estadoCls}>
+                      {estadoLabel}
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────────
 
 export default function VecinoDashboard() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { vecinoSession, clearVecinoSession, authLoading } = useVecino()
-  const [tab, setTab] = useState('turnos')
 
-  // DEBUG: Log inicial del componente
+  // Leer tab desde query param, default 'turnos'
+  const tab = searchParams.get('tab') || 'turnos'
+
+  function setTab(newTab) {
+    setSearchParams({ tab: newTab })
+  }
+
+  // DEBUG: Log inicial del componente y cuando cambia el tab
+  useEffect(() => {
+    console.log('[VecinoDashboard] TAB CHANGED', {
+      tab,
+      searchParamsRaw: searchParams.toString(),
+      tabFromParams: searchParams.get('tab'),
+    })
+  }, [tab, searchParams])
+
   console.log('[VecinoDashboard] RENDER', {
     vecinoSession,
     hasSession: !!vecinoSession,
     vecinoId: vecinoSession?.id,
     authMode: vecinoSession?.auth_mode,
     authLoading,
-    tab
+    tab,
+    searchParamsToString: searchParams.toString(),
   })
 
   // Los hooks van siempre antes del early return — los queries
@@ -956,13 +1098,15 @@ export default function VecinoDashboard() {
   const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase, ready)
   const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase, ready)
   const reservasQ = useReservasVecino(vecinoSession?.id)
+  const solicitudesQ = useSolicitudesVecino(vecinoSession?.id, { enabled: ready })
 
   // DEBUG: Log estado de queries
   console.log('[VecinoDashboard] QUERIES', {
     turnos: { isLoading: turnosQ.isLoading, error: turnosQ.error, dataLength: turnosQ.data?.length },
     atenciones: { isLoading: atencionesQ.isLoading, error: atencionesQ.error, dataLength: atencionesQ.data?.length },
     reclamos: { isLoading: reclamosQ.isLoading, error: reclamosQ.error, dataLength: reclamosQ.data?.length },
-    reservas: { isLoading: reservasQ.isLoading, error: reservasQ.error, dataLength: reservasQ.data?.length }
+    reservas: { isLoading: reservasQ.isLoading, error: reservasQ.error, dataLength: reservasQ.data?.length },
+    solicitudes: { isLoading: solicitudesQ.isLoading, error: solicitudesQ.error, dataLength: solicitudesQ.data?.length }
   })
 
   function handleSignOut() {
@@ -976,7 +1120,7 @@ export default function VecinoDashboard() {
 
   return (
     <div className="min-h-svh bg-background">
-      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} />
+      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} menuItems={TABS} />
 
       <Tabs active={tab} onChange={setTab} />
 
@@ -1018,6 +1162,14 @@ export default function VecinoDashboard() {
             turnos={turnosQ.data ?? []}
             isLoading={turnosQ.isLoading}
             error={turnosQ.error}
+          />
+        )}
+        {tab === 'desarrollo' && (
+          <DesarrolloTab
+            vecino={vecinoSession}
+            solicitudes={solicitudesQ.data ?? []}
+            isLoading={solicitudesQ.isLoading}
+            error={solicitudesQ.error}
           />
         )}
       </main>

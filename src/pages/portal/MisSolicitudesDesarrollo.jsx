@@ -3,7 +3,9 @@
 
 import { useNavigate } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
+import { TABS } from './VecinoDashboard'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
+import DashboardHeader from '../../components/portal/DashboardHeader'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { dateOf } from '../../lib/datetime'
@@ -18,7 +20,14 @@ const ESTADO_LABELS = {
 
 export default function MisSolicitudesDesarrollo() {
   const navigate = useNavigate()
-  const { vecino } = useVecino()
+  const { vecinoSession, clearVecinoSession } = useVecino()
+
+  function handleSignOut() {
+    clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
+
+  const vecino = vecinoSession
 
   // AUTH GUARD
   if (!vecino) {
@@ -65,29 +74,29 @@ export default function MisSolicitudesDesarrollo() {
 
   const { data: solicitudes = [], isLoading } = useSolicitudesVecino(vecino.id)
 
-  if (isLoading) {
-    return (
-      <div className="container max-w-3xl py-10">
-        <Spinner />
-      </div>
-    )
-  }
-
   return (
-    <div className="container max-w-4xl py-6 sm:py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
-            Mis Solicitudes
-          </h1>
-          <p className="mt-1 text-sm text-primary-500">
-            Historial de solicitudes de Agencia de Desarrollo — Servicios Rurales
-          </p>
+    <div className="min-h-screen bg-background">
+      <DashboardHeader vecino={vecino} onSignOut={handleSignOut} subtitle="Mis solicitudes" menuItems={TABS} />
+
+      {isLoading ? (
+        <div className="container max-w-3xl py-10">
+          <Spinner />
         </div>
-        <Button onClick={() => navigate('/portal/desarrollo/solicitar')}>
-          Nueva Solicitud
-        </Button>
-      </div>
+      ) : (
+        <div className="container max-w-4xl py-6 sm:py-10">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
+                Mis Solicitudes
+              </h1>
+              <p className="mt-1 text-sm text-primary-500">
+                Historial de solicitudes de Agencia de Desarrollo — Servicios Rurales
+              </p>
+            </div>
+            <Button onClick={() => navigate('/portal/desarrollo/solicitar')}>
+              Nueva Solicitud
+            </Button>
+          </div>
 
       {solicitudes.length === 0 ? (
         <div className="card p-8 text-center">
@@ -192,6 +201,8 @@ export default function MisSolicitudesDesarrollo() {
               )}
             </div>
           ))}
+        </div>
+      )}
         </div>
       )}
     </div>

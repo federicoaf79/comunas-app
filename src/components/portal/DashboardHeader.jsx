@@ -1,6 +1,7 @@
 // src/components/portal/DashboardHeader.jsx
 // Header compartido del portal del vecino — banner con nombre del municipio + logout
 
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
@@ -45,21 +46,39 @@ function Escudo({ className = 'h-9 w-9' }) {
  * @param {Object} vecino - Datos del vecino (nombre, dni, barrio, etc.)
  * @param {Function} onSignOut - Callback para cerrar sesión
  * @param {string} [subtitle='Mi cuenta'] - Subtítulo debajo del nombre del municipio
+ * @param {Array} [menuItems] - Array de { key, label, short } para menú hamburguesa en mobile
  */
-export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuenta' }) {
+export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuenta', menuItems }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+
   return (
     <header className="border-b border-primary-900 bg-primary text-white">
       <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link to="/portal" className="flex items-center gap-2.5 text-white">
-            <Escudo className="h-8 w-8 shrink-0" />
-            <div className="leading-tight">
-              <p className="font-sora text-sm font-bold">{MUNICIPIO_NOMBRE}</p>
-              <p className="text-[10px] font-medium uppercase tracking-wide text-white/60">
-                {subtitle}
-              </p>
-            </div>
-          </Link>
+          {/* Mobile: menú ☰ a la izquierda del logo */}
+          <div className="flex items-center gap-2">
+            {menuItems && (
+              <button
+                type="button"
+                onClick={() => setMenuOpen(true)}
+                className="sm:hidden rounded-md p-1.5 text-white transition-colors hover:bg-white/10"
+                aria-label="Abrir menú"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            )}
+            <Link to="/portal" className="flex items-center gap-2.5 text-white">
+              <Escudo className="h-8 w-8 shrink-0" />
+              <div className="leading-tight">
+                <p className="font-sora text-sm font-bold">{MUNICIPIO_NOMBRE}</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-white/60">
+                  {subtitle}
+                </p>
+              </div>
+            </Link>
+          </div>
           <button
             type="button"
             onClick={onSignOut}
@@ -86,6 +105,52 @@ export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuen
           </div>
         </div>
       </div>
+
+      {/* Mobile menu drawer */}
+      {menuItems && menuOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-40 bg-black/50 sm:hidden"
+            onClick={() => setMenuOpen(false)}
+          />
+          {/* Panel lateral */}
+          <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl sm:hidden">
+            <div className="flex h-full flex-col">
+              {/* Header del drawer */}
+              <div className="flex items-center justify-between border-b border-border bg-primary px-4 py-3 text-white">
+                <span className="font-sora text-sm font-bold">Menú</span>
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-md p-1 transition-colors hover:bg-white/10"
+                  aria-label="Cerrar menú"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              {/* Lista de secciones */}
+              <nav className="flex-1 overflow-y-auto p-4">
+                <ul className="space-y-1">
+                  {menuItems.map(item => (
+                    <li key={item.key}>
+                      <Link
+                        to={`/portal/mi-cuenta?tab=${item.key}`}
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary-50"
+                      >
+                        {item.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   )
 }
