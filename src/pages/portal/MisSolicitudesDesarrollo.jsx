@@ -32,7 +32,7 @@ export default function MisSolicitudesDesarrollo() {
   // AUTH GUARD
   if (!vecino) {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -53,7 +53,7 @@ export default function MisSolicitudesDesarrollo() {
 
   if (vecino.auth_mode !== 'supabase') {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -79,11 +79,11 @@ export default function MisSolicitudesDesarrollo() {
       <DashboardHeader vecino={vecino} onSignOut={handleSignOut} subtitle="Mis solicitudes" menuItems={TABS} />
 
       {isLoading ? (
-        <div className="container max-w-3xl py-10">
+        <div className="container mx-auto max-w-3xl py-10">
           <Spinner />
         </div>
       ) : (
-        <div className="container max-w-4xl py-6 sm:py-10">
+        <div className="container mx-auto max-w-4xl py-6 sm:py-10">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">

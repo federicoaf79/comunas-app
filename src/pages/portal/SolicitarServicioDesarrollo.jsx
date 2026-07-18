@@ -30,7 +30,7 @@ export default function SolicitarServicioDesarrollo() {
   // AUTH GUARD: requiere cuenta supabase (email/password)
   if (!vecinoSession) {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -54,7 +54,7 @@ export default function SolicitarServicioDesarrollo() {
 
   if (vecinoSession.auth_mode !== 'supabase') {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -118,7 +118,7 @@ export default function SolicitarServicioDesarrollo() {
     <div className="min-h-screen bg-background">
       <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Nueva solicitud" menuItems={TABS} />
 
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="mb-6">
           <button
             type="button"

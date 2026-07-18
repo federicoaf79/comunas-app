@@ -38,7 +38,7 @@ export default function ReservarPolideportivo() {
   // AUTH GUARD: requiere cuenta supabase (email/password)
   if (!vecinoSession) {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -62,7 +62,7 @@ export default function ReservarPolideportivo() {
 
   if (vecinoSession.auth_mode !== 'supabase') {
     return (
-      <div className="container max-w-2xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -182,7 +182,7 @@ export default function ReservarPolideportivo() {
 
   if (loadingDep || loadingEspacios || loadingHorario) {
     return (
-      <div className="container max-w-2xl py-10">
+      <div className="container mx-auto max-w-2xl py-10">
         <Spinner />
       </div>
     )
@@ -190,7 +190,7 @@ export default function ReservarPolideportivo() {
 
   if (!depPolideportivo || espacios.length === 0) {
     return (
-      <div className="container max-w-2xl py-10">
+      <div className="container mx-auto max-w-2xl py-10">
         <div className="card p-8 text-center">
           <p className="text-sm text-primary-500">
             El Polideportivo no está disponible en este momento.
@@ -204,7 +204,7 @@ export default function ReservarPolideportivo() {
     <div className="min-h-screen bg-background">
       <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Reservar cancha" menuItems={TABS} />
 
-      <div className="container max-w-3xl py-6 sm:py-10">
+      <div className="container mx-auto max-w-3xl py-6 sm:py-10">
         <div className="mb-6">
           <button
             type="button"
@@ -402,10 +402,22 @@ export default function ReservarPolideportivo() {
                     <div className="font-medium text-primary">
                       {dateOf(r.fecha)} · {timeOf(r.hora_inicio)}-{timeOf(r.hora_fin)}
                     </div>
-                    <div className="text-primary-500">
-                      {r.estado === 'pendiente' && '⏳ Pendiente'}
-                      {r.estado === 'confirmado' && '✅ Confirmado'}
-                      {r.estado === 'cancelado' && '❌ Cancelado'}
+                    <div className="mt-1">
+                      {r.estado === 'pendiente' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-accent/20 px-2 py-0.5 text-xs font-semibold text-accent-800">
+                          Pendiente
+                        </span>
+                      )}
+                      {r.estado === 'confirmado' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-ok/20 px-2 py-0.5 text-xs font-semibold text-ok-800">
+                          Confirmado
+                        </span>
+                      )}
+                      {r.estado === 'cancelado' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-danger/20 px-2 py-0.5 text-xs font-semibold text-danger-800">
+                          Cancelado
+                        </span>
+                      )}
                     </div>
                   </li>
                 ))}
