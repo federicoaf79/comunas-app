@@ -87,8 +87,8 @@ export default function ReservarPolideportivo() {
 
   // QUERIES
   const { data: depPolideportivo, isLoading: loadingDep } = useDependenciaPublica(
-    municipioId,
-    'polideportivo'
+    'deporte',
+    municipioId
   )
   const { data: espacios = [], isLoading: loadingEspacios } = useEspaciosDeportivos(municipioId)
   const { data: horarioConfig, isLoading: loadingHorario } = usePolideportivoHorario(municipioId)
