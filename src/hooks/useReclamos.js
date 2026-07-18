@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext'
 // =============================================================
 // useReclamos — denuncias / reclamos ciudadanos.
 // Schema: reclamos (id, municipio_id, vecino_id?, tipo, descripcion,
-//   ubicacion?, estado, prioridad, canal, created_at, updated_at)
+//   ubicacion?, estado, prioridad, canal, fotos_urls, dependencia_asignada_id,
+//   notas_admin, created_at)
 //
 // vecino_id es nullable — un reclamo puede ser anónimo (anon
 // INSERT desde el portal sin sesión).
@@ -20,7 +21,7 @@ const TIMEOUT_MS = 8000
 const COLS = `
   id, municipio_id, vecino_id, tipo, descripcion, ubicacion,
   estado, prioridad, canal, fotos_urls, dependencia_asignada_id, notas_admin,
-  created_at, updated_at,
+  created_at,
   vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono ),
   dependencia:dependencia_asignada_id ( id, nombre, tipo )
 `
