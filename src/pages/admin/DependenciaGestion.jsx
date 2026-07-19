@@ -453,17 +453,6 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
         .lte('fecha', hasta)
         .order('orden_ruta', { ascending: true, nullsFirst: false })
         .order('fecha', { ascending: true })
-
-      // DEBUG LOG TEMPORAL
-      console.log('[DEBUG] Hoja de ruta query:', {
-        desde,
-        hasta,
-        dependenciaId,
-        cantidadResultados: data?.length,
-        error: error?.message,
-        primerosDatos: data?.slice(0, 3),
-      })
-
       if (error) {
         console.warn('[TabTurnosAgencia] hoja_ruta:', error.message)
         return []

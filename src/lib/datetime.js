@@ -41,6 +41,12 @@ export function timeOf(iso) {
 // "YYYY-MM-DD" en horario Argentina.
 export function dateOf(iso) {
   if (!iso) return ''
+  // Si es DATE puro (sin hora), parsearlo como fecha local sin conversión UTC
+  if (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number)
+    const date = new Date(y, m - 1, d, 12, 0, 0)
+    return _dateFmt.format(date)
+  }
   const d = iso instanceof Date ? iso : new Date(iso)
   if (isNaN(d)) return ''
   return _dateFmt.format(d)
@@ -49,6 +55,12 @@ export function dateOf(iso) {
 // "YYYY-MM-DD · HH:MM" en horario Argentina.
 export function dateTimeOf(iso) {
   if (!iso) return '—'
+  // Si es DATE puro (sin hora), parsearlo como fecha local sin conversión UTC
+  if (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number)
+    const date = new Date(y, m - 1, d, 12, 0, 0)
+    return `${_dateFmt.format(date)} · ${_timeFmt.format(date)}`
+  }
   const d = iso instanceof Date ? iso : new Date(iso)
   if (isNaN(d)) return String(iso)
   return `${_dateFmt.format(d)} · ${_timeFmt.format(d)}`
@@ -57,6 +69,12 @@ export function dateTimeOf(iso) {
 // "DD MMM" en horario Argentina (para headers de calendario).
 export function shortDateOf(iso) {
   if (!iso) return ''
+  // Si es DATE puro (sin hora), parsearlo como fecha local sin conversión UTC
+  if (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number)
+    const date = new Date(y, m - 1, d, 12, 0, 0)
+    return _shortDateFmt.format(date)
+  }
   const d = iso instanceof Date ? iso : new Date(iso)
   if (isNaN(d)) return ''
   return _shortDateFmt.format(d)
