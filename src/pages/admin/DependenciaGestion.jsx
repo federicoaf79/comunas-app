@@ -11,6 +11,7 @@ import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
 import { dateTimeOf } from '../../lib/datetime'
 import AdministracionTab from '../../components/admin/AdministracionTab'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useUpdateEstadoTurnoAgenda } from '../../hooks/useTurnosAgenda'
 
 // =============================================================
 // /admin/dependencia-gestion/:dependenciaId — módulo genérico para
@@ -374,12 +375,14 @@ function TabEquipo({ dep }) {
 
 const TURNOS_COLS = `
   id, fecha, hora_inicio, hora_fin, estado, dependencia_id, municipio_id,
+  motivo, notas_admin,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre )
 `
 
 function TabTurnos({ dep, dependenciaId }) {
   const qc = useQueryClient()
   const [modalOpen, setModalOpen] = useState(false)
+  const updateEstadoMut = useUpdateEstadoTurnoAgenda()
 
   const { data: turnos = [], isLoading } = useQuery({
     queryKey: ['dependencia-gestion-turnos', dependenciaId],
@@ -398,6 +401,11 @@ function TabTurnos({ dep, dependenciaId }) {
       return data ?? []
     },
   })
+
+  async function handleEstado(id, estado) {
+    await updateEstadoMut.mutateAsync({ id, estado })
+    qc.invalidateQueries({ queryKey: ['dependencia-gestion-turnos', dependenciaId] })
+  }
 
   return (
     <div className="space-y-4">
@@ -419,19 +427,51 @@ function TabTurnos({ dep, dependenciaId }) {
               <Th>Hora</Th>
               <Th>Vecino</Th>
               <Th>DNI</Th>
+              <Th>Detalle</Th>
               <Th>Estado</Th>
+              <Th>Acciones</Th>
             </Tr>
           </THead>
           <tbody>
             {turnos.map(t => {
               const { fecha, hora } = turnoFechaHora(t)
+              const detalle = t.motivo || t.notas_admin || ''
+              const detalleCorto = detalle.length > 60 ? detalle.substring(0, 60) + '…' : detalle
               return (
                 <Tr key={t.id}>
                   <Td className="whitespace-nowrap font-mono text-xs">{fecha}</Td>
                   <Td className="whitespace-nowrap font-mono text-xs">{hora}</Td>
                   <Td className="font-medium text-primary">{vecinoLabel(t.vecino)}</Td>
                   <Td className="font-mono text-xs text-primary-500">{t.vecino?.dni ?? '—'}</Td>
+                  <Td className="max-w-xs">
+                    {t.motivo && <p className="text-xs font-semibold text-primary">{t.motivo}</p>}
+                    {t.notas_admin && (
+                      <p className="text-xs text-primary-500" title={t.notas_admin}>
+                        {t.notas_admin.length > 60 ? t.notas_admin.substring(0, 60) + '…' : t.notas_admin}
+                      </p>
+                    )}
+                    {!t.motivo && !t.notas_admin && <span className="text-xs text-primary-300">—</span>}
+                  </Td>
                   <Td><TurnoEstadoBadge estado={t.estado} /></Td>
+                  <Td>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      {t.estado === 'pendiente' && (
+                        <button onClick={() => handleEstado(t.id, 'confirmado')} className="text-ok-700 hover:underline">
+                          Confirmar
+                        </button>
+                      )}
+                      {t.estado === 'confirmado' && (
+                        <button onClick={() => handleEstado(t.id, 'atendido')} className="text-primary-700 hover:underline">
+                          Marcar atendido
+                        </button>
+                      )}
+                      {(t.estado === 'pendiente' || t.estado === 'confirmado') && (
+                        <button onClick={() => handleEstado(t.id, 'cancelado')} className="text-danger hover:underline">
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </Td>
                 </Tr>
               )
             })}
