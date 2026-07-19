@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
+import Tabs from '../../components/ui/Tabs'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
 import { dateTimeOf } from '../../lib/datetime'
@@ -375,9 +376,404 @@ function TabEquipo({ dep }) {
 
 const TURNOS_COLS = `
   id, fecha, hora_inicio, hora_fin, estado, dependencia_id, municipio_id,
-  motivo, notas_vecino, notas_admin,
+  motivo, notas_vecino, notas_admin, orden_ruta,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre )
 `
+
+// Helper: obtener lunes y domingo de una semana (offset: 0=actual, -1=anterior, +1=siguiente)
+function getSemana(offset = 0) {
+  const hoy = new Date()
+  const dia = hoy.getDay() === 0 ? 7 : hoy.getDay()
+  const lunes = new Date(hoy)
+  lunes.setDate(hoy.getDate() - dia + 1 + offset * 7)
+  const domingo = new Date(lunes)
+  domingo.setDate(lunes.getDate() + 6)
+  const fmt = d => d.toISOString().split('T')[0]
+  return { desde: fmt(lunes), hasta: fmt(domingo) }
+}
+
+// Helper: formatear rango de fechas "14 al 20 de julio"
+function formatRangoSemana(desde, hasta) {
+  const dDesde = new Date(desde + 'T12:00:00')
+  const dHasta = new Date(hasta + 'T12:00:00')
+  const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+  return `${dDesde.getDate()} al ${dHasta.getDate()} de ${meses[dHasta.getMonth()]}`
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TAB 3A · Turnos y hoja de ruta (Agencia de Desarrollo)
+// ─────────────────────────────────────────────────────────────────
+
+const SECCIONES_AGENCIA = [
+  { value: 'solicitudes', label: 'Solicitudes' },
+  { value: 'hoja_ruta',   label: 'Hoja de ruta' },
+  { value: 'atendidos',   label: 'Historial de atendidos' },
+]
+
+function TabTurnosAgencia({ dep, dependenciaId }) {
+  const qc = useQueryClient()
+  const [seccion, setSeccion] = useState('solicitudes')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [offsetSemana, setOffsetSemana] = useState(0)
+  const [draggedId, setDraggedId] = useState(null)
+  const updateEstadoMut = useUpdateEstadoTurnoAgenda()
+
+  const { desde, hasta } = getSemana(offsetSemana)
+
+  // Query turnos para Solicitudes (todos los estados menos atendido)
+  const { data: turnos = [], isLoading } = useQuery({
+    queryKey: ['agencia-turnos-solicitudes', dependenciaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('turnos_agenda')
+        .select(TURNOS_COLS)
+        .eq('dependencia_id', dependenciaId)
+        .neq('estado', 'atendido')
+        .order('fecha', { ascending: false })
+        .order('hora_inicio', { ascending: false })
+        .limit(50)
+      if (error) {
+        console.warn('[TabTurnosAgencia] solicitudes:', error.message)
+        return []
+      }
+      return data ?? []
+    },
+  })
+
+  // Query hoja de ruta (confirmados de la semana seleccionada)
+  const { data: hojaRuta = [], isLoading: loadingRuta } = useQuery({
+    queryKey: ['agencia-hoja-ruta', dependenciaId, desde, hasta],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('turnos_agenda')
+        .select(TURNOS_COLS)
+        .eq('dependencia_id', dependenciaId)
+        .eq('estado', 'confirmado')
+        .gte('fecha', desde)
+        .lte('fecha', hasta)
+        .order('orden_ruta', { ascending: true, nullsFirst: false })
+        .order('fecha', { ascending: true })
+      if (error) {
+        console.warn('[TabTurnosAgencia] hoja_ruta:', error.message)
+        return []
+      }
+      return data ?? []
+    },
+    enabled: seccion === 'hoja_ruta',
+  })
+
+  // Query atendidos (agrupados por semana)
+  const { data: atendidos = [], isLoading: loadingAtendidos } = useQuery({
+    queryKey: ['agencia-atendidos', dependenciaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('turnos_agenda')
+        .select(TURNOS_COLS)
+        .eq('dependencia_id', dependenciaId)
+        .eq('estado', 'atendido')
+        .order('fecha', { ascending: false })
+        .limit(100)
+      if (error) {
+        console.warn('[TabTurnosAgencia] atendidos:', error.message)
+        return []
+      }
+      return data ?? []
+    },
+    enabled: seccion === 'atendidos',
+  })
+
+  async function handleEstado(id, estado) {
+    await updateEstadoMut.mutateAsync({ id, estado })
+    qc.invalidateQueries({ queryKey: ['agencia-turnos-solicitudes', dependenciaId] })
+    qc.invalidateQueries({ queryKey: ['agencia-hoja-ruta', dependenciaId] })
+  }
+
+  async function handleReordenar(items) {
+    try {
+      await Promise.all(
+        items.map((item, idx) =>
+          supabase
+            .from('turnos_agenda')
+            .update({ orden_ruta: idx + 1 })
+            .eq('id', item.id)
+        )
+      )
+      qc.invalidateQueries({ queryKey: ['agencia-hoja-ruta', dependenciaId, desde, hasta] })
+    } catch (err) {
+      console.error('[TabTurnosAgencia] reordenar:', err)
+    }
+  }
+
+  function handleDragStart(e, id) {
+    setDraggedId(id)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(e) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  function handleDrop(e, targetId) {
+    e.preventDefault()
+    if (!draggedId || draggedId === targetId) return
+
+    const items = [...hojaRuta]
+    const dragIdx = items.findIndex(t => t.id === draggedId)
+    const targetIdx = items.findIndex(t => t.id === targetId)
+
+    if (dragIdx === -1 || targetIdx === -1) return
+
+    const [draggedItem] = items.splice(dragIdx, 1)
+    items.splice(targetIdx, 0, draggedItem)
+
+    handleReordenar(items)
+    setDraggedId(null)
+  }
+
+  // Renderizado según sección activa
+  return (
+    <div className="space-y-4">
+      <Tabs tabs={SECCIONES_AGENCIA} value={seccion} onChange={setSeccion} />
+
+      {seccion === 'solicitudes' && (
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => setModalOpen(true)}>+ Nuevo turno</Button>
+          </div>
+
+          {isLoading ? (
+            <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+          ) : turnos.length === 0 ? (
+            <div className="card p-10 text-center text-sm text-primary-400">
+              No hay solicitudes registradas.
+            </div>
+          ) : (
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Fecha</Th>
+                  <Th>Hora</Th>
+                  <Th>Vecino</Th>
+                  <Th>DNI</Th>
+                  <Th>Detalle</Th>
+                  <Th>Estado</Th>
+                  <Th>Acciones</Th>
+                </Tr>
+              </THead>
+              <tbody>
+                {turnos.map(t => {
+                  const { fecha, hora } = turnoFechaHora(t)
+                  return (
+                    <Tr key={t.id}>
+                      <Td className="whitespace-nowrap font-mono text-xs">{fecha}</Td>
+                      <Td className="whitespace-nowrap font-mono text-xs">{hora}</Td>
+                      <Td className="font-medium text-primary">{vecinoLabel(t.vecino)}</Td>
+                      <Td className="font-mono text-xs text-primary-500">{t.vecino?.dni ?? '—'}</Td>
+                      <Td className="max-w-xs">
+                        {t.motivo && <p className="text-xs font-semibold text-primary">{t.motivo}</p>}
+                        {t.notas_vecino && (
+                          <p className="text-xs text-primary-600" title={t.notas_vecino}>
+                            {t.notas_vecino.length > 60 ? t.notas_vecino.substring(0, 60) + '…' : t.notas_vecino}
+                          </p>
+                        )}
+                        {!t.motivo && !t.notas_vecino && <span className="text-xs text-primary-300">—</span>}
+                      </Td>
+                      <Td><TurnoEstadoBadge estado={t.estado} /></Td>
+                      <Td>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {t.estado === 'pendiente' && (
+                            <button onClick={() => handleEstado(t.id, 'confirmado')} className="text-ok-700 hover:underline">
+                              Confirmar
+                            </button>
+                          )}
+                          {t.estado === 'confirmado' && (
+                            <button onClick={() => handleEstado(t.id, 'atendido')} className="text-primary-700 hover:underline">
+                              Marcar atendido
+                            </button>
+                          )}
+                          {(t.estado === 'pendiente' || t.estado === 'confirmado') && (
+                            <button onClick={() => handleEstado(t.id, 'cancelado')} className="text-danger hover:underline">
+                              Cancelar
+                            </button>
+                          )}
+                        </div>
+                      </Td>
+                    </Tr>
+                  )
+                })}
+              </tbody>
+            </Table>
+          )}
+        </div>
+      )}
+
+      {seccion === 'hoja_ruta' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setOffsetSemana(o => o - 1)}
+                className="rounded border border-border px-3 py-1.5 text-sm hover:bg-background"
+              >
+                ← Anterior
+              </button>
+              <span className="font-sora text-sm font-semibold text-primary">
+                Semana del {formatRangoSemana(desde, hasta)}
+              </span>
+              <button
+                onClick={() => setOffsetSemana(o => o + 1)}
+                className="rounded border border-border px-3 py-1.5 text-sm hover:bg-background"
+              >
+                Siguiente →
+              </button>
+            </div>
+            <Button variant="outline" onClick={() => window.print()}>
+              📄 Imprimir hoja de ruta
+            </Button>
+          </div>
+
+          {loadingRuta ? (
+            <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+          ) : hojaRuta.length === 0 ? (
+            <div className="card p-10 text-center text-sm text-primary-400">
+              No hay servicios confirmados para esta semana.
+            </div>
+          ) : (
+            <div className="card p-4">
+              <div className="hoja-ruta-print">
+                <h2 className="mb-4 font-sora text-lg font-bold text-primary print-only">
+                  Hoja de Ruta — Semana del {formatRangoSemana(desde, hasta)}
+                </h2>
+                <div className="space-y-2">
+                  {hojaRuta.map((t, idx) => (
+                    <div
+                      key={t.id}
+                      draggable
+                      onDragStart={e => handleDragStart(e, t.id)}
+                      onDragOver={handleDragOver}
+                      onDrop={e => handleDrop(e, t.id)}
+                      className="no-print-drag flex items-start gap-4 rounded border border-border bg-white p-3 cursor-move hover:bg-background/50"
+                    >
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary font-sora text-sm font-bold text-white">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium text-primary">
+                          {vecinoLabel(t.vecino)} {t.vecino?.dni && <span className="text-xs text-primary-400">DNI {t.vecino.dni}</span>}
+                        </p>
+                        {t.motivo && <p className="mt-1 text-xs font-semibold text-accent-700">{t.motivo}</p>}
+                        {t.notas_vecino && <p className="mt-1 text-xs text-primary-600">{t.notas_vecino}</p>}
+                        <p className="mt-1 text-xs text-primary-400">📅 {dateTimeOf(t.fecha).split(' · ')[0]}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {seccion === 'atendidos' && (
+        <div className="space-y-6">
+          {loadingAtendidos ? (
+            <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
+          ) : atendidos.length === 0 ? (
+            <div className="card p-10 text-center text-sm text-primary-400">
+              No hay servicios atendidos registrados.
+            </div>
+          ) : (
+            (() => {
+              // Agrupar por semana
+              const grouped = {}
+              atendidos.forEach(t => {
+                const d = new Date(t.fecha + 'T12:00:00')
+                const dia = d.getDay() === 0 ? 7 : d.getDay()
+                const lunes = new Date(d)
+                lunes.setDate(d.getDate() - dia + 1)
+                const domingo = new Date(lunes)
+                domingo.setDate(lunes.getDate() + 6)
+                const key = lunes.toISOString().split('T')[0]
+                if (!grouped[key]) grouped[key] = { desde: key, hasta: domingo.toISOString().split('T')[0], items: [] }
+                grouped[key].items.push(t)
+              })
+              const semanas = Object.values(grouped).sort((a, b) => b.desde.localeCompare(a.desde))
+
+              return semanas.map(sem => (
+                <div key={sem.desde}>
+                  <h3 className="mb-3 font-sora text-sm font-semibold text-primary">
+                    Semana del {formatRangoSemana(sem.desde, sem.hasta)}
+                  </h3>
+                  <div className="card">
+                    <Table>
+                      <THead>
+                        <Tr>
+                          <Th>Fecha</Th>
+                          <Th>Vecino</Th>
+                          <Th>DNI</Th>
+                          <Th>Detalle</Th>
+                        </Tr>
+                      </THead>
+                      <tbody>
+                        {sem.items.map(t => (
+                          <Tr key={t.id}>
+                            <Td className="whitespace-nowrap font-mono text-xs">{dateTimeOf(t.fecha).split(' · ')[0]}</Td>
+                            <Td className="font-medium text-primary">{vecinoLabel(t.vecino)}</Td>
+                            <Td className="font-mono text-xs text-primary-500">{t.vecino?.dni ?? '—'}</Td>
+                            <Td className="max-w-xs text-xs text-primary-600">
+                              {t.motivo && <span className="font-semibold">{t.motivo}</span>}
+                              {t.notas_vecino && ` · ${t.notas_vecino.substring(0, 60)}${t.notas_vecino.length > 60 ? '…' : ''}`}
+                            </Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                </div>
+              ))
+            })()
+          )}
+        </div>
+      )}
+
+      {modalOpen && (
+        <NuevoTurnoModal
+          open
+          onClose={() => setModalOpen(false)}
+          dependencia={{ id: dep.id, municipio_id: dep.municipio_id, nombre: dep.nombre }}
+          onCreated={() => {
+            setModalOpen(false)
+            qc.invalidateQueries({ queryKey: ['agencia-turnos-solicitudes', dependenciaId] })
+          }}
+        />
+      )}
+
+      <style>{`
+        .print-only { display: none; }
+        @media print {
+          @page { size: A4 portrait; margin: 15mm; }
+          body * { visibility: hidden !important; }
+          .hoja-ruta-print, .hoja-ruta-print * { visibility: visible !important; }
+          .hoja-ruta-print {
+            position: absolute !important;
+            left: 0;
+            top: 0;
+            width: 100%;
+            color: #000;
+            background: #fff;
+          }
+          .print-only { display: block !important; }
+          .no-print-drag {
+            cursor: default !important;
+            border: 1px solid #ddd !important;
+            background: #fff !important;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
 
 function TabTurnos({ dep, dependenciaId }) {
   const qc = useQueryClient()
@@ -834,7 +1230,11 @@ export default function DependenciaGestion() {
         {tab === 'landing'   && dep && <LandingRedirectTab dep={dep} />}
         {tab === 'bot_ia'    && dep && <TabBotIA dep={dep} />}
         {tab === 'equipo'    && <TabEquipo dep={dep} />}
-        {tab === 'turnos'    && <TabTurnos dep={dep} dependenciaId={dependenciaId} />}
+        {tab === 'turnos'    && (
+          (dep.tipo === 'agencia_desarrollo' || dep.tipo === 'desarrollo')
+            ? <TabTurnosAgencia dep={dep} dependenciaId={dependenciaId} />
+            : <TabTurnos dep={dep} dependenciaId={dependenciaId} />
+        )}
         {tab === 'administracion' && dep && (
           <AdministracionTab
             dependenciaId={dep.id}

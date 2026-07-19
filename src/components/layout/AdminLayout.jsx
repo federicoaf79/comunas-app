@@ -251,6 +251,15 @@ function subitemsParaTipo(tipo, basePath) {
       { to: `${basePath}?tab=admin`,               label: 'Administración',  kind: 'admin'   },
     ]
   }
+  if (t === 'agencia_desarrollo' || t === 'desarrollo') {
+    return [
+      { to: basePath,                              label: 'Información',        kind: 'gestion' },
+      { to: `${basePath}?tab=turnos`,              label: 'Turnos y hoja de ruta', kind: 'gestion' },
+      { to: `${basePath}?tab=landing`,             label: 'Landing pública',    kind: 'gestion' },
+      { to: `${basePath}?tab=bot_ia`,              label: 'Bot IA',             kind: 'gestion' },
+      { to: `${basePath}?tab=administracion`,      label: 'Administración',     kind: 'admin'   },
+    ]
+  }
   // Dependencias dinámicas genéricas → DependenciaGestion con tabs
   // vía URL params (?tab=). El sidebar navega directamente al tab correcto.
   return [
