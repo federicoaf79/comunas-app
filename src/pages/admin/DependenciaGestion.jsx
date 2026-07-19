@@ -375,7 +375,7 @@ function TabEquipo({ dep }) {
 
 const TURNOS_COLS = `
   id, fecha, hora_inicio, hora_fin, estado, dependencia_id, municipio_id,
-  motivo, notas_admin,
+  motivo, notas_vecino, notas_admin,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre )
 `
 
@@ -435,8 +435,6 @@ function TabTurnos({ dep, dependenciaId }) {
           <tbody>
             {turnos.map(t => {
               const { fecha, hora } = turnoFechaHora(t)
-              const detalle = t.motivo || t.notas_admin || ''
-              const detalleCorto = detalle.length > 60 ? detalle.substring(0, 60) + '…' : detalle
               return (
                 <Tr key={t.id}>
                   <Td className="whitespace-nowrap font-mono text-xs">{fecha}</Td>
@@ -445,12 +443,12 @@ function TabTurnos({ dep, dependenciaId }) {
                   <Td className="font-mono text-xs text-primary-500">{t.vecino?.dni ?? '—'}</Td>
                   <Td className="max-w-xs">
                     {t.motivo && <p className="text-xs font-semibold text-primary">{t.motivo}</p>}
-                    {t.notas_admin && (
-                      <p className="text-xs text-primary-500" title={t.notas_admin}>
-                        {t.notas_admin.length > 60 ? t.notas_admin.substring(0, 60) + '…' : t.notas_admin}
+                    {t.notas_vecino && (
+                      <p className="text-xs text-primary-600" title={t.notas_vecino}>
+                        {t.notas_vecino.length > 60 ? t.notas_vecino.substring(0, 60) + '…' : t.notas_vecino}
                       </p>
                     )}
-                    {!t.motivo && !t.notas_admin && <span className="text-xs text-primary-300">—</span>}
+                    {!t.motivo && !t.notas_vecino && <span className="text-xs text-primary-300">—</span>}
                   </Td>
                   <Td><TurnoEstadoBadge estado={t.estado} /></Td>
                   <Td>
