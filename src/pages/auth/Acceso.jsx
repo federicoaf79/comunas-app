@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
@@ -382,6 +382,7 @@ function StepMunicipio({
 
 export default function Acceso() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { signIn, perfil, loading: authLoading } = useAuth()
   const { setVecinoSession, isVecinoLogued } = useVecino()
 
@@ -411,9 +412,10 @@ export default function Acceso() {
       }
     }
     if (isVecinoLogued) {
-      navigate('/mi-cuenta', { replace: true })
+      const redirectTo = location.state?.from?.pathname || '/mi-cuenta'
+      navigate(redirectTo, { replace: true })
     }
-  }, [authLoading, perfil, isVecinoLogued, navigate])
+  }, [authLoading, perfil, isVecinoLogued, navigate, location])
 
   // Cada vez que el usuario cambia un campo, limpiamos errores
   // anteriores. Evita que un error del paso anterior se vea
@@ -461,7 +463,8 @@ export default function Acceso() {
       telefono_login: form.telefono.replace(/[^0-9]/g, ''),
       ...(emailLimpio ? { email_login: emailLimpio } : {}),
     })
-    navigate('/mi-cuenta', { replace: true })
+    const redirectTo = location.state?.from?.pathname || '/mi-cuenta'
+    navigate(redirectTo, { replace: true })
   }
 
   // PASO 3 — Empleado: signIn + verificación de perfil/activo/roles.
@@ -516,10 +519,40 @@ export default function Acceso() {
     }
   }
 
+  // Banner contextual basado en la ruta de origen
+  const getContextualMessage = () => {
+    const from = location.state?.from?.pathname
+    if (!from) return null
+
+    if (from.includes('polideportivo')) {
+      return 'Para reservar una cancha necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+    }
+    if (from.includes('desarrollo')) {
+      return 'Para solicitar un servicio de la Agencia de Desarrollo necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+    }
+    if (from.includes('reclamo')) {
+      return 'Para crear un reclamo necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+    }
+    return 'Necesitás iniciar sesión para continuar.'
+  }
+
+  const contextualMessage = getContextualMessage()
+
   return (
     <div className="min-h-svh bg-background">
       <AccesoHeader />
       <main className="mx-auto max-w-[480px] px-4 py-8 sm:py-12">
+        {contextualMessage && (
+          <div className="mb-6 rounded-lg border border-primary/20 bg-primary-50 p-4">
+            <div className="flex items-start gap-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 shrink-0 text-primary mt-0.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4M12 8h.01"/>
+              </svg>
+              <p className="text-sm text-primary-700">{contextualMessage}</p>
+            </div>
+          </div>
+        )}
         {step === 1 && (
           <StepIdentificacion
             dni={form.dni}

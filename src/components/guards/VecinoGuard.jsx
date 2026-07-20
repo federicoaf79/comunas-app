@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 
@@ -7,6 +7,7 @@ import { useVecino } from '../../context/VecinoContext'
 // y soporta Supabase Auth (email + password) o acceso rápido (DNI + tel).
 export default function VecinoGuard() {
   const { isVecinoLogued, vecinoData, clearVecinoSession, authLoading } = useVecino()
+  const location = useLocation()
 
   // Esperar a que termine de cargar antes de redirigir
   // (evita loop cuando se navega desde login antes de que VecinoContext
@@ -23,7 +24,7 @@ export default function VecinoGuard() {
   }
 
   if (!isVecinoLogued) {
-    return <Navigate to="/portal/acceso" replace />
+    return <Navigate to="/portal/acceso" state={{ from: location }} replace />
   }
 
   // Verificar estado del portal
