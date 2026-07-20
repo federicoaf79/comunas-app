@@ -80,6 +80,7 @@ export default function SolicitarServicioDesarrollo() {
   // STATE
   const [tipoServicio, setTipoServicio] = useState('')
   const [fechaPreferida, setFechaPreferida] = useState('')
+  const [direccion, setDireccion] = useState('')
   const [notas, setNotas] = useState('')
 
   // MUTATION
@@ -90,6 +91,11 @@ export default function SolicitarServicioDesarrollo() {
 
     if (!tipoServicio) {
       alert('Por favor seleccioná el tipo de servicio')
+      return
+    }
+
+    if (!direccion || direccion.trim().length === 0) {
+      alert('Por favor completá la dirección / ubicación')
       return
     }
 
@@ -104,6 +110,7 @@ export default function SolicitarServicioDesarrollo() {
         vecino_id: vecinoSession.id,
         tipo_servicio: tipoServicio,
         fecha_preferida: fechaPreferida || null,
+        direccion: direccion.trim(),
         notas: notas.trim(),
       })
 
@@ -176,7 +183,25 @@ export default function SolicitarServicioDesarrollo() {
           </p>
         </div>
 
-        {/* Notas / Ubicación / Detalle */}
+        {/* Dirección / Ubicación */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-primary">
+            Dirección / Ubicación <span className="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            value={direccion}
+            onChange={e => setDireccion(e.target.value)}
+            className="input w-full"
+            placeholder="Ej: Paraje El Bordo, camino a 3km de la escuela, junto al molino"
+            required
+          />
+          <p className="mt-1.5 text-xs text-primary-500">
+            Indicá la ubicación exacta con referencias claras para que el personal pueda llegar sin dificultad.
+          </p>
+        </div>
+
+        {/* Detalle de la solicitud */}
         <div>
           <label className="mb-1 block text-sm font-medium text-primary">
             Detalle de la solicitud <span className="text-danger">*</span>
@@ -186,11 +211,11 @@ export default function SolicitarServicioDesarrollo() {
             onChange={e => setNotas(e.target.value)}
             className="input w-full"
             rows={5}
-            placeholder="Describí tu solicitud: ubicación, detalles específicos, horarios preferidos, etc."
+            placeholder="Describí tu solicitud: detalles específicos, horarios preferidos, problemática, etc."
             required
           />
           <p className="mt-1.5 text-xs text-primary-500">
-            Incluí toda la información relevante: ubicación exacta, referencias, problemática, etc.
+            Incluí toda la información relevante sobre el servicio que necesitás.
           </p>
         </div>
 

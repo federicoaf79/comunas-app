@@ -53,6 +53,9 @@ export function useCrearSolicitud() {
       if (!payload.tipo_servicio) {
         throw new Error('Tipo de servicio requerido')
       }
+      if (!payload.direccion || payload.direccion.trim().length === 0) {
+        throw new Error('Dirección / ubicación requerida')
+      }
       if (!payload.notas || payload.notas.trim().length === 0) {
         throw new Error('Por favor describí tu solicitud en el campo de notas')
       }
@@ -67,6 +70,7 @@ export function useCrearSolicitud() {
           fecha: payload.fecha_preferida || null,
           estado: 'pendiente',
           motivo: payload.tipo_servicio,
+          direccion: payload.direccion,
           notas_vecino: payload.notas,
         })
         .select()

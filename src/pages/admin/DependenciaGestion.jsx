@@ -377,7 +377,7 @@ function TabEquipo({ dep }) {
 
 const TURNOS_COLS = `
   id, fecha, hora_inicio, hora_fin, estado, dependencia_id, municipio_id,
-  motivo, notas_vecino, notas_admin, orden_ruta,
+  motivo, direccion, notas_vecino, notas_admin, orden_ruta,
   vecino:vecino_id ( id, dni, nombre_completo, apellido, nombre )
 `
 
@@ -583,12 +583,17 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
                       <Td className="font-mono text-xs text-primary-500">{t.vecino?.dni ?? '—'}</Td>
                       <Td className="max-w-xs">
                         {t.motivo && <p className="text-xs font-semibold text-primary">{t.motivo}</p>}
+                        {t.direccion && (
+                          <p className="text-xs text-accent-700">
+                            <span className="font-semibold">📍</span> {t.direccion.length > 50 ? t.direccion.substring(0, 50) + '…' : t.direccion}
+                          </p>
+                        )}
                         {t.notas_vecino && (
                           <p className="text-xs text-primary-600" title={t.notas_vecino}>
                             {t.notas_vecino.length > 60 ? t.notas_vecino.substring(0, 60) + '…' : t.notas_vecino}
                           </p>
                         )}
-                        {!t.motivo && !t.notas_vecino && <span className="text-xs text-primary-300">—</span>}
+                        {!t.motivo && !t.direccion && !t.notas_vecino && <span className="text-xs text-primary-300">—</span>}
                       </Td>
                       <Td><TurnoEstadoBadge estado={t.estado} /></Td>
                       <Td onClick={e => e.stopPropagation()}>
@@ -674,6 +679,7 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
                           {vecinoLabel(t.vecino)} {t.vecino?.dni && <span className="text-xs text-primary-400">DNI {t.vecino.dni}</span>}
                         </p>
                         {t.motivo && <p className="mt-1 text-xs font-semibold text-accent-700">{t.motivo}</p>}
+                        {t.direccion && <p className="mt-1 text-xs font-medium text-accent-700">📍 {t.direccion}</p>}
                         {t.notas_vecino && <p className="mt-1 text-xs text-primary-600">{t.notas_vecino}</p>}
                         <p className="mt-1 text-xs text-primary-400">📅 {dateTimeOf(t.fecha).split(' · ')[0]}</p>
                       </div>
@@ -833,6 +839,13 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Tipo de servicio</p>
                 <p className="mt-1 font-semibold text-primary">{detalleModal.motivo}</p>
+              </div>
+            )}
+
+            {detalleModal.direccion && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Dirección / Ubicación</p>
+                <p className="mt-1 text-sm font-medium text-accent-700">📍 {detalleModal.direccion}</p>
               </div>
             )}
 
