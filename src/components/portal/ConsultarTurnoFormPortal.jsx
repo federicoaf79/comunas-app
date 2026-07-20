@@ -20,7 +20,9 @@ const ESTADO_CLASS = {
   cancelado:  'estado-cancelado',
 }
 
-// Intenta primero por numero_turno, después por DNI vía vecinos.
+// Intenta primero por numero_turno, después por DNI vía RPC function.
+// La RPC bypassa RLS de vecinos (SECURITY DEFINER) para permitir búsqueda
+// pública sin exponer la tabla vecinos directamente.
 async function buscarTurnos(input) {
   const q = input.trim()
   if (!q) return []
@@ -39,22 +41,35 @@ async function buscarTurnos(input) {
     .order('hora_inicio', { ascending: false })
   if (byNumero && byNumero.length > 0) return byNumero
 
-  // 2) por DNI: lookup vecino → turnos por vecino_id.
-  const { data: vecino } = await supabase
-    .from('vecinos')
-    .select('id')
-    .eq('dni', q)
-    .limit(1)
-  if (!vecino || vecino.length === 0) return []
+  // 2) por DNI: usar RPC function que hace el lookup internamente con SECURITY DEFINER.
+  const { data: rpcResult, error: rpcError } = await supabase
+    .rpc('buscar_turnos_por_dni', { p_dni: q })
 
-  const { data: byDni } = await supabase
-    .from('turnos_agenda')
-    .select(COLS)
-    .eq('vecino_id', vecino[0].id)
-    .order('fecha', { ascending: false })
-    .order('hora_inicio', { ascending: false })
-    .limit(5)
-  return byDni ?? []
+  if (rpcError) {
+    console.warn('[ConsultarTurno] RPC error:', rpcError.message)
+    return []
+  }
+  if (!rpcResult || rpcResult.length === 0) return []
+
+  // La RPC devuelve turnos con dependencia_id pero sin el join embed.
+  // Necesitamos traer los nombres de dependencias para la UI.
+  const depIds = [...new Set(rpcResult.map(t => t.dependencia_id).filter(Boolean))]
+  let depsMap = {}
+  if (depIds.length > 0) {
+    const { data: deps } = await supabase
+      .from('dependencias')
+      .select('id, nombre')
+      .in('id', depIds)
+    if (deps) {
+      depsMap = Object.fromEntries(deps.map(d => [d.id, d]))
+    }
+  }
+
+  // Mapear resultado RPC al formato esperado por la UI (con embed de dependencia)
+  return rpcResult.map(t => ({
+    ...t,
+    dependencia: depsMap[t.dependencia_id] || null,
+  }))
 }
 
 export default function ConsultarTurnoFormPortal() {
