@@ -7,9 +7,10 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Spinner from '../../components/ui/Spinner'
 import Tabs from '../../components/ui/Tabs'
+import Modal from '../../components/ui/Modal'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import NuevoTurnoModal from '../../components/admin/NuevoTurnoModal'
-import { dateTimeOf } from '../../lib/datetime'
+import { dateTimeOf, todayArgYMD } from '../../lib/datetime'
 import AdministracionTab from '../../components/admin/AdministracionTab'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useUpdateEstadoTurnoAgenda } from '../../hooks/useTurnosAgenda'
@@ -381,14 +382,23 @@ const TURNOS_COLS = `
 `
 
 // Helper: obtener lunes y domingo de una semana (offset: 0=actual, -1=anterior, +1=siguiente)
+// Calcula "hoy" en horario Argentina para evitar corrimiento UTC en las 21-00hs
 function getSemana(offset = 0) {
-  const hoy = new Date()
+  // Usar todayArgYMD() que ya calcula la fecha correcta en ARG_TZ
+  const hoyStr = todayArgYMD()
+  const [y, m, d] = hoyStr.split('-').map(Number)
+  const hoy = new Date(y, m - 1, d, 12, 0, 0) // Mediodía local
   const dia = hoy.getDay() === 0 ? 7 : hoy.getDay()
   const lunes = new Date(hoy)
   lunes.setDate(hoy.getDate() - dia + 1 + offset * 7)
   const domingo = new Date(lunes)
   domingo.setDate(lunes.getDate() + 6)
-  const fmt = d => d.toISOString().split('T')[0]
+  const fmt = d => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dd}`
+  }
   return { desde: fmt(lunes), hasta: fmt(domingo) }
 }
 
@@ -414,6 +424,7 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
   const qc = useQueryClient()
   const [seccion, setSeccion] = useState('solicitudes')
   const [modalOpen, setModalOpen] = useState(false)
+  const [detalleModal, setDetalleModal] = useState(null)
   const [offsetSemana, setOffsetSemana] = useState(0)
   const [draggedId, setDraggedId] = useState(null)
   const updateEstadoMut = useUpdateEstadoTurnoAgenda()
@@ -565,7 +576,7 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
                 {turnos.map(t => {
                   const { fecha, hora } = turnoFechaHora(t)
                   return (
-                    <Tr key={t.id}>
+                    <Tr key={t.id} onClick={() => setDetalleModal(t)} className="cursor-pointer hover:bg-background/50">
                       <Td className="whitespace-nowrap font-mono text-xs">{fecha}</Td>
                       <Td className="whitespace-nowrap font-mono text-xs">{hora}</Td>
                       <Td className="font-medium text-primary">{vecinoLabel(t.vecino)}</Td>
@@ -580,7 +591,7 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
                         {!t.motivo && !t.notas_vecino && <span className="text-xs text-primary-300">—</span>}
                       </Td>
                       <Td><TurnoEstadoBadge estado={t.estado} /></Td>
-                      <Td>
+                      <Td onClick={e => e.stopPropagation()}>
                         <div className="flex flex-wrap gap-2 text-xs">
                           {t.estado === 'pendiente' && (
                             <button onClick={() => handleEstado(t.id, 'confirmado')} className="text-ok-700 hover:underline">
@@ -747,6 +758,92 @@ function TabTurnosAgencia({ dep, dependenciaId }) {
             qc.invalidateQueries({ queryKey: ['agencia-turnos-solicitudes', dependenciaId] })
           }}
         />
+      )}
+
+      {detalleModal && (
+        <Modal
+          open
+          onClose={() => setDetalleModal(null)}
+          title="Detalle de solicitud"
+          size="md"
+          footer={
+            <>
+              {detalleModal.estado === 'pendiente' && (
+                <Button
+                  onClick={() => {
+                    handleEstado(detalleModal.id, 'confirmado')
+                    setDetalleModal(null)
+                  }}
+                >
+                  Confirmar
+                </Button>
+              )}
+              {detalleModal.estado === 'confirmado' && (
+                <Button
+                  onClick={() => {
+                    handleEstado(detalleModal.id, 'atendido')
+                    setDetalleModal(null)
+                  }}
+                >
+                  Marcar atendido
+                </Button>
+              )}
+              {(detalleModal.estado === 'pendiente' || detalleModal.estado === 'confirmado') && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    handleEstado(detalleModal.id, 'cancelado')
+                    setDetalleModal(null)
+                  }}
+                >
+                  Cancelar
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setDetalleModal(null)}>
+                Cerrar
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Vecino</p>
+              <p className="mt-1 font-medium text-primary">{vecinoLabel(detalleModal.vecino)}</p>
+              {detalleModal.vecino?.dni && (
+                <p className="text-sm text-primary-500">DNI {detalleModal.vecino.dni}</p>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Fecha y hora</p>
+              <p className="mt-1 text-sm text-primary">
+                {turnoFechaHora(detalleModal).fecha}
+                {turnoFechaHora(detalleModal).hora !== '—' && ` · ${turnoFechaHora(detalleModal).hora}`}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Estado</p>
+              <div className="mt-1">
+                <TurnoEstadoBadge estado={detalleModal.estado} />
+              </div>
+            </div>
+
+            {detalleModal.motivo && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Tipo de servicio</p>
+                <p className="mt-1 font-semibold text-primary">{detalleModal.motivo}</p>
+              </div>
+            )}
+
+            {detalleModal.notas_vecino && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Detalle de la solicitud</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-primary-600">{detalleModal.notas_vecino}</p>
+              </div>
+            )}
+          </div>
+        </Modal>
       )}
 
       <style>{`
