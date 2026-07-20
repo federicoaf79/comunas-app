@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { dateTimeOf } from '../../lib/datetime'
+import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
 
@@ -23,9 +24,9 @@ const ESTADO_CLASS = {
 // Intenta primero por numero_turno, después por DNI vía RPC function.
 // La RPC bypassa RLS de vecinos (SECURITY DEFINER) para permitir búsqueda
 // pública sin exponer la tabla vecinos directamente.
-async function buscarTurnos(input) {
+async function buscarTurnos(input, municipioId) {
   const q = input.trim()
-  if (!q) return []
+  if (!q || !municipioId) return []
 
   const COLS = `
     id, numero_turno, fecha, hora_inicio, estado, canal,
@@ -33,17 +34,20 @@ async function buscarTurnos(input) {
   `
 
   // 1) por numero_turno (la columna podría ser int o text — PostgREST coerce).
+  //    Filtrar por municipio_id para scopear la búsqueda al portal actual.
   const { data: byNumero } = await supabase
     .from('turnos_agenda')
     .select(COLS)
     .eq('numero_turno', q)
+    .eq('municipio_id', municipioId)
     .order('fecha', { ascending: false })
     .order('hora_inicio', { ascending: false })
   if (byNumero && byNumero.length > 0) return byNumero
 
   // 2) por DNI: usar RPC function que hace el lookup internamente con SECURITY DEFINER.
+  //    Pasar municipio_id para scopear la búsqueda al portal actual.
   const { data: rpcResult, error: rpcError } = await supabase
-    .rpc('buscar_turnos_por_dni', { p_dni: q })
+    .rpc('buscar_turnos_por_dni', { p_dni: q, p_municipio_id: municipioId })
 
   if (rpcError) {
     console.warn('[ConsultarTurno] RPC error:', rpcError.message)
@@ -73,6 +77,9 @@ async function buscarTurnos(input) {
 }
 
 export default function ConsultarTurnoFormPortal() {
+  const portalMunicipioQ = usePortalMunicipioId()
+  const municipioId = portalMunicipioQ.data ?? null
+
   const [busqueda, setBusqueda] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -81,11 +88,15 @@ export default function ConsultarTurnoFormPortal() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!busqueda.trim()) return
+    if (!municipioId) {
+      setError('No pudimos identificar el municipio. Recargá la página.')
+      return
+    }
     setError('')
     setSubmitting(true)
     setTurnos(null)
     try {
-      const result = await buscarTurnos(busqueda)
+      const result = await buscarTurnos(busqueda, municipioId)
       setTurnos(result)
     } catch (e) {
       setError(e?.message ?? 'No pudimos consultar tu turno.')
