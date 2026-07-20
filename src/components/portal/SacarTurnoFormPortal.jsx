@@ -462,7 +462,14 @@ export default function SacarTurnoFormPortal() {
 
       // Descomponer fecha_hora en fecha + hora_inicio + hora_fin
       const dt = new Date(fecha_hora)
-      const fecha = dt.toISOString().split('T')[0]
+      // Helper: Date → YYYY-MM-DD en TZ Argentina (evita corrimiento de día)
+      const fmtDate = (d) => new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d)
+      const fecha = fmtDate(dt)
       const hora_inicio = dt.toTimeString().slice(0, 5) // HH:MM
       const dtFin = new Date(dt.getTime() + 30 * 60 * 1000) // +30 min
       const hora_fin = dtFin.toTimeString().slice(0, 5)

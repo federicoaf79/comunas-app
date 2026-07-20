@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { ARG_OFFSET } from '../lib/datetime'
+import { ARG_OFFSET, todayArgYMD } from '../lib/datetime'
 import { createCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar'
 
 const TIMEOUT_MS = 8000
@@ -143,7 +143,13 @@ export async function createTurno(data) {
   let payload = { ...data }
   if (data.fecha_hora) {
     const dt = new Date(data.fecha_hora)
-    const fecha = dt.toISOString().split('T')[0]
+    const fmtDate = (d) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d)
+    const fecha = fmtDate(dt)
     const hora_inicio = dt.toTimeString().slice(0, 5) // HH:MM
     // hora_fin: +30 min por defecto si no se especifica
     const dtFin = new Date(dt.getTime() + 30 * 60 * 1000)
@@ -322,7 +328,7 @@ async function fetchProximosTurnos({ municipioId, limit = 5 }) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
-    const hoy = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const hoy = todayArgYMD() // YYYY-MM-DD en TZ Argentina
     let q = supabase
       .from('turnos_agenda')
       .select(TURNO_SELECT)

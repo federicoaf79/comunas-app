@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { todayArgYMD } from '../lib/datetime'
 
 // =============================================================
 // useInventario — stock, movimientos y órdenes de compra
@@ -434,7 +435,7 @@ async function createOrdenCompra(data) {
       .from('gastos')
       .insert({
         municipio_id:    rest.municipio_id,
-        fecha:           rest.fecha ?? new Date().toISOString().slice(0, 10),
+        fecha:           rest.fecha ?? todayArgYMD(),
         descripcion:     buildGastoDesc(rest),
         categoria:       'Insumos',
         dependencia_id:  rest.dependencia_id,
@@ -496,14 +497,14 @@ export function useCreateOrdenCompra() {
 async function updateOrdenEstado({ id, estado, fechaAprobacion }) {
   const patch = { estado }
   if (estado === 'aprobada') {
-    patch.fecha_aprobacion = fechaAprobacion ?? new Date().toISOString().slice(0, 10)
+    patch.fecha_aprobacion = fechaAprobacion ?? todayArgYMD()
   }
   const { data: row, error } = await supabase
     .from('ordenes_compra').update(patch).eq('id', id).select(OC_COLS).single()
   if (error) throw error
 
   if (estado === 'aprobada') {
-    const fechaAprob = row.fecha_aprobacion ?? new Date().toISOString().slice(0, 10)
+    const fechaAprob = row.fecha_aprobacion ?? todayArgYMD()
 
     if (row.gasto_id) {
       // Promover el gasto pre-registrado al estado 'aprobado'.

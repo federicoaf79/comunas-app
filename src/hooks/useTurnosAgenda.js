@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { todayArgYMD } from '../lib/datetime'
 
 const COLS = `
   id, fecha, hora_inicio, hora_fin, estado,
@@ -158,7 +159,12 @@ export function getSemanaActual(offset = 0) {
   lunes.setDate(hoy.getDate() - dia + 1 + offset * 7)
   const domingo = new Date(lunes)
   domingo.setDate(lunes.getDate() + 6)
-  const fmt = (d) => d.toISOString().split('T')[0]
+  const fmt = (d) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
   return { desde: fmt(lunes), hasta: fmt(domingo), lunes }
 }
 
@@ -167,14 +173,22 @@ export function getDiasSemana(desde) {
   const dias = []
   const NOMBRES = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
   const NOMBRES_FULL = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado']
+  const fmt = (d) => new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+  const hoy = todayArgYMD()
   for (let i = 0; i < 7; i++) {
     const d = new Date(desde + 'T12:00:00')
     d.setDate(d.getDate() + i)
+    const fechaStr = fmt(d)
     dias.push({
-      fecha: d.toISOString().split('T')[0],
+      fecha: fechaStr,
       nombre: NOMBRES[d.getDay()],
       nombreFull: NOMBRES_FULL[d.getDay()],
-      esHoy: d.toISOString().split('T')[0] === new Date().toISOString().split('T')[0],
+      esHoy: fechaStr === hoy,
     })
   }
   return dias

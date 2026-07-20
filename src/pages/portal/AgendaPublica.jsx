@@ -5,6 +5,7 @@ import { useAgendaPublica } from '../../hooks/useAgendaPublica'
 import { useCrearTurnoAgenda } from '../../hooks/useTurnosAgenda'
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
+import { todayArgYMD } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 const TIPO_ICON_SVG = {
@@ -66,8 +67,18 @@ export default function AgendaPublica() {
   const { data: muniDatos } = useDatosMunicipio(municipioId)
   const { vecino } = useVecino()
 
+  // Helper: Date → YYYY-MM-DD en TZ Argentina (evita corrimiento de día)
+  const fmtDate = (d) => {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d)
+  }
+
   const [vista, setVista] = useState('dia') // 'dia' | 'semana'
-  const [fechaSelec, setFechaSelec] = useState(() => new Date().toISOString().split('T')[0])
+  const [fechaSelec, setFechaSelec] = useState(() => todayArgYMD())
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [modalEvento, setModalEvento] = useState(null)
   const [formTurno, setFormTurno] = useState({ motivo: '', orden: null })
@@ -87,13 +98,12 @@ export default function AgendaPublica() {
     const dow = d.getDay() === 0 ? 7 : d.getDay()
     const lunes = new Date(d); lunes.setDate(d.getDate() - dow + 1)
     const viernes = new Date(lunes); viernes.setDate(lunes.getDate() + 4)
-    const fmt = x => x.toISOString().split('T')[0]
     const dias = []
     for (let i = 0; i < 5; i++) {
       const dd = new Date(lunes); dd.setDate(lunes.getDate() + i)
-      dias.push(fmt(dd))
+      dias.push(fmtDate(dd))
     }
-    return { fechaDesde: fmt(lunes), fechaHasta: fmt(viernes), diasVista: dias }
+    return { fechaDesde: fmtDate(lunes), fechaHasta: fmtDate(viernes), diasVista: dias }
   }, [vista, fechaSelec])
 
   const { data: eventos = [], isLoading } = useAgendaPublica(municipioId, fechaDesde, fechaHasta)
@@ -123,7 +133,7 @@ export default function AgendaPublica() {
   function navegar(delta) {
     const d = new Date(fechaSelec + 'T12:00:00')
     d.setDate(d.getDate() + (vista === 'dia' ? delta : delta * 7))
-    setFechaSelec(d.toISOString().split('T')[0])
+    setFechaSelec(fmtDate(d))
   }
 
   function formatFechaHeader() {
@@ -190,7 +200,7 @@ export default function AgendaPublica() {
   }
 
   const muniNombre = muniDatos?.nombre || 'Comisión Municipal'
-  const hoy = new Date().toISOString().split('T')[0]
+  const hoy = todayArgYMD()
 
   return (
     <div className="min-h-svh bg-background">

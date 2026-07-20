@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
 
+// Helper: Date → YYYY-MM-DD en TZ Argentina
+const fmtDateArg = (d) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(d)
+
 // SQL ejecutado en Supabase para permitir acceso anónimo:
 // DROP POLICY IF EXISTS "publico puede ver agenda activa" ON agenda_publica;
 // CREATE POLICY "publico puede ver agenda activa" ON agenda_publica FOR SELECT TO anon USING (activo = true);
@@ -44,7 +52,7 @@ export function expandirEventos(eventos, fechaDesde, fechaHasta) {
         })
         if (matchDia) {
           // Verificar rango de fechas si tiene fecha_fin
-          const fechaStr = cur.toISOString().split('T')[0]
+          const fechaStr = fmtDateArg(cur)
           if (ev.fecha_fin && fechaStr > ev.fecha_fin) { cur.setDate(cur.getDate() + 1); continue }
           if (ev.fecha_inicio && fechaStr < ev.fecha_inicio) { cur.setDate(cur.getDate() + 1); continue }
           result.push({ ...ev, fecha: fechaStr })

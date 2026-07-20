@@ -2,6 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 
+// Helper: Date → YYYY-MM-DD en TZ Argentina
+const fmtDateArg = (d) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Argentina/Buenos_Aires',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(d)
+
 // =============================================================
 // useBeneficiarios — programas de Ayuda Social del municipio.
 // Schema: beneficiarios (id, municipio_id, vecino_id, tipo_ayuda,
@@ -14,7 +22,7 @@ const TIMEOUT_MS = 8000
 const COLS = `
   id, municipio_id, vecino_id, tipo_ayuda, descripcion,
   estado, fecha_inicio, programa, nivel, monto_mensual,
-  fecha_fin, observaciones, registrado_por, created_at, updated_at,
+  fecha_fin, observaciones, registrado_por, created_at,
   vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono )
 `
 
@@ -257,7 +265,7 @@ export async function createEntrega(data) {
   const fechaObj = new Date(fecha + 'T00:00:00')
   const fechaLimite = new Date(fechaObj)
   fechaLimite.setDate(fechaLimite.getDate() - periodoDias)
-  const fechaLimiteStr = fechaLimite.toISOString().split('T')[0]
+  const fechaLimiteStr = fmtDateArg(fechaLimite)
 
   // 3. Buscar entregas duplicadas en la ventana
   const { data: duplicados, error: dupError } = await supabase

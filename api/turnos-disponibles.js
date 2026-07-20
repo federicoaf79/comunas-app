@@ -12,6 +12,16 @@ const supabase = createClient(
 // (formato usado en tabla profesionales.dias_atencion)
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado']
 
+// Helper: fecha actual en TZ Argentina (YYYY-MM-DD)
+function todayArgYMD() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   if (req.method !== 'GET') return res.status(405).end()
@@ -32,8 +42,8 @@ export default async function handler(req, res) {
 
     if (!muni) return res.status(404).json({ error: 'Municipio no encontrado' })
 
-    // Fecha a consultar (default: hoy)
-    const fechaConsulta = fecha ?? new Date().toISOString().split('T')[0]
+    // Fecha a consultar (default: hoy en TZ Argentina)
+    const fechaConsulta = fecha ?? todayArgYMD()
     const diaSemana = new Date(fechaConsulta).getDay() // 0=Dom, 1=Lun...
     const diaNombre = DIAS_SEMANA[diaSemana]           // 'lunes', 'martes', etc.
 

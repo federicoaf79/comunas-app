@@ -10,7 +10,7 @@ import {
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
 import { useStockCritico } from '../../hooks/useInventario'
-import { dateTimeOf, timeOf } from '../../lib/datetime'
+import { dateTimeOf, timeOf, todayArgYMD } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -1428,12 +1428,10 @@ export default function AdminDashboard() {
   // primer municipio activo. Sin esto el médico de guardia y otras
   // queries con .eq('municipio_id', null) no encuentran filas.
   const { municipioId } = useEffectiveMunicipioId()
-  // today como 'YYYY-MM-DD' sin hora — Supabase serializa el string
-  // a timestamptz interpretándolo como medianoche UTC y eso rompe
-  // los .lte/.gte contra semana_inicio/semana_fin si el formato no
-  // es estricto. Usamos toISOString().split para garantizar formato
-  // canónico (en lugar de Intl con timezone).
-  const today = new Date().toISOString().split('T')[0]
+  // today como 'YYYY-MM-DD' en TZ Argentina — todayArgYMD() usa
+  // Intl.DateTimeFormat con timezone explícito para evitar corrimiento
+  // de día por offset UTC-3.
+  const today = todayArgYMD()
   const mes   = currentMonthYYYYMM()
   const mesAnterior = prevMonthYYYYMM(mes)
   const anio  = currentYear()
