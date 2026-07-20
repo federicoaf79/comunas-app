@@ -60,13 +60,18 @@ export default function MiSaludForm() {
           autoComplete="tel"
           placeholder="+54 9 ..."
         />
-        <Button
-          type="submit"
-          loading={submitting}
-          disabled={!dni.trim() || !telefono.trim()}
-        >
-          Ver mi salud
-        </Button>
+        <div className="flex flex-col gap-1">
+          <Button
+            type="submit"
+            loading={submitting}
+            disabled={!dni.trim() || !telefono.trim()}
+          >
+            Ver mi salud
+          </Button>
+          {(!dni.trim() || !telefono.trim()) && (
+            <p className="text-xs text-primary-400">Completá los campos para continuar</p>
+          )}
+        </div>
       </form>
 
       <p className="mt-3 text-xs text-primary-400">

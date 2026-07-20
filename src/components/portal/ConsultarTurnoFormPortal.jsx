@@ -92,9 +92,14 @@ export default function ConsultarTurnoFormPortal() {
             inputMode="numeric"
             autoComplete="off"
           />
-          <Button type="submit" loading={submitting} disabled={!busqueda.trim()}>
-            Consultar
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button type="submit" loading={submitting} disabled={!busqueda.trim()}>
+              Consultar
+            </Button>
+            {!busqueda.trim() && (
+              <p className="text-xs text-primary-400">Completá el campo para continuar</p>
+            )}
+          </div>
         </div>
       </form>
 

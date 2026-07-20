@@ -97,8 +97,8 @@ const ACCESOS_RAPIDOS = [
   },
   {
     to:    '/portal/polideportivo/reservar',
-    label: 'Reservar Cancha',
-    desc:  'Polideportivo Municipal',
+    label: 'Polideportivo Municipal',
+    desc:  'Reservar cancha',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true" className="h-8 w-8">
         <circle cx="12" cy="12" r="9" />

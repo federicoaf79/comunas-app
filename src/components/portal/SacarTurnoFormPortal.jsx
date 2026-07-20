@@ -775,6 +775,9 @@ export default function SacarTurnoFormPortal() {
         >
           Solicitar turno
         </Button>
+        {!canSubmit && (
+          <p className="mt-1.5 text-center text-xs text-primary-400">Completá todos los campos obligatorios para continuar</p>
+        )}
         <p className="mt-1.5 text-center text-[11px] text-primary-400">
           Te confirmamos por {form.canal === 'whatsapp' ? 'WhatsApp' : 'SMS'} en menos de 24hs.
         </p>
