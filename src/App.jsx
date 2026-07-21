@@ -55,8 +55,6 @@ import NoticiaDetalle      from './pages/portal/NoticiaDetalle'
 import DependenciaPublica  from './pages/portal/DependenciaPublica'
 import CicSaludPortal      from './pages/portal/CicSaludPortal'
 import SacarTurno          from './pages/portal/SacarTurno'
-import MiTurno             from './pages/portal/MiTurno'
-import MiSalud             from './pages/portal/MiSalud'
 import VideosPage          from './pages/portal/VideosPage'
 import TramitesPortal      from './pages/portal/TramitesPortal'
 import HistoriaPage        from './pages/portal/HistoriaPage'
@@ -137,8 +135,6 @@ const router = createBrowserRouter([
   { path: '/portal/dependencia/:tipo', element: <LandingDomainGuard><AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/cic-salud', element: <LandingDomainGuard><AdminDomainRedirect><CicSaludPortal /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/agenda', element: <LandingDomainGuard><AdminDomainRedirect><AgendaPublica /></AdminDomainRedirect></LandingDomainGuard> },
-  { path: '/portal/mi-turno', element: <LandingDomainGuard><AdminDomainRedirect><MiTurno /></AdminDomainRedirect></LandingDomainGuard> },
-  { path: '/portal/mi-salud', element: <LandingDomainGuard><AdminDomainRedirect><MiSalud /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/videos', element: <LandingDomainGuard><AdminDomainRedirect><VideosPage /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/tramites', element: <LandingDomainGuard><AdminDomainRedirect><TramitesPortal /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/historia', element: <LandingDomainGuard><AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect></LandingDomainGuard> },
@@ -183,6 +179,8 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/portal/turno', element: <SacarTurno /> },
+      { path: '/portal/mi-turno', element: <Navigate to="/portal/mi-cuenta?tab=turnos" replace /> },
+      { path: '/portal/mi-salud', element: <Navigate to="/portal/mi-cuenta?tab=salud" replace /> },
     ],
   },
 
