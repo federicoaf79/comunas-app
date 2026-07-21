@@ -6,6 +6,14 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ---
 
+## 🛑 Regla de seguridad operativa — acciones destructivas en producción
+
+**Antes de ejecutar cualquier acción que escriba, sobreescriba o borre datos reales en producción** (uploads con `upsert`, updates, deletes) — **confirmar con el usuario ANTES de ejecutar**, nunca tratarlo como un paso pasivo de verificación/diagnóstico, aunque la tarea se plantee como "probar" o "testear".
+
+**Aprendido de un incidente real:** al diagnosticar el bug de upload del logo institucional (bucket `avatares`), se subió un archivo de prueba con `upsert=true` sin pedir confirmación previa — esto sobrescribió el logo real de Real Sayana en producción (portal, header del panel y página de login) hasta que el usuario lo volvió a subir manualmente.
+
+---
+
 ## ⚠️ Riesgos abiertos
 
 **CRÍTICO — Columna `activa` en tabla `dependencias`:** es `activa` (NO `activo`). Bug corregido en junio 2026.
