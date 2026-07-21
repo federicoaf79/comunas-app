@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabasePublic } from '../lib/supabase'
 
 export function useOrdenMedicaUpload() {
   const [uploading, setUploading] = useState(false)
@@ -17,7 +17,7 @@ export function useOrdenMedicaUpload() {
       const filePath = `ordenes/${fileName}`
 
       // Subir a Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabasePublic.storage
         .from('documentos-hc')
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -27,15 +27,15 @@ export function useOrdenMedicaUpload() {
       if (uploadError) throw uploadError
 
       // Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl } } = supabasePublic.storage
         .from('documentos-hc')
         .getPublicUrl(filePath)
 
       // Obtener usuario autenticado para validada_por
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user } } = await supabasePublic.auth.getUser()
 
       // Crear registro en ordenes_derivacion
-      const { error: insertError } = await supabase
+      const { error: insertError } = await supabasePublic
         .from('ordenes_derivacion')
         .insert({
           turno_id: turnoId,

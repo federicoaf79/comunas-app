@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabasePublic } from '../../lib/supabase'
 import { dateTimeOf } from '../../lib/datetime'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
@@ -9,7 +9,7 @@ import Button from '../ui/Button'
 // NUNCA devuelve diagnóstico ni receta — eso queda restringido a la HC
 // completa que se consulta presencialmente en la Sala Primeros Auxilios.
 async function consultarMiSalud(dni, telefono) {
-  const { data, error } = await supabase.rpc('consultas_publicas_por_vecino', {
+  const { data, error } = await supabasePublic.rpc('consultas_publicas_por_vecino', {
     p_dni:      dni.trim(),
     p_telefono: telefono.trim(),
   })

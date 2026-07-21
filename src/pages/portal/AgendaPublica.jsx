@@ -4,7 +4,7 @@ import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPo
 import { useAgendaPublica } from '../../hooks/useAgendaPublica'
 import { useCrearTurnoAgenda } from '../../hooks/useTurnosAgenda'
 import { useVecino } from '../../context/VecinoContext'
-import { supabase } from '../../lib/supabase'
+import { supabasePublic } from '../../lib/supabase'
 import { todayArgYMD } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
@@ -164,9 +164,9 @@ export default function AgendaPublica() {
     try {
       const ext = file.name.split('.').pop()
       const path = `ordenes/${Date.now()}.${ext}`
-      const { error } = await supabase.storage.from('documentos-hc').upload(path, file)
+      const { error } = await supabasePublic.storage.from('documentos-hc').upload(path, file)
       if (error) throw error
-      const { data } = supabase.storage.from('documentos-hc').getPublicUrl(path)
+      const { data } = supabasePublic.storage.from('documentos-hc').getPublicUrl(path)
       setOrdenPreview(file.name)
       setFormTurno(p => ({ ...p, orden: { url: data.publicUrl, nombre: file.name } }))
     } catch(e) { alert('Error al subir: ' + e.message) }

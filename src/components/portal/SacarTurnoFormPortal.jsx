@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabasePublic } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { validateDniArg, normalizePhoneE164 } from '../../lib/historiaClinica'
 import { useOrdenMedicaUpload } from '../../hooks/useOrdenMedicaUpload'
@@ -47,7 +47,7 @@ const EMPTY = {
 // primera fila que matchee — si la DB tuviera el mismo DNI en dos
 // municipios distintos, prevalece el del portal actual.
 async function lookupVecinoPorDni({ dni, municipio_id }) {
-  let q = supabase
+  let q = supabasePublic
     .from('vecinos')
     .select('id, dni, nombre, apellido, nombre_completo, telefono')
     .eq('dni', dni)
@@ -80,7 +80,7 @@ async function findOrCreateVecino({ dni, nombre, telefono, municipio_id }) {
 
   let user_id = null
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await supabasePublic.auth.getUser()
     user_id = user?.id ?? null
   } catch {
     // Anon sin sesión → seguimos sin user_id.
@@ -96,7 +96,7 @@ async function findOrCreateVecino({ dni, nombre, telefono, municipio_id }) {
     ...(user_id ? { user_id } : {}),
   }
 
-  const { data: created, error: insErr } = await supabase
+  const { data: created, error: insErr } = await supabasePublic
     .from('vecinos')
     .insert(payload)
     .select('id, telefono')
@@ -493,7 +493,7 @@ export default function SacarTurnoFormPortal() {
         payload.metadata = { ...(payload.metadata || {}), especialidad: especialidadURL }
       }
 
-      const { data: turno, error: tErr } = await supabase
+      const { data: turno, error: tErr } = await supabasePublic
         .from('turnos_agenda')
         .insert(payload)
         .select('id, numero_turno, fecha, hora_inicio, estado')

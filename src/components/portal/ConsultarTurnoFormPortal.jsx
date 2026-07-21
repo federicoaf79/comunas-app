@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabasePublic } from '../../lib/supabase'
 import { dateTimeOf } from '../../lib/datetime'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Input from '../ui/Input'
@@ -37,7 +37,7 @@ async function buscarTurnos(input, municipioId) {
 
   // 1) por numero_turno (la columna podría ser int o text — PostgREST coerce).
   //    Filtrar por municipio_id para scopear la búsqueda al portal actual.
-  const { data: byNumero } = await supabase
+  const { data: byNumero } = await supabasePublic
     .from('turnos_agenda')
     .select(COLS)
     .eq('numero_turno', q)
@@ -48,7 +48,7 @@ async function buscarTurnos(input, municipioId) {
 
   // 2) por DNI: usar RPC function que hace el lookup internamente con SECURITY DEFINER.
   //    Pasar municipio_id para scopear la búsqueda al portal actual.
-  const { data: rpcResult, error: rpcError } = await supabase
+  const { data: rpcResult, error: rpcError } = await supabasePublic
     .rpc('buscar_turnos_por_dni', { p_dni: q, p_municipio_id: municipioId })
 
   if (rpcError) {
@@ -62,7 +62,7 @@ async function buscarTurnos(input, municipioId) {
   const depIds = [...new Set(rpcResult.map(t => t.dependencia_id).filter(Boolean))]
   let depsMap = {}
   if (depIds.length > 0) {
-    const { data: deps } = await supabase
+    const { data: deps } = await supabasePublic
       .from('dependencias')
       .select('id, nombre')
       .in('id', depIds)

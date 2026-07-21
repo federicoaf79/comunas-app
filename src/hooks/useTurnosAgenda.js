@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { supabase, supabasePublic } from '../lib/supabase'
 import { todayArgYMD } from '../lib/datetime'
 
 const COLS = `
@@ -85,7 +85,9 @@ export function useTurnosAgendaDependencia(dependenciaId, fechaDesde, fechaHasta
   })
 }
 
-// Crear turno (vecino saca turno)
+// Crear turno (vecino saca turno) — usa supabasePublic: se llama desde
+// páginas 100% públicas (AgendaPublica, SacarTurnoFormPortal), nunca
+// desde admin. Ver REGLA en src/lib/supabase.js.
 export function useCrearTurnoAgenda() {
   const qc = useQueryClient()
   return useMutation({
@@ -95,7 +97,7 @@ export function useCrearTurnoAgenda() {
       motivo, orden_medica_url, orden_medica_nombre,
     }) => {
       // Validar disponibilidad
-      const { count } = await supabase
+      const { count } = await supabasePublic
         .from('turnos_agenda')
         .select('id', { count: 'exact', head: true })
         .eq('profesional_id', profesional_id)
@@ -103,7 +105,7 @@ export function useCrearTurnoAgenda() {
         .eq('hora_inicio', hora_inicio)
         .in('estado', ['pendiente', 'confirmado'])
 
-      const { data: prof } = await supabase
+      const { data: prof } = await supabasePublic
         .from('profesionales')
         .select('max_turnos_por_slot')
         .eq('id', profesional_id)
@@ -113,7 +115,7 @@ export function useCrearTurnoAgenda() {
         throw new Error('Este horario ya no tiene disponibilidad. Por favor elegí otro.')
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('turnos_agenda')
         .insert({
           municipio_id, dependencia_id, profesional_id,
