@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { useAgendaPublica } from '../../hooks/useAgendaPublica'
 import { useCrearTurnoAgenda } from '../../hooks/useTurnosAgenda'
@@ -63,6 +63,7 @@ function formatHora(h) {
 
 export default function AgendaPublica() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { data: municipioId, isLoading: loadingMunicipioId } = usePortalMunicipioId()
   const { data: muniDatos } = useDatosMunicipio(municipioId)
   const { vecino } = useVecino()
@@ -175,7 +176,7 @@ export default function AgendaPublica() {
 
   async function handleSacarTurno() {
     setError('')
-    if (!vecino) { navigate('/mi-cuenta/acceso?redirect=/portal/agenda'); return }
+    if (!vecino || vecino.auth_mode !== 'supabase') { navigate('/portal/acceso', { state: { from: location } }); return }
     if (!formTurno.motivo.trim()) { setError('Ingresá el motivo'); return }
     if (modalEvento?.profesional?.requiere_orden && !formTurno.orden) {
       setError('Este especialista requiere orden médica.')
@@ -434,10 +435,10 @@ export default function AgendaPublica() {
               {modalEvento.tipo === 'medico' && modalEvento.profesional_id ? (
                 <div className="space-y-3 border-t border-border pt-4">
                   <p className="text-sm font-semibold text-primary">Solicitar turno</p>
-                  {!vecino ? (
+                  {(!vecino || vecino.auth_mode !== 'supabase') ? (
                     <div className="rounded-xl border border-[#C9A84C]/40 bg-[#C9A84C]/10 p-3 text-sm">
-                      <p className="font-semibold text-primary">Necesitás iniciar sesión para sacar turno.</p>
-                      <button onClick={() => navigate('/mi-cuenta/acceso?redirect=/portal/agenda')}
+                      <p className="font-semibold text-primary">Necesitás una cuenta completa para sacar turno.</p>
+                      <button onClick={() => navigate('/portal/acceso', { state: { from: location } })}
                         className="mt-1 text-xs text-[#1D4ED8] font-medium hover:underline">
                         Iniciar sesión →
                       </button>
@@ -480,7 +481,7 @@ export default function AgendaPublica() {
             </div>
             <div className="flex gap-3 border-t border-border px-6 py-4">
               <button onClick={() => setModalEvento(null)} className="btn-secondary flex-1">Cerrar</button>
-              {modalEvento.tipo === 'medico' && modalEvento.profesional_id && vecino && (
+              {modalEvento.tipo === 'medico' && modalEvento.profesional_id && vecino?.auth_mode === 'supabase' && (
                 <button onClick={handleSacarTurno} disabled={crearTurno.isPending}
                   className="btn-primary flex-1 flex items-center justify-center gap-2 disabled:opacity-50">
                   {crearTurno.isPending && <Spinner size="sm" />}
