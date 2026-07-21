@@ -5,8 +5,14 @@ import { useVecino } from '../../context/VecinoContext'
 // Guard del Portal del Vecino — redirige a /portal/acceso
 // cuando no hay sesión. La sesión vive en localStorage (persiste)
 // y soporta Supabase Auth (email + password) o acceso rápido (DNI + tel).
-export default function VecinoGuard() {
-  const { isVecinoLogued, vecinoData, clearVecinoSession, authLoading } = useVecino()
+// requireCuentaCompleta: cuando true, además de exigir sesión exige
+// auth_mode === 'supabase' — usado en rutas donde se decidió que el
+// acceso rápido (DNI+tel) ya no alcanza (ver plan Fase 2). Las rutas
+// que ya usaban <VecinoGuard /> sin este prop mantienen su
+// comportamiento de siempre (solo exigen *alguna* sesión); esas
+// páginas siguen gateando auth_mode internamente donde corresponda.
+export default function VecinoGuard({ requireCuentaCompleta = false }) {
+  const { isVecinoLogued, vecinoSession, vecinoData, clearVecinoSession, authLoading } = useVecino()
   const location = useLocation()
 
   // Esperar a que termine de cargar antes de redirigir
@@ -23,7 +29,7 @@ export default function VecinoGuard() {
     )
   }
 
-  if (!isVecinoLogued) {
+  if (!isVecinoLogued || (requireCuentaCompleta && vecinoSession?.auth_mode !== 'supabase')) {
     return <Navigate to="/portal/acceso" state={{ from: location }} replace />
   }
 

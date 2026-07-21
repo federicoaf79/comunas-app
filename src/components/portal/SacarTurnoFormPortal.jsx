@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { supabasePublic } from '../../lib/supabase'
+import { useVecino } from '../../context/VecinoContext'
+import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
-import { validateDniArg, normalizePhoneE164 } from '../../lib/historiaClinica'
+import { normalizePhoneE164 } from '../../lib/historiaClinica'
 import { useOrdenMedicaUpload } from '../../hooks/useOrdenMedicaUpload'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
-import Spinner from '../ui/Spinner'
 
 const CANALES = [
   { value: 'whatsapp', label: 'WhatsApp' },
@@ -27,8 +27,10 @@ const VINCULOS = [
 ]
 
 const EMPTY = {
-  // Datos del solicitante (siempre van al vecino_id del turno)
-  dni: '', nombre: '', telefono: '',
+  // Teléfono del solicitante — prefilleado desde vecinoSession pero
+  // editable (puede diferir del registrado, es a dónde se manda la
+  // confirmación por WhatsApp/SMS).
+  telefono: '',
   // Datos del turno
   dependencia: '', fecha: '', canal: 'whatsapp', motivo: '',
   // ¿Para quién es?
@@ -43,73 +45,11 @@ const EMPTY = {
   ordenFile: null,
 }
 
-// Búsqueda por DNI scoping al municipio del portal. Devuelve la
-// primera fila que matchee — si la DB tuviera el mismo DNI en dos
-// municipios distintos, prevalece el del portal actual.
-async function lookupVecinoPorDni({ dni, municipio_id }) {
-  let q = supabasePublic
-    .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono')
-    .eq('dni', dni)
-    .limit(1)
-  if (municipio_id) q = q.eq('municipio_id', municipio_id)
-  const { data, error } = await q
-  if (error) throw error
-  return (data && data[0]) || null
-}
-
-// Busca el vecino por DNI; si no existe, lo crea con el municipio
-// del turno. Devuelve { vecino, created } para que el caller sepa
-// si fue alta nueva (y muestre el copy correspondiente en la
-// pantalla de confirmación).
-//
-// Si hay un user logueado en Supabase Auth lo vinculamos al vecino
-// nuevo seteando user_id. Si no hay sesión, queda sin link — se
-// puede asociar más adelante desde "Mi cuenta".
-async function findOrCreateVecino({ dni, nombre, telefono, municipio_id }) {
-  // Primero scoped al municipio destino; si no hay match, hacemos
-  // un fallback amplio para no duplicar a alguien que ya existe en
-  // OTRO municipio (caso superadmin con varios portales).
-  const existing = await lookupVecinoPorDni({ dni, municipio_id })
-  if (existing) return { vecino: existing, created: false }
-
-  // Split simple del nombre completo: primer token = nombre, resto = apellido.
-  const partes      = nombre.trim().split(/\s+/)
-  const nombreSolo  = partes.shift() ?? ''
-  const apellido    = partes.join(' ') || nombreSolo
-
-  let user_id = null
-  try {
-    const { data: { user } } = await supabasePublic.auth.getUser()
-    user_id = user?.id ?? null
-  } catch {
-    // Anon sin sesión → seguimos sin user_id.
-  }
-
-  const payload = {
-    municipio_id,
-    dni,
-    nombre:          nombreSolo,
-    apellido,
-    nombre_completo: nombre,
-    telefono,
-    ...(user_id ? { user_id } : {}),
-  }
-
-  const { data: created, error: insErr } = await supabasePublic
-    .from('vecinos')
-    .insert(payload)
-    .select('id, telefono')
-    .single()
-  if (insErr) throw insErr
-  return { vecino: created, created: true }
-}
-
 // Construye el objeto metadata jsonb a guardar en el turno cuando
 // el ciudadano sacó turno para un familiar. El vecino_id sigue
-// siendo el del solicitante (la persona que llenó el formulario)
-// — quién va a atenderse queda registrado acá.
-function buildFamiliarMetadata(form) {
+// siendo el del solicitante (la cuenta logueada) — quién va a
+// atenderse queda registrado acá.
+function buildFamiliarMetadata(form, vecinoSession) {
   const vinculoFinal =
     form.vinculo === 'otro'
       ? (form.vinculo_otro.trim() || 'otro')
@@ -121,8 +61,8 @@ function buildFamiliarMetadata(form) {
     familiar_dni:       form.familiar_dni.trim(),
     vinculo:            vinculoFinal,
     familiar_edad:      Number.isFinite(edadNum) ? edadNum : null,
-    solicitante_nombre: form.nombre.trim(),
-    solicitante_dni:    form.dni.trim(),
+    solicitante_nombre: vecinoSession?.nombre_completo || '',
+    solicitante_dni:    vecinoSession?.dni || '',
     solicitante_tel:    form.telefono.trim(),
   }
 }
@@ -282,23 +222,16 @@ export default function SacarTurnoFormPortal() {
   const especialidadURL = searchParams.get('esp') || ''
   const depParam = searchParams.get('dep') || ''  // dep desde URL (slug/tipo)
 
-  const [form, setForm]           = useState(EMPTY)
+  // Ruta detrás de VecinoGuard(requireCuentaCompleta) — vecinoSession
+  // siempre existe acá, con auth_mode === 'supabase'.
+  const { vecinoSession } = useVecino()
+
+  const [form, setForm] = useState(() => ({ ...EMPTY, telefono: vecinoSession?.telefono ?? '' }))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState('')
   const [resultado, setResultado] = useState(null)
   const [deps, setDeps]           = useState([])
-  // dniStatus: 'idle' | 'searching' | 'found' | 'notfound'
-  //   idle      → todavía no se intentó buscar (o DNI cambió y resetea)
-  //   searching → fetch en vuelo
-  //   found     → existe; auto-completamos nombre/teléfono
-  //   notfound  → no existe; mostramos bloque gold + checkbox "Soy vecino"
-  const [dniStatus, setDniStatus] = useState('idle')
-  // Checkbox del bloque gold — obligatorio cuando dniStatus === 'notfound'.
-  const [esVecino, setEsVecino]   = useState(false)
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
-  // Track del último DNI buscado para no re-disparar la query si el
-  // usuario blurea sin cambiar nada.
-  const lastDniLookup = useRef('')
   const depPreselectado = useRef(false)  // flag para solo preseleccionar una vez
 
   const portalMunicipioQ = usePortalMunicipioId()
@@ -349,70 +282,20 @@ export default function SacarTurnoFormPortal() {
     }
   }, [depParam, deps])
 
-  // Si el usuario edita el DNI después de buscar, reseteamos el
-  // estado de lookup — el bloque gold/banner desaparece hasta que
-  // vuelva a bluerar.
-  useEffect(() => {
-    if (dniStatus !== 'idle' && form.dni !== lastDniLookup.current) {
-      setDniStatus('idle')
-    }
-  }, [form.dni, dniStatus])
-
-  // Lookup en blur del DNI. Validamos formato local antes de
-  // pegarle a Supabase — sin DNI válido no buscamos. El scope por
-  // municipio_id es soft: si todavía no se cargó el portalMunicipioId,
-  // hacemos un lookup global (caso muy raro: el hook usePortalMunicipioId
-  // se resuelve casi instantáneamente).
-  async function handleDniBlur() {
-    const dni = form.dni.trim()
-    if (!dni || dni === lastDniLookup.current) return
-    const { ok } = validateDniArg(dni)
-    if (!ok) {
-      // No buscamos con formato inválido. El error de validación
-      // se mostrará al intentar enviar; acá solo silenciamos.
-      return
-    }
-    lastDniLookup.current = dni
-    setDniStatus('searching')
-    try {
-      const vecino = await lookupVecinoPorDni({ dni, municipio_id: portalMunicipioId })
-      if (vecino) {
-        // Solo prefill si los campos están vacíos — no piso lo que
-        // el usuario ya escribió manualmente.
-        setForm(s => ({
-          ...s,
-          nombre:   s.nombre   || vecino.nombre_completo || [vecino.nombre, vecino.apellido].filter(Boolean).join(' ') || '',
-          telefono: s.telefono || vecino.telefono || '',
-        }))
-        setDniStatus('found')
-      } else {
-        setDniStatus('notfound')
-      }
-    } catch (e) {
-      console.warn('[SacarTurno] lookup vecino:', e?.message ?? e)
-      // En caso de error de red, dejamos al usuario completar
-      // manualmente. NO bloqueamos: status vuelve a idle.
-      setDniStatus('idle')
-      lastDniLookup.current = ''
-    }
-  }
-
   function resolveDep(depId) {
     return deps.find(d => d.id === depId) ?? null
   }
 
   const isFamiliar = form.paraQuien === 'familiar'
 
-  // Validación: para enviar necesitamos los datos básicos del
-  // solicitante + dependencia + fecha. Si es para un familiar,
-  // además requerimos nombre/DNI/vínculo del familiar (y el texto
-  // libre cuando vínculo === 'otro'). Si el DNI no existe en la DB
-  // (alta nueva), además exigimos el checkbox "Soy vecino".
-  // Si requiere orden médica, exigimos que hayan subido el archivo.
+  // Validación: solicitante ya está identificado por la sesión — acá
+  // solo faltan teléfono, dependencia y fecha. Si es para un
+  // familiar, además requerimos nombre/DNI/vínculo del familiar (y
+  // el texto libre cuando vínculo === 'otro'). Si requiere orden
+  // médica, exigimos que hayan subido el archivo.
   const canSubmit =
-    !!form.dni && !!form.nombre && !!form.telefono &&
+    !!form.telefono &&
     !!form.dependencia && !!form.fecha &&
-    (dniStatus !== 'notfound' || esVecino) &&
     (!requiereOrden || !!form.ordenFile) &&
     (!isFamiliar || (
       !!form.familiar_nombre.trim() &&
@@ -425,12 +308,6 @@ export default function SacarTurnoFormPortal() {
     e.preventDefault()
     setError('')
 
-    // Validación de DNI antes de pegarle a la DB.
-    const dniRes = validateDniArg(form.dni)
-    if (!dniRes.ok) {
-      setError(dniRes.error)
-      return
-    }
     // Normalizamos teléfono a E.164 (+549…) — el campo de DB lo
     // guarda como string libre, pero el sistema de SMS/WhatsApp
     // necesita el formato canónico.
@@ -439,22 +316,11 @@ export default function SacarTurnoFormPortal() {
       setError(telRes.error)
       return
     }
-    if (dniStatus === 'notfound' && !esVecino) {
-      setError('Confirmá que sos vecino de Real Sayana para registrarte.')
-      return
-    }
 
     setSubmitting(true)
     try {
       const dep = resolveDep(form.dependencia)
       if (!dep) throw new Error('No se encontró la dependencia seleccionada.')
-
-      const { vecino: v, created } = await findOrCreateVecino({
-        dni:          dniRes.value,
-        nombre:       form.nombre.trim(),
-        telefono:     telRes.value,
-        municipio_id: dep.municipio_id,
-      })
 
       // fecha_hora: usamos la fecha elegida + 09:00 hora Argentina
       // como horario tentativo. El operador la ajusta al confirmar.
@@ -477,7 +343,7 @@ export default function SacarTurnoFormPortal() {
       const payload = {
         municipio_id:   dep.municipio_id,
         dependencia_id: dep.id,
-        vecino_id:      v.id,
+        vecino_id:      vecinoSession.id,
         fecha,
         hora_inicio,
         hora_fin,
@@ -486,14 +352,14 @@ export default function SacarTurnoFormPortal() {
         motivo:         form.motivo || null,
       }
       if (isFamiliar) {
-        payload.metadata = buildFamiliarMetadata(form)
+        payload.metadata = buildFamiliarMetadata(form, vecinoSession)
       }
       // Si hay especialidad en URL, guardarla en metadata
       if (especialidadURL) {
         payload.metadata = { ...(payload.metadata || {}), especialidad: especialidadURL }
       }
 
-      const { data: turno, error: tErr } = await supabasePublic
+      const { data: turno, error: tErr } = await supabase
         .from('turnos_agenda')
         .insert(payload)
         .select('id, numero_turno, fecha, hora_inicio, estado')
@@ -502,7 +368,7 @@ export default function SacarTurnoFormPortal() {
 
       // Si requiere orden y hay archivo, subirlo
       if (requiereOrden && form.ordenFile) {
-        const uploadResult = await uploadOrden(form.ordenFile, turno.id, v.id)
+        const uploadResult = await uploadOrden(form.ordenFile, turno.id, vecinoSession.id)
         if (!uploadResult.success) {
           throw new Error('Error al subir orden médica: ' + uploadResult.error)
         }
@@ -514,10 +380,6 @@ export default function SacarTurnoFormPortal() {
         telefono:        telRes.value,
         para_familiar:   isFamiliar,
         familiar_nombre: form.familiar_nombre,
-        // Distingue alta nueva de match con vecino existente — la
-        // pantalla de confirmación lo usa para mostrar el copy de
-        // "También creamos tu perfil…".
-        fue_alta_nueva:  created,
       })
     } catch (e) {
       setError(e?.message ?? 'No pudimos registrar tu turno. Probá de nuevo.')
@@ -550,15 +412,6 @@ export default function SacarTurnoFormPortal() {
         <p className="mt-2 text-sm text-primary-500">
           Te confirmamos por <strong>{canalLabel}</strong> en menos de 24 hs.
         </p>
-        {resultado.fue_alta_nueva && (
-          <p
-            className="mx-auto mt-4 max-w-sm rounded-md border border-accent-200 bg-accent-50 px-3 py-2 text-xs leading-relaxed text-primary-700"
-            style={{ backgroundColor: 'rgba(201, 168, 76, 0.10)', borderColor: '#C9A84C' }}
-          >
-            También creamos tu perfil en el sistema. Podés completar tus datos
-            desde <strong>Mi cuenta</strong> cuando quieras.
-          </p>
-        )}
         <Link
           to="/portal"
           className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
@@ -576,71 +429,15 @@ export default function SacarTurnoFormPortal() {
         <ParaQuienSelector value={form.paraQuien} onChange={v => set('paraQuien', v)} />
       </div>
 
-      {/* Sección "Tus datos" — header full width, luego DNI | Nombre */}
+      {/* Sección "Tus datos" — header full width, luego resumen de la
+          cuenta (solo lectura) | Teléfono editable. */}
       <h3 className="col-span-2 mt-2 text-xs font-bold uppercase tracking-widest text-primary">
         {isFamiliar ? 'Tus datos (solicitante)' : 'Tus datos'}
       </h3>
-      <Input
-        label="DNI"
-        value={form.dni}
-        onChange={e => set('dni', e.target.value.replace(/[^\d]/g, ''))}
-        onBlur={handleDniBlur}
-        required
-        inputMode="numeric"
-        type="text"
-        autoComplete="off"
-      />
-      <Input
-        label="Nombre completo"
-        value={form.nombre}
-        onChange={e => set('nombre', e.target.value)}
-        required
-        autoComplete="name"
-      />
-
-      {/* Status del lookup por DNI — full width */}
-      {dniStatus === 'searching' && (
-        <div className="col-span-2 flex items-center gap-2 rounded-md border border-border bg-white px-3 py-1.5 text-xs text-primary-500">
-          <Spinner size="sm" />
-          Buscando tu DNI…
-        </div>
-      )}
-      {dniStatus === 'found' && (
-        <div className="col-span-2 flex items-center gap-2 rounded-md border border-ok-100 bg-ok-50 px-3 py-1.5 text-xs text-ok-700">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          <span>
-            <strong>DNI encontrado.</strong> Cargamos tus datos — verificá nombre y teléfono.
-          </span>
-        </div>
-      )}
-      {dniStatus === 'notfound' && (
-        <div
-          className="col-span-2 rounded-md border-2 px-3 py-2"
-          style={{
-            backgroundColor: 'rgba(201, 168, 76, 0.10)',
-            borderColor: '#C9A84C',
-          }}
-        >
-          <p className="text-xs font-semibold text-primary">
-            No encontramos tu DNI en el sistema. Completá estos datos para registrarte:
-          </p>
-          <p className="mt-0.5 text-[11px] text-primary-700">
-            · Nombre completo y teléfono celular (formato +54 9…) en los campos del form.
-          </p>
-          <label className="mt-1.5 flex cursor-pointer items-center gap-2 text-xs text-primary-700">
-            <input
-              type="checkbox"
-              checked={esVecino}
-              onChange={e => setEsVecino(e.target.checked)}
-              className="h-4 w-4 rounded border-border accent-primary"
-            />
-            <span>Soy vecino de <strong>Real Sayana</strong>.</span>
-          </label>
-        </div>
-      )}
-
+      <div className="col-span-2 rounded-md border border-border bg-primary-50 px-3 py-2 text-sm text-primary-700">
+        Reservando como <strong>{vecinoSession?.nombre_completo || 'vos'}</strong>
+        {vecinoSession?.dni && <> · DNI {vecinoSession.dni}</>}
+      </div>
       <Input
         label="Teléfono celular"
         value={form.telefono}

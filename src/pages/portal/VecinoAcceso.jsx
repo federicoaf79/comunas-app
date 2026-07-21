@@ -21,6 +21,12 @@ function getContextualMessage(from) {
   if (from.includes('reclamo')) {
     return 'Para crear un reclamo necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
   }
+  if (from.includes('turno')) {
+    return 'Para sacar o consultar un turno necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+  }
+  if (from.includes('salud')) {
+    return 'Para ver tu información de salud necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+  }
   return 'Necesitás iniciar sesión para continuar.'
 }
 

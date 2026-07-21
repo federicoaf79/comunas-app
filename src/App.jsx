@@ -137,7 +137,6 @@ const router = createBrowserRouter([
   { path: '/portal/dependencia/:tipo', element: <LandingDomainGuard><AdminDomainRedirect><DependenciaPublica /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/cic-salud', element: <LandingDomainGuard><AdminDomainRedirect><CicSaludPortal /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/agenda', element: <LandingDomainGuard><AdminDomainRedirect><AgendaPublica /></AdminDomainRedirect></LandingDomainGuard> },
-  { path: '/portal/turno', element: <LandingDomainGuard><AdminDomainRedirect><SacarTurno /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/mi-turno', element: <LandingDomainGuard><AdminDomainRedirect><MiTurno /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/mi-salud', element: <LandingDomainGuard><AdminDomainRedirect><MiSalud /></AdminDomainRedirect></LandingDomainGuard> },
   { path: '/portal/videos', element: <LandingDomainGuard><AdminDomainRedirect><VideosPage /></AdminDomainRedirect></LandingDomainGuard> },
@@ -168,6 +167,22 @@ const router = createBrowserRouter([
       { path: '/portal/mis-reservas', element: <Navigate to="/portal/mi-cuenta?tab=reservas" replace /> },
       { path: '/portal/desarrollo/solicitar', element: <SolicitarServicioDesarrollo /> },
       { path: '/portal/mis-solicitudes-desarrollo', element: <Navigate to="/portal/mi-cuenta?tab=desarrollo" replace /> },
+    ],
+  },
+
+  // Fase 2 — flujos que requieren cuenta completa (auth_mode==='supabase'),
+  // sin excepción para acceso rápido. Grupo separado del de arriba para no
+  // cambiar el comportamiento de las rutas ya existentes.
+  {
+    element: (
+      <LandingDomainGuard>
+        <AdminDomainRedirect>
+          <VecinoGuard requireCuentaCompleta />
+        </AdminDomainRedirect>
+      </LandingDomainGuard>
+    ),
+    children: [
+      { path: '/portal/turno', element: <SacarTurno /> },
     ],
   },
 
