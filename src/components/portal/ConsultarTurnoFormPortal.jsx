@@ -4,6 +4,7 @@ import { dateTimeOf } from '../../lib/datetime'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Input from '../ui/Input'
 import Button from '../ui/Button'
+import Modal from '../ui/Modal'
 
 const ESTADO_LABEL = {
   pendiente:  'Pendiente',
@@ -29,7 +30,8 @@ async function buscarTurnos(input, municipioId) {
   if (!q || !municipioId) return []
 
   const COLS = `
-    id, numero_turno, fecha, hora_inicio, estado, canal,
+    id, numero_turno, fecha, hora_inicio, hora_fin, estado, canal,
+    motivo, notas_vecino, direccion,
     dependencia:dependencia_id ( id, nombre )
   `
 
@@ -84,6 +86,7 @@ export default function ConsultarTurnoFormPortal() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [turnos, setTurnos] = useState(null)
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState(null)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -141,28 +144,143 @@ export default function ConsultarTurnoFormPortal() {
         </div>
       )}
 
-      {turnos && turnos.length > 0 && (
-        <ul className="mt-4 divide-y divide-border rounded-md border border-border">
-          {turnos.map(t => {
-            const dep = t.dependencia?.nombre ?? '—'
-            return (
-              <li key={t.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-primary">
-                    {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
-                  </p>
-                  <p className="mt-1 text-xs text-primary-400">
-                    {t.fecha} {t.hora_inicio} · {dep}
-                  </p>
-                </div>
-                <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
-                  {ESTADO_LABEL[t.estado] ?? t.estado}
+      {turnos && turnos.length > 0 && (() => {
+        const activos = turnos.filter(t => t.estado === 'pendiente' || t.estado === 'confirmado')
+        const historial = turnos.filter(t => t.estado === 'atendido' || t.estado === 'cancelado')
+
+        return (
+          <>
+            {/* Sección: Turnos activos */}
+            {activos.length > 0 && (
+              <div className="mt-4">
+                <h3 className="mb-3 text-sm font-semibold text-primary">Turnos activos</h3>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {activos.map(t => {
+                    const dep = t.dependencia?.nombre ?? '—'
+                    return (
+                      <li
+                        key={t.id}
+                        onClick={() => setTurnoSeleccionado(t)}
+                        className="flex cursor-pointer flex-wrap items-start justify-between gap-3 p-4 transition-colors hover:bg-primary-50"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-primary">
+                            {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
+                          </p>
+                          <p className="mt-1 text-xs text-primary-400">
+                            {t.fecha} {t.hora_inicio} · {dep}
+                          </p>
+                        </div>
+                        <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
+                          {ESTADO_LABEL[t.estado] ?? t.estado}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* Sección: Historial (lista condensada) */}
+            {historial.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-semibold text-primary">Historial</h3>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {historial.map(t => {
+                    const dep = t.dependencia?.nombre ?? '—'
+                    return (
+                      <li
+                        key={t.id}
+                        onClick={() => setTurnoSeleccionado(t)}
+                        className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-xs transition-colors hover:bg-primary-50"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-primary">
+                            {t.numero_turno ? `#${t.numero_turno}` : 'Turno'}
+                          </span>
+                          <span className="ml-2 text-primary-400">
+                            {t.fecha} · {dep}
+                          </span>
+                        </div>
+                        <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
+                          {ESTADO_LABEL[t.estado] ?? t.estado}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+          </>
+        )
+      })()}
+
+      {/* Modal de detalle */}
+      <Modal
+        open={!!turnoSeleccionado}
+        onClose={() => setTurnoSeleccionado(null)}
+        title={turnoSeleccionado?.numero_turno ? `Turno #${turnoSeleccionado.numero_turno}` : 'Detalle del turno'}
+        size="md"
+      >
+        {turnoSeleccionado && (
+          <div className="space-y-4 p-5">
+            {/* Dependencia */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Dependencia</p>
+              <p className="mt-1 text-sm text-primary">{turnoSeleccionado.dependencia?.nombre ?? '—'}</p>
+            </div>
+
+            {/* Fecha y hora */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Fecha</p>
+                <p className="mt-1 text-sm text-primary">{turnoSeleccionado.fecha ?? '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Horario</p>
+                <p className="mt-1 text-sm text-primary">
+                  {turnoSeleccionado.hora_inicio ?? '—'}
+                  {turnoSeleccionado.hora_fin && ` - ${turnoSeleccionado.hora_fin}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Estado */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Estado</p>
+              <div className="mt-1">
+                <span className={ESTADO_CLASS[turnoSeleccionado.estado] ?? 'estado-pendiente'}>
+                  {ESTADO_LABEL[turnoSeleccionado.estado] ?? turnoSeleccionado.estado}
                 </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+              </div>
+            </div>
+
+            {/* Motivo */}
+            {turnoSeleccionado.motivo && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Motivo</p>
+                <p className="mt-1 text-sm text-primary">{turnoSeleccionado.motivo}</p>
+              </div>
+            )}
+
+            {/* Notas / Detalle */}
+            {turnoSeleccionado.notas_vecino && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Notas / Detalle</p>
+                <p className="mt-1 text-sm text-primary">{turnoSeleccionado.notas_vecino}</p>
+              </div>
+            )}
+
+            {/* Dirección (solo Agencia de Desarrollo) */}
+            {turnoSeleccionado.direccion && (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Dirección</p>
+                <p className="mt-1 text-sm text-primary">{turnoSeleccionado.direccion}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
