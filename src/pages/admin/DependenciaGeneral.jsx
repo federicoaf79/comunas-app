@@ -1393,9 +1393,9 @@ function ReservasCanchasTab({ municipioId, dependenciaId }) {
                   </Td>
                   <Td>
                     <div className="text-sm">{r.motivo || '—'}</div>
-                    {r.observaciones && (
+                    {r.notas_vecino && (
                       <div className="text-xs text-primary-500 mt-0.5">
-                        {r.observaciones}
+                        {r.notas_vecino}
                       </div>
                     )}
                   </Td>

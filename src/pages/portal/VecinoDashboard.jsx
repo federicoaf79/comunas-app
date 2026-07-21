@@ -824,9 +824,9 @@ function ReservasTab({ vecino, reservas, isLoading, error }) {
                         <span className="font-medium">Actividad:</span> {r.motivo}
                       </p>
                     )}
-                    {r.observaciones && (
+                    {r.notas_vecino && (
                       <p>
-                        <span className="font-medium">Observaciones:</span> {r.observaciones}
+                        <span className="font-medium">Observaciones:</span> {r.notas_vecino}
                       </p>
                     )}
                   </div>
