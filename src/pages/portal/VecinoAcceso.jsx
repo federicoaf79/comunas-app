@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
 import { supabase } from '../../lib/supabase'
@@ -7,15 +7,36 @@ import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
+// Banner contextual basado en la ruta de origen (mismo patrón que
+// src/pages/auth/Acceso.jsx, portado acá porque VecinoGuard redirige
+// a /portal/acceso — no a /acceso — con state={{ from: location }}.
+function getContextualMessage(from) {
+  if (!from) return null
+  if (from.includes('polideportivo')) {
+    return 'Para reservar una cancha necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+  }
+  if (from.includes('desarrollo')) {
+    return 'Para solicitar un servicio de la Agencia de Desarrollo necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+  }
+  if (from.includes('reclamo')) {
+    return 'Para crear un reclamo necesitás iniciar sesión. Si no tenés cuenta, creála en pocos pasos — no te va a tomar más de 5 minutos.'
+  }
+  return 'Necesitás iniciar sesión para continuar.'
+}
+
 export default function VecinoAcceso() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { setVecinoSession, isVecinoLogued } = useVecino()
   const [tab, setTab] = useState('login') // 'login' | 'registro' | 'rapido'
 
-  // Si ya hay sesión, ir directo al dashboard
+  const redirectTo = location.state?.from?.pathname || '/portal/mi-cuenta'
+  const contextualMessage = getContextualMessage(location.state?.from?.pathname)
+
+  // Si ya hay sesión, ir directo al dashboard (o a la ruta de origen)
   useEffect(() => {
-    if (isVecinoLogued) navigate('/portal/mi-cuenta', { replace: true })
-  }, [isVecinoLogued, navigate])
+    if (isVecinoLogued) navigate(redirectTo, { replace: true })
+  }, [isVecinoLogued, navigate, redirectTo])
 
   return (
     <PortalFormPage
@@ -24,6 +45,17 @@ export default function VecinoAcceso() {
       compact
     >
       <div className="mx-auto max-w-[420px]">
+        {contextualMessage && (
+          <div className="mb-4 rounded-lg border border-primary/20 bg-primary-50 p-4">
+            <div className="flex items-start gap-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5 shrink-0 text-primary mt-0.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4M12 8h.01"/>
+              </svg>
+              <p className="text-sm text-primary-700">{contextualMessage}</p>
+            </div>
+          </div>
+        )}
         <div className="card overflow-hidden p-0">
           {/* Tabs */}
           <div className="flex border-b border-border bg-[#F5F4EF]">
@@ -67,9 +99,9 @@ export default function VecinoAcceso() {
 
           {/* Contenido */}
           <div className="p-4 sm:p-5">
-            {tab === 'login' && <LoginTab setVecinoSession={setVecinoSession} navigate={navigate} />}
-            {tab === 'registro' && <RegistroTab setVecinoSession={setVecinoSession} navigate={navigate} />}
-            {tab === 'rapido' && <RapidoTab setVecinoSession={setVecinoSession} navigate={navigate} />}
+            {tab === 'login' && <LoginTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
+            {tab === 'registro' && <RegistroTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
+            {tab === 'rapido' && <RapidoTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
           </div>
         </div>
       </div>
@@ -81,7 +113,7 @@ export default function VecinoAcceso() {
 // TAB: Ingresar con Supabase Auth
 // ═════════════════════════════════════════════════════════════
 
-function LoginTab({ setVecinoSession, navigate }) {
+function LoginTab({ setVecinoSession, navigate, redirectTo }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -108,7 +140,7 @@ function LoginTab({ setVecinoSession, navigate }) {
       // VecinoContext.onAuthStateChange se encarga de cargar el vecino
       // vinculado y popular vecinoSession cuando detecta el evento SIGNED_IN.
       // Navegamos directamente — VecinoGuard/VecinoDashboard manejan el loading.
-      navigate('/portal/mi-cuenta', { replace: true })
+      navigate(redirectTo, { replace: true })
     } catch (e) {
       setError(e?.message ?? 'Error al iniciar sesión. Verificá tus datos.')
     } finally {
@@ -275,7 +307,7 @@ function RecoveryForm({ onBack }) {
 // TAB: Registrarse con Supabase Auth
 // ═════════════════════════════════════════════════════════════
 
-function RegistroTab({ setVecinoSession, navigate }) {
+function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [dni, setDni] = useState('')
@@ -379,7 +411,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
           auth_mode: 'supabase',
           user_email: authData.user.email,
         })
-        navigate('/portal/mi-cuenta', { replace: true })
+        navigate(redirectTo, { replace: true })
       }
     } catch (e) {
       setError(e?.message ?? 'Error al crear cuenta. Probá de nuevo.')
@@ -485,7 +517,7 @@ function RegistroTab({ setVecinoSession, navigate }) {
 // TAB: Acceso rápido (DNI + teléfono) — Sistema anterior
 // ═════════════════════════════════════════════════════════════
 
-function RapidoTab({ setVecinoSession, navigate }) {
+function RapidoTab({ setVecinoSession, navigate, redirectTo }) {
   const [dni, setDni] = useState('')
   const [telefono, setTel] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -506,7 +538,7 @@ function RapidoTab({ setVecinoSession, navigate }) {
         auth_mode: 'rapido',
         telefono_login: telefono.replace(/[^0-9]/g, ''),
       })
-      navigate('/portal/mi-cuenta', { replace: true })
+      navigate(redirectTo, { replace: true })
     } catch (e) {
       setError(e?.message ?? 'Error al verificar identidad.')
     } finally {
