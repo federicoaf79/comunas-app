@@ -2,16 +2,16 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Link } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 
-// Guard del Portal del Vecino — redirige a /portal/acceso
-// cuando no hay sesión. La sesión vive en localStorage (persiste)
-// y soporta Supabase Auth (email + password) o acceso rápido (DNI + tel).
-// requireCuentaCompleta: cuando true, además de exigir sesión exige
-// auth_mode === 'supabase' — usado en rutas donde se decidió que el
-// acceso rápido (DNI+tel) ya no alcanza (ver plan Fase 2). Las rutas
-// que ya usaban <VecinoGuard /> sin este prop mantienen su
-// comportamiento de siempre (solo exigen *alguna* sesión); esas
-// páginas siguen gateando auth_mode internamente donde corresponda.
-export default function VecinoGuard({ requireCuentaCompleta = false }) {
+// Guard del Portal del Vecino — redirige a /portal/acceso cuando no
+// hay sesión de cuenta completa. La sesión vive en localStorage
+// (persiste).
+//
+// Fase 3 del plan de eliminación de acceso rápido: el comportamiento
+// ÚNICO ahora es exigir auth_mode === 'supabase' — isVecinoLogued ya
+// no alcanza por sí solo. requireCuentaCompleta queda como prop por
+// compatibilidad (algunas rutas lo pasan explícito desde antes) pero
+// no cambia nada: el default ya es true en todos los casos.
+export default function VecinoGuard({ requireCuentaCompleta = true }) {
   const { isVecinoLogued, vecinoSession, vecinoData, clearVecinoSession, authLoading } = useVecino()
   const location = useLocation()
 

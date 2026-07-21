@@ -140,8 +140,9 @@ const router = createBrowserRouter([
   { path: '/portal/historia', element: <LandingDomainGuard><AdminDomainRedirect><HistoriaPage /></AdminDomainRedirect></LandingDomainGuard> },
 
   // Portal del Vecino — área personal con autenticación dual:
-  // - Supabase Auth (email + password con user_id vinculado)
-  // - Acceso rápido (DNI + teléfono sin cuenta)
+  // - Supabase Auth (email + password con user_id vinculado) — único
+  //   modo soportado desde Fase 3 del plan de eliminación de acceso
+  //   rápido (ver VecinoGuard.jsx).
   // La sesión vive en localStorage (persiste entre cierres).
   // En comunas.lat → redirige a / (landing)
   // En admin.comunas.lat → redirige a /login
@@ -163,21 +164,6 @@ const router = createBrowserRouter([
       { path: '/portal/mis-reservas', element: <Navigate to="/portal/mi-cuenta?tab=reservas" replace /> },
       { path: '/portal/desarrollo/solicitar', element: <SolicitarServicioDesarrollo /> },
       { path: '/portal/mis-solicitudes-desarrollo', element: <Navigate to="/portal/mi-cuenta?tab=desarrollo" replace /> },
-    ],
-  },
-
-  // Fase 2 — flujos que requieren cuenta completa (auth_mode==='supabase'),
-  // sin excepción para acceso rápido. Grupo separado del de arriba para no
-  // cambiar el comportamiento de las rutas ya existentes.
-  {
-    element: (
-      <LandingDomainGuard>
-        <AdminDomainRedirect>
-          <VecinoGuard requireCuentaCompleta />
-        </AdminDomainRedirect>
-      </LandingDomainGuard>
-    ),
-    children: [
       { path: '/portal/turno', element: <SacarTurno /> },
       { path: '/portal/mi-turno', element: <Navigate to="/portal/mi-cuenta?tab=turnos" replace /> },
       { path: '/portal/mi-salud', element: <Navigate to="/portal/mi-cuenta?tab=salud" replace /> },

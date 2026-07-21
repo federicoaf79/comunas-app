@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
 import { supabase } from '../../lib/supabase'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
@@ -34,7 +33,7 @@ export default function VecinoAcceso() {
   const navigate = useNavigate()
   const location = useLocation()
   const { setVecinoSession, isVecinoLogued } = useVecino()
-  const [tab, setTab] = useState('login') // 'login' | 'registro' | 'rapido'
+  const [tab, setTab] = useState('login') // 'login' | 'registro'
 
   const redirectTo = location.state?.from?.pathname || '/portal/mi-cuenta'
   const contextualMessage = getContextualMessage(location.state?.from?.pathname)
@@ -89,25 +88,12 @@ export default function VecinoAcceso() {
             >
               Registrarse
             </button>
-            <button
-              type="button"
-              onClick={() => setTab('rapido')}
-              className={
-                'flex-1 px-3 py-2 font-sora text-xs font-semibold transition-colors sm:text-sm ' +
-                (tab === 'rapido'
-                  ? 'border-b-2 border-[#0F1C35] bg-white text-[#0F1C35]'
-                  : 'text-[#0F1C35]/70 hover:text-[#0F1C35]')
-              }
-            >
-              Sin cuenta
-            </button>
           </div>
 
           {/* Contenido */}
           <div className="p-4 sm:p-5">
             {tab === 'login' && <LoginTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
             {tab === 'registro' && <RegistroTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
-            {tab === 'rapido' && <RapidoTab setVecinoSession={setVecinoSession} navigate={navigate} redirectTo={redirectTo} />}
           </div>
         </div>
       </div>
@@ -515,89 +501,6 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
       >
         Crear cuenta
       </Button>
-    </form>
-  )
-}
-
-// ═════════════════════════════════════════════════════════════
-// TAB: Acceso rápido (DNI + teléfono) — Sistema anterior
-// ═════════════════════════════════════════════════════════════
-
-function RapidoTab({ setVecinoSession, navigate, redirectTo }) {
-  const [dni, setDni] = useState('')
-  const [telefono, setTel] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setError('')
-    setSubmitting(true)
-    try {
-      const vecino = await findVecinoByDniTelefono({ dni, telefono })
-      if (!vecino) {
-        setError('No encontramos tu cuenta. Registrate en "Registrarse".')
-        return
-      }
-      setVecinoSession({
-        ...vecino,
-        auth_mode: 'rapido',
-        telefono_login: telefono.replace(/[^0-9]/g, ''),
-      })
-      navigate(redirectTo, { replace: true })
-    } catch (e) {
-      setError(e?.message ?? 'Error al verificar identidad.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const canSubmit = !!dni.trim() && !!telefono.trim()
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <Input
-        label="DNI"
-        value={dni}
-        onChange={e => setDni(e.target.value)}
-        required
-        inputMode="numeric"
-        type="text"
-        autoComplete="off"
-        placeholder="32145678"
-      />
-      <Input
-        label="Teléfono celular"
-        value={telefono}
-        onChange={e => setTel(e.target.value)}
-        required
-        inputMode="tel"
-        type="tel"
-        autoComplete="tel"
-        placeholder="+54 9 ..."
-      />
-
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
-          {error}
-        </div>
-      )}
-
-      <Button
-        type="submit"
-        loading={submitting}
-        disabled={!canSubmit}
-        className="w-full"
-      >
-        Ingresar
-      </Button>
-
-      <div className="rounded-md border border-[#C9A84C] bg-[#C9A84C]/10 p-2 text-[10px] text-[#0F1C35]">
-        <p className="font-sora font-semibold">💡 Tip:</p>
-        <p className="mt-0.5">
-          Registrate con email para acceder desde cualquier dispositivo.
-        </p>
-      </div>
     </form>
   )
 }
