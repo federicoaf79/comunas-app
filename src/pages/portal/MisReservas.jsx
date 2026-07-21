@@ -19,28 +19,6 @@ export default function MisReservas() {
     navigate('/portal', { replace: true })
   }
 
-  // AUTH GUARD
-  if (!vecinoSession) {
-    return (
-      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
-        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
-          <div className="mx-auto max-w-lg text-center">
-            <div className="mb-4 text-5xl">🔒</div>
-            <h3 className="font-sora text-lg font-bold text-primary">
-              Inicio de sesión requerido
-            </h3>
-            <p className="mt-2 text-sm text-primary-600">
-              Para ver tus reservas necesitás ingresar con tu cuenta.
-            </p>
-            <Button onClick={() => navigate('/portal/login')} className="mt-4">
-              Iniciar sesión
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (vecinoSession.auth_mode !== 'supabase') {
     return (
       <div className="container mx-auto max-w-2xl py-6 sm:py-10">
