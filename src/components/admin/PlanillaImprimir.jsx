@@ -1,4 +1,4 @@
-import { medicoGuardia } from '../../lib/mockData'
+import { useMedicoGuardia } from '../../hooks/useMedicoGuardia'
 import { useTurnos } from '../../hooks/useTurnos'
 import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { timeOf, longDateOf, shortDateOf } from '../../lib/datetime'
@@ -41,6 +41,7 @@ function nombrePaciente(t) {
 export default function PlanillaImprimir({
   fecha,
   dependenciaId,
+  municipioId,
   duracionTurnoMin = 30,
 }) {
   // useTurnos siempre activo: el componente está mounted detrás
@@ -50,6 +51,8 @@ export default function PlanillaImprimir({
     fecha,
     dependenciaId: dependenciaId ?? undefined,
   })
+
+  const { data: medicoGuardia } = useMedicoGuardia(municipioId)
 
   const { datos, identidad } = useDatosMunicipio()
   const muniNombre = datos?.nombre || datos?.nombre_oficial || 'Comisión Municipal Real Sayana'
@@ -93,9 +96,16 @@ export default function PlanillaImprimir({
             {fechaLarga || shortDateOf(fecha)}
           </p>
           <p style={{ textAlign: 'right' }}>
-            <strong>Médico de guardia:</strong> {medicoGuardia.nombre}
-            <br />
-            Mat. {medicoGuardia.matricula} · {medicoGuardia.desde} – {medicoGuardia.hasta}
+            <strong>Médico de guardia:</strong>{' '}
+            {medicoGuardia ? (
+              <>
+                {medicoGuardia.nombre}
+                <br />
+                Mat. {medicoGuardia.matricula || '—'} · {medicoGuardia.hora_desde} – {medicoGuardia.hora_hasta}
+              </>
+            ) : (
+              'Sin guardia asignada'
+            )}
           </p>
         </div>
       </header>

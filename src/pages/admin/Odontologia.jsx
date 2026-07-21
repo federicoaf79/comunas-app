@@ -310,6 +310,7 @@ export default function Odontologia() {
                 <PlanillaImprimir
                   turnos={turnosHoy}
                   fecha={hoy}
+                  municipioId={municipioId}
                   dependenciaNombre="Consultorio Odontológico"
                 />
               </div>

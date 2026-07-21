@@ -488,6 +488,7 @@ export default function SalaPrimerosAuxilios() {
       <PlanillaImprimir
         fecha={printDate}
         dependenciaId={dependenciaSaludId}
+        municipioId={municipioId}
         duracionTurnoMin={duracionTurnoMin}
       />
 
