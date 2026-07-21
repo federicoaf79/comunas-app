@@ -14,6 +14,16 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ---
 
+## 📌 Decisión de producto — `modulo_turnos=false` en Sala Primeros Auxilios y Juez de Paz
+
+**NO es un bug.** Decisión del cliente (2026-07-21): estas dos dependencias se gestionan por turno asignado directamente por el staff desde el panel admin — **no** por autogestión del vecino. Por eso `dependencias.modulo_turnos = false` para ambas, a propósito.
+
+`modulo_turnos` solo controla si la dependencia aparece en el selector **público** de `/portal/turno` (filtro en `SacarTurnoFormPortal.jsx`). No afecta en nada la creación manual de turnos desde `/admin/dependencia-gestion/:id?tab=turnos` (botón "+ Nuevo turno" → `NuevoTurnoModal.jsx`) — ese flujo no lee `modulo_turnos` en absoluto.
+
+**Antes de "corregir" este valor a `true` de nuevo, confirmar con el cliente** — ya pasó una vez que se interpretó como error y se revirtió sin necesidad.
+
+---
+
 ## ⚠️ Riesgos abiertos
 
 **CRÍTICO — Columna `activa` en tabla `dependencias`:** es `activa` (NO `activo`). Bug corregido en junio 2026.
