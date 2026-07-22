@@ -73,11 +73,12 @@ const TABS = [
 // las órdenes físicas externas). Sin turno_id todavía — se linkea
 // cuando el vecino reserve el turno con el especialista.
 async function crearDerivacionInterna({
-  vecinoId, profesionalId, dependenciaDestinoId, especialidadDestino,
+  municipioId, vecinoId, profesionalId, dependenciaDestinoId, especialidadDestino,
   diagnostico, indicaciones,
 }) {
   const nowIso = new Date().toISOString()
   const { error } = await supabase.from('ordenes_derivacion').insert({
+    municipio_id:           municipioId,
     vecino_id:              vecinoId,
     profesional_id:         profesionalId,
     dependencia_destino_id: dependenciaDestinoId,
@@ -446,6 +447,7 @@ function AtencionFormInner({
       if (derivarEspecialidad && esMedicoGeneral) {
         try {
           await crearDerivacionInterna({
+            municipioId,
             vecinoId:              turno.vecino_id ?? turno.vecino?.id,
             profesionalId:         profesionalAtencion.id,
             dependenciaDestinoId:  dependenciaIdTurno,
