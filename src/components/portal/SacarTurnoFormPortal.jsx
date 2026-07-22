@@ -239,6 +239,11 @@ export default function SacarTurnoFormPortal() {
   const [resultado, setResultado] = useState(null)
   const [deps, setDeps]           = useState([])
   const [profesionalesDep, setProfesionalesDep] = useState([])
+  // Derivación digital del médico general (ordenes_derivacion,
+  // origen='digital') que cubre la especialidad elegida — si existe,
+  // se salta el paso de subir orden médica.
+  const [derivacionDigital, setDerivacionDigital]   = useState(null)
+  const [checkingDerivacion, setCheckingDerivacion] = useState(false)
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
   const depPreselectado = useRef(false)  // flag para solo preseleccionar una vez
 
@@ -276,7 +281,7 @@ export default function SacarTurnoFormPortal() {
     const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
     const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
     fetch(
-      `${SUPABASE_URL}/rest/v1/profesionales_publico?dependencia_id=eq.${form.dependencia}&activo=eq.true&select=especialidad`,
+      `${SUPABASE_URL}/rest/v1/profesionales_publico?dependencia_id=eq.${form.dependencia}&activo=eq.true&select=especialidad,requiere_orden`,
       {
         headers: {
           apikey: SUPABASE_ANON_KEY,
@@ -324,17 +329,56 @@ export default function SacarTurnoFormPortal() {
     new Set(profesionalesDep.map(p => p.especialidad).filter(Boolean))
   )
 
+  // Si requiere orden — dato real de profesionales_publico para la
+  // especialidad ELEGIDA en el form, no solo el flag estático de la
+  // URL (que puede quedar desactualizado si el vecino cambia de
+  // especialidad en el selector).
+  const especialidadRequiereOrden =
+    requiereOrden ||
+    profesionalesDep.some(p => p.especialidad === form.especialidad && p.requiere_orden)
+
+  // Derivación digital ya validada por el Médico General del CIC que
+  // cubre esta especialidad — si existe, se salta el upload de
+  // archivo. Usa el cliente autenticado (no el anon de los fetch de
+  // arriba) porque esta ruta vive detrás de VecinoGuard(requireCuentaCompleta)
+  // y ordenes_derivacion no es de lectura pública.
+  useEffect(() => {
+    let cancelled = false
+    setDerivacionDigital(null)
+    if (!especialidadRequiereOrden || !form.especialidad || !vecinoSession?.id) return
+    setCheckingDerivacion(true)
+    supabase
+      .from('ordenes_derivacion')
+      .select('id, especialidad_destino')
+      .eq('vecino_id', vecinoSession.id)
+      .eq('origen', 'digital')
+      .eq('estado', 'validada')
+      .eq('especialidad_destino', form.especialidad)
+      .is('turno_id', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) { console.warn('[SacarTurno] fetch derivacion digital:', error.message); return }
+        setDerivacionDigital(data ?? null)
+      })
+      .finally(() => { if (!cancelled) setCheckingDerivacion(false) })
+    return () => { cancelled = true }
+  }, [especialidadRequiereOrden, form.especialidad, vecinoSession?.id])
+
   const isFamiliar = form.paraQuien === 'familiar'
 
   // Validación: solicitante ya está identificado por la sesión — acá
   // solo faltan teléfono, dependencia y fecha. Si es para un
   // familiar, además requerimos nombre/DNI/vínculo del familiar (y
   // el texto libre cuando vínculo === 'otro'). Si requiere orden
-  // médica, exigimos que hayan subido el archivo.
+  // médica, la cubre una derivación digital ya validada o, si no hay,
+  // exigimos que hayan subido el archivo.
   const canSubmit =
     !!form.telefono &&
     !!form.dependencia && !!form.fecha &&
-    (!requiereOrden || !!form.ordenFile) &&
+    (!especialidadRequiereOrden || !!derivacionDigital || !!form.ordenFile) &&
     (!isFamiliar || (
       !!form.familiar_nombre.trim() &&
       !!form.familiar_dni.trim() &&
@@ -385,7 +429,10 @@ export default function SacarTurnoFormPortal() {
         fecha,
         hora_inicio,
         hora_fin,
-        estado:         requiereOrden ? 'pendiente_validacion' : 'pendiente',
+        // Si una derivación digital ya validada cubre la especialidad,
+        // el turno no necesita el paso de validación de staff — va
+        // directo a 'pendiente' igual que cualquier turno sin orden.
+        estado:         (especialidadRequiereOrden && !derivacionDigital) ? 'pendiente_validacion' : 'pendiente',
         canal:          form.canal,
         motivo:         form.motivo || null,
       }
@@ -404,8 +451,18 @@ export default function SacarTurnoFormPortal() {
         .single()
       if (tErr) throw tErr
 
-      // Si requiere orden y hay archivo, subirlo
-      if (requiereOrden && form.ordenFile) {
+      // Si hay una derivación digital cubriendo esta especialidad, la
+      // linkeamos al turno recién creado (así no se puede reusar en
+      // otra reserva) y saltamos el upload de archivo por completo.
+      if (derivacionDigital) {
+        const { error: derivErr } = await supabase
+          .from('ordenes_derivacion')
+          .update({ turno_id: turno.id })
+          .eq('id', derivacionDigital.id)
+        if (derivErr) {
+          throw new Error('No pudimos vincular tu derivación: ' + derivErr.message)
+        }
+      } else if (especialidadRequiereOrden && form.ordenFile) {
         const uploadResult = await uploadOrden(form.ordenFile, turno.id, vecinoSession.id)
         if (!uploadResult.success) {
           throw new Error('Error al subir orden médica: ' + uploadResult.error)
@@ -550,8 +607,23 @@ export default function SacarTurnoFormPortal() {
         />
       </div>
 
-      {/* Campo de upload de orden médica — solo si requiere_orden=true */}
-      {requiereOrden && (
+      {/* Campo de upload de orden médica — solo si la especialidad
+          elegida requiere orden Y no hay ya una derivación digital
+          validada que la cubra. */}
+      {especialidadRequiereOrden && checkingDerivacion && (
+        <div className="col-span-2 rounded-md border border-border bg-primary-50 px-3 py-2 text-xs text-primary-500">
+          Buscando si ya tenés una derivación digital para esta especialidad…
+        </div>
+      )}
+
+      {especialidadRequiereOrden && !checkingDerivacion && derivacionDigital && (
+        <div className="col-span-2 rounded-md border border-ok-100 bg-ok-50 px-3 py-2 text-sm text-ok-700">
+          ✓ Ya tenés una derivación digital validada para <strong>{derivacionDigital.especialidad_destino}</strong> —
+          no hace falta subir orden médica.
+        </div>
+      )}
+
+      {especialidadRequiereOrden && !checkingDerivacion && !derivacionDigital && (
         <div className="col-span-2">
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-700">
             Orden médica <span className="font-normal normal-case tracking-normal text-red-500">*</span>
@@ -576,7 +648,7 @@ export default function SacarTurnoFormPortal() {
                 }
               }}
               className="absolute inset-0 cursor-pointer opacity-0"
-              required={requiereOrden}
+              required={especialidadRequiereOrden}
             />
             <div className="pointer-events-none flex flex-col items-center gap-2">
               <svg
