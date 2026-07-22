@@ -433,17 +433,23 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         // misma referencia que hizo signUp/getSession arriba — no hay
         // forma de que sea otra sin una reasignación local, que ya
         // confirmamos por grep que no existe en este archivo.
+        const insertPayload = {
+          user_id: userId,
+          dni: dni.trim(),
+          nombre: nombreSolo,
+          apellido,
+          nombre_completo: nombre.trim(),
+          telefono: telefono.trim(),
+          portal_estado: portalEstado,
+        }
+        console.log('[RegistroTab] DIAGNÓSTICO payload insert completo:', {
+          municipio_id: insertPayload.municipio_id,
+          tipo: typeof insertPayload.municipio_id,
+          payload_completo: insertPayload,
+        })
         const { data: newVecino, error: insertError } = await supabase
           .from('vecinos')
-          .insert({
-            user_id: userId,
-            dni: dni.trim(),
-            nombre: nombreSolo,
-            apellido,
-            nombre_completo: nombre.trim(),
-            telefono: telefono.trim(),
-            portal_estado: portalEstado,
-          })
+          .insert(insertPayload)
           .select()
           .single()
 
