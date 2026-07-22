@@ -716,9 +716,16 @@ export default function AdminLayout() {
     const soloInformativo = moduloConfig
       ? configByModulo.get(moduloConfig)?.solo_informativo === true
       : false
-    // Info-only: link plano sin verificar permisos (siempre visible)
-    if (TIPOS_INFO_ONLY.has(tLower) || soloInformativo) {
+    // Info-only: link plano sin verificar permisos (siempre visible).
+    // soloInformativo apunta directo al tab "Landing pública" — a
+    // diferencia de TIPOS_INFO_ONLY, estas dependencias SÍ tienen
+    // gestión completa en su basePath (turnos, agenda) y necesitamos
+    // saltarla explícitamente en vez de caer ahí por default.
+    if (TIPOS_INFO_ONLY.has(tLower)) {
       return { kind: 'link', to: basePath, label, icon }
+    }
+    if (soloInformativo) {
+      return { kind: 'link', to: `${basePath}?tab=landing`, label, icon }
     }
     // Permisos: directores ven todo; el resto solo si tienen acceso
     // explícito a este dep.id (gestión y/o administración).
