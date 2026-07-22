@@ -205,9 +205,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
       const especialidad = normalizarEspecialidad(prof?.especialidad)
       return {
         id: t.id,
-        fecha: t.fecha_hora?.split('T')[0],
-        horaInicio: timeOf(t.fecha_hora),
-        horaFin: t.hora_fin ? timeOf(t.hora_fin) : undefined,
+        fecha_hora: t.fecha_hora,
         titulo: vecinoLabel(t),
         subtitulo: prof?.especialidad || 'Sin especialidad',
         color: COLOR_POR_ESPECIALIDAD[especialidad] || COLOR_ESPECIALIDAD_DEFAULT,
