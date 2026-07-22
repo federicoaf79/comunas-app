@@ -348,6 +348,19 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         throw new Error('No se pudo crear la cuenta')
       }
 
+      // TEMPORAL — diagnóstico del bug de RLS en el insert de vecinos.
+      // authData.session: lo que devolvió signUp() mismo (null si el
+      // proyecto tiene "Confirm email" activado — en ese caso NO hay
+      // sesión hasta que el usuario confirme por mail).
+      // getSession(): lo que el cliente cree tener adjunto en este
+      // momento exacto, justo antes del insert.
+      const { data: sessionCheck } = await supabase.auth.getSession()
+      console.log('[RegistroTab] DIAGNÓSTICO sesión post-signUp:', {
+        'authData.session (de signUp)': authData.session,
+        'getSession().session':          sessionCheck?.session,
+        'access_token presente':          !!sessionCheck?.session?.access_token,
+      })
+
       const userId = authData.user.id
 
       // 3. Buscar si existe vecino con ese DNI
