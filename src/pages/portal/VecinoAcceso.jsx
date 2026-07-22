@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
 import PortalFormPage from '../../components/portal/PortalFormPage'
@@ -32,8 +32,11 @@ function getContextualMessage(from) {
 export default function VecinoAcceso() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { setVecinoSession, isVecinoLogued } = useVecino()
-  const [tab, setTab] = useState('login') // 'login' | 'registro'
+  // ?tab=registro permite deep-link directo a la tab Registrarse
+  // (usado desde el mensaje "sin perfil de vecino" de /acceso).
+  const [tab, setTab] = useState(searchParams.get('tab') === 'registro' ? 'registro' : 'login')
 
   const redirectTo = location.state?.from?.pathname || '/portal/mi-cuenta'
   const contextualMessage = getContextualMessage(location.state?.from?.pathname)

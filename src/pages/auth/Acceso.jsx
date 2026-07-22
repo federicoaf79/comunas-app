@@ -315,6 +315,8 @@ function StepMunicipio({
   onChange,
   submitting, error,
   onSubmit, onBack,
+  titulo = 'Acceso al sistema municipal',
+  descripcion = 'Ingresá tu contraseña para acceder al panel de gestión.',
 }) {
   const canSubmit = email.trim() && password.length > 0
   return (
@@ -332,10 +334,10 @@ function StepMunicipio({
 
       <StepIndicator step={3} />
       <h1 className="font-sora text-2xl font-bold leading-tight text-primary sm:text-3xl">
-        Acceso al sistema municipal
+        {titulo}
       </h1>
       <p className="mt-2 text-sm text-primary-500 sm:text-base">
-        Ingresá tu contraseña para acceder al panel de gestión.
+        {descripcion}
       </p>
 
       <form onSubmit={onSubmit} className="portal-form-page mt-6 card flex flex-col gap-5 p-5 sm:p-6">
@@ -377,6 +379,46 @@ function StepMunicipio({
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Resultado de elegir "Ingresar como vecino" cuando la cuenta
+// autenticada (auth.uid()) no tiene un registro en `vecinos`
+// vinculado por user_id. Pasa esto, por ejemplo, para personal que
+// solo tiene cuenta de empleado y nunca se registró como vecino.
+// ─────────────────────────────────────────────────────────────────
+function StepSinPerfilVecino({ onBack }) {
+  return (
+    <section className="animate-fade-in">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 hover:text-primary"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
+        </svg>
+        Volver
+      </button>
+
+      <div className="rounded-lg border-2 p-5" style={{ backgroundColor: 'rgba(201, 168, 76, 0.10)', borderColor: '#C9A84C' }}>
+        <h2 className="font-sora text-lg font-bold text-primary">
+          Todavía no tenés un perfil de vecino
+        </h2>
+        <p className="mt-2 text-sm text-primary-700">
+          Tu cuenta se autenticó correctamente, pero no tiene un perfil de vecino
+          vinculado — registrate en el portal ciudadano para acceder a tus turnos,
+          salud y datos como vecino.
+        </p>
+        <Link
+          to="/portal/acceso?tab=registro"
+          className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
+        >
+          Registrarme en el portal ciudadano →
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Página principal — orquesta los 3 pasos
 // ─────────────────────────────────────────────────────────────────
 
@@ -396,14 +438,27 @@ export default function Acceso() {
   const [vecino, setVecino] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  // 'empleado' | 'vecino' — elegido en el Paso 2, decide qué chequear
+  // después del signIn() del Paso 3 (mismo formulario para ambos).
+  const [tipoElegido, setTipoElegido] = useState(null)
+  // true cuando la cuenta autenticada no tiene vecinos.user_id vinculado.
+  const [sinPerfilVecino, setSinPerfilVecino] = useState(false)
+  // Suprime el auto-redirect de más abajo mientras estamos mostrando
+  // el resultado de la rama "vecino" — sin esto, en cuanto AuthContext
+  // puebla `perfil.roles` (si la cuenta también es de empleado), el
+  // useEffect redirige a /admin antes de que se vea la pantalla de
+  // "sin perfil de vecino".
+  const [vecinoLoginEnCurso, setVecinoLoginEnCurso] = useState(false)
 
   const setField = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
   // Auto-redirect si ya hay una sesión activa antes de empezar el flujo.
   // Esperamos a que termine el auth bootstrap (cache → fetch perfil) para
   // no parpadear con el formulario y después saltar a /admin.
+  // vecinoLoginEnCurso suprime esto mientras se resuelve (o ya se
+  // mostró) el resultado de la rama "Ingresar como vecino".
   useEffect(() => {
-    if (authLoading) return
+    if (authLoading || vecinoLoginEnCurso || sinPerfilVecino) return
     if (perfil?.roles) {
       const route = homeRouteFor(perfil.roles)
       if (route) {
@@ -412,10 +467,10 @@ export default function Acceso() {
       }
     }
     if (isVecinoLogued) {
-      const redirectTo = location.state?.from?.pathname || '/mi-cuenta'
+      const redirectTo = location.state?.from?.pathname || '/portal/mi-cuenta'
       navigate(redirectTo, { replace: true })
     }
-  }, [authLoading, perfil, isVecinoLogued, navigate, location])
+  }, [authLoading, perfil, isVecinoLogued, navigate, location, vecinoLoginEnCurso, sinPerfilVecino])
 
   // Cada vez que el usuario cambia un campo, limpiamos errores
   // anteriores. Evita que un error del paso anterior se vea
@@ -451,27 +506,13 @@ export default function Acceso() {
     }
   }
 
-  // PASO 2 — Vecino: crear sesión y entrar al área personal. El
-  // email del paso 1 se guarda como `email_login` (opcional) por
-  // si después se necesita para pre-rellenar formularios o
-  // notificaciones, sin pisar el `email` real del vecino persistido.
-  function handleEntrarComoVecino() {
-    if (!vecino) return
-    const emailLimpio = form.email.trim()
-    setVecinoSession({
-      ...vecino,
-      telefono_login: form.telefono.replace(/[^0-9]/g, ''),
-      ...(emailLimpio ? { email_login: emailLimpio } : {}),
-    })
-    const redirectTo = location.state?.from?.pathname || '/mi-cuenta'
-    navigate(redirectTo, { replace: true })
-  }
-
-  // PASO 3 — Empleado: signIn + verificación de perfil/activo/roles.
+  // PASO 3 — signIn() único para ambas ramas. Qué se chequea después
+  // depende de tipoElegido (seteado en el Paso 2).
   async function handleStep3(e) {
     e.preventDefault()
     setError('')
     setSubmitting(true)
+    if (tipoElegido === 'vecino') setVecinoLoginEnCurso(true)
     try {
       const { data, error: signInError } = await signIn({
         email:    form.email,
@@ -486,6 +527,36 @@ export default function Acceso() {
         setError('No se pudo iniciar sesión.')
         return
       }
+
+      // RAMA VECINO — la cuenta autenticada (auth.uid()) puede ser a
+      // la vez empleado y vecino del pueblo. Buscamos su propio
+      // perfil de vecino vinculado por user_id, sin pedir DNI/tel de
+      // nuevo (eso ya fue solo para el saludo del Paso 1).
+      if (tipoElegido === 'vecino') {
+        const { data: vecinoRow, error: vecinoError } = await supabase
+          .from('vecinos')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle()
+        if (vecinoError) {
+          setError('No pudimos cargar tu perfil de vecino. Probá de nuevo.')
+          return
+        }
+        if (!vecinoRow) {
+          setSinPerfilVecino(true)
+          return
+        }
+        setVecinoSession({
+          ...vecinoRow,
+          auth_mode:  'supabase',
+          user_email: data.user.email,
+        })
+        const redirectTo = location.state?.from?.pathname || '/portal/mi-cuenta'
+        navigate(redirectTo, { replace: true })
+        return
+      }
+
+      // RAMA EMPLEADO — sin cambios.
       const { data: u, error: perfilError } = await supabase
         .from('usuarios')
         .select('roles, activo')
@@ -516,6 +587,7 @@ export default function Acceso() {
       setError(e?.message ?? 'No pudimos iniciar sesión. Probá de nuevo.')
     } finally {
       setSubmitting(false)
+      setVecinoLoginEnCurso(false)
     }
   }
 
@@ -567,12 +639,17 @@ export default function Acceso() {
         {step === 2 && (
           <StepTipo
             vecino={vecino}
-            onPickVecino={handleEntrarComoVecino}
-            onPickMunicipio={() => { setError(''); setStep(3) }}
+            onPickVecino={() => { setError(''); setTipoElegido('vecino'); setStep(3) }}
+            onPickMunicipio={() => { setError(''); setTipoElegido('empleado'); setStep(3) }}
             onBack={() => { setError(''); setStep(1) }}
           />
         )}
-        {step === 3 && (
+        {step === 3 && sinPerfilVecino && (
+          <StepSinPerfilVecino
+            onBack={() => { setSinPerfilVecino(false); setError(''); setStep(2) }}
+          />
+        )}
+        {step === 3 && !sinPerfilVecino && (
           <StepMunicipio
             email={form.email}
             password={form.password}
@@ -581,6 +658,8 @@ export default function Acceso() {
             error={error}
             onSubmit={handleStep3}
             onBack={() => { setError(''); setStep(2) }}
+            titulo={tipoElegido === 'vecino' ? 'Ingresar como vecino' : undefined}
+            descripcion={tipoElegido === 'vecino' ? 'Ingresá tu contraseña para acceder a tus turnos, salud y datos.' : undefined}
           />
         )}
 
