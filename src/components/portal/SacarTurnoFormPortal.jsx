@@ -455,12 +455,20 @@ export default function SacarTurnoFormPortal() {
       // linkeamos al turno recién creado (así no se puede reusar en
       // otra reserva) y saltamos el upload de archivo por completo.
       if (derivacionDigital) {
-        const { error: derivErr } = await supabase
+        // .select() para poder distinguir "0 filas afectadas por RLS"
+        // (data=[], sin error) de un update real — sin esto, un UPDATE
+        // bloqueado en silencio por falta de policy se ve idéntico a
+        // uno exitoso.
+        const { data: derivRows, error: derivErr } = await supabase
           .from('ordenes_derivacion')
           .update({ turno_id: turno.id })
           .eq('id', derivacionDigital.id)
+          .select('id')
         if (derivErr) {
           throw new Error('No pudimos vincular tu derivación: ' + derivErr.message)
+        }
+        if (!derivRows || derivRows.length === 0) {
+          throw new Error('No pudimos vincular tu derivación digital al turno. Contactanos para resolverlo.')
         }
       } else if (especialidadRequiereOrden && form.ordenFile) {
         const uploadResult = await uploadOrden(form.ordenFile, turno.id, vecinoSession.id)
