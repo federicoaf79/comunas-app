@@ -251,6 +251,12 @@ const EMPTY_FORM = {
 // del drawer. `extraSlot` renderiza contenido entre Indicaciones y
 // Próxima consulta (lo usa la página para meter Documentos).
 export function AtencionForm({ turno, atencion, municipioId, profesionalId, extraSlot = null }) {
+  // derivarEspecialidad vive acá arriba (no en AtencionFormInner) porque
+  // no es un campo de `atenciones` — no tiene de dónde repoblarse
+  // cuando el key-remount de abajo desmonta/remonta el form al pasar
+  // de "sin atención" a "atención recién guardada".
+  const [derivarEspecialidad, setDerivarEspecialidad] = useState('')
+
   // Key remount: si cambia la atención persistida, el form se
   // re-monta con los valores correctos sin useEffect→setState.
   return (
@@ -261,6 +267,8 @@ export function AtencionForm({ turno, atencion, municipioId, profesionalId, extr
       municipioId={municipioId}
       profesionalId={profesionalId}
       extraSlot={extraSlot}
+      derivarEspecialidad={derivarEspecialidad}
+      setDerivarEspecialidad={setDerivarEspecialidad}
     />
   )
 }
@@ -290,7 +298,10 @@ function useVecinoHCStatus(vecinoId) {
   })
 }
 
-function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraSlot }) {
+function AtencionFormInner({
+  turno, atencion, municipioId, profesionalId, extraSlot,
+  derivarEspecialidad, setDerivarEspecialidad,
+}) {
   const [form, setForm] = useState(() => atencion ? {
     motivo:             atencion.motivo             ?? '',
     anamnesis:          atencion.anamnesis          ?? '',
@@ -305,7 +316,6 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
   const [ok, setOk] = useState('')
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const [hcModalOpen, setHcModalOpen] = useState(false)
-  const [derivarEspecialidad, setDerivarEspecialidad] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
   const qc           = useQueryClient()
