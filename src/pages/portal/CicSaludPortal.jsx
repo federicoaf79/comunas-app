@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useProfesionales } from '../../hooks/useProfesionales'
+import { usePublicProfesionales } from '../../hooks/useProfesionales'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
@@ -50,9 +50,10 @@ export default function CicSaludPortal() {
     [deps]
   )
 
-  const { data: profesionales = [], isLoading } = useProfesionales({
-    dependenciaId: depCicSalud?.id,
-  })
+  const { data: profesionales = [], isLoading } = usePublicProfesionales(
+    municipioId,
+    depCicSalud?.id ?? null
+  )
 
   const [modalEspecialidad, setModalEspecialidad] = useState(null)
 

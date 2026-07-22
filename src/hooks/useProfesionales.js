@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { supabase, supabasePublic } from '../lib/supabase'
 
 const COLS = 'id, nombre, especialidad, matricula, telefono, email, dias_atencion, hora_desde, hora_hasta, frecuencia_nota, activo, dependencia_id, municipio_id'
+
+// Columnas expuestas a vecinos sin sesión (vista profesionales_publico,
+// sin telefono/email/matricula/frecuencia_nota — solo lo necesario para
+// mostrar "quién atiende" y armar el selector de especialidad).
+const PUBLIC_COLS = 'id, nombre, especialidad, dias_atencion, hora_desde, hora_hasta, activo, dependencia_id, municipio_id, requiere_orden'
 
 // =============================================================
 // Sincronización automática con agenda_publica
@@ -77,6 +82,27 @@ export function useProfesionales(municipioId, dependenciaId) {
     queryFn: async () => {
       if (!municipioId) return []
       let q = supabase.from('profesionales').select(COLS)
+        .eq('municipio_id', municipioId)
+        .order('nombre')
+      if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
+      const { data, error } = await q
+      if (error) throw error
+      return data ?? []
+    },
+    enabled: !!municipioId,
+    staleTime: 5 * 60_000,
+  })
+}
+
+// Versión pública (sin auth) para portal ciudadano — vista
+// profesionales_publico vía cliente supabasePublic. Nunca usar esta
+// para pantallas admin (no trae telefono/email/matricula).
+export function usePublicProfesionales(municipioId, dependenciaId) {
+  return useQuery({
+    queryKey: ['profesionales-publico', municipioId, dependenciaId ?? '__all__'],
+    queryFn: async () => {
+      if (!municipioId) return []
+      let q = supabasePublic.from('profesionales_publico').select(PUBLIC_COLS)
         .eq('municipio_id', municipioId)
         .order('nombre')
       if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)

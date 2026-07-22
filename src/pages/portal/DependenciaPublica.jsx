@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
 import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
-import { useProfesionales } from '../../hooks/useProfesionales'
+import { usePublicProfesionales } from '../../hooks/useProfesionales'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -216,7 +216,7 @@ export default function DependenciaPublica() {
   const direccion = dep?.direccion || null
 
   const TIPOS_CON_PROFESIONALES = new Set(['caps', 'salud', 'sala'])
-  const { data: profesionales = [] } = useProfesionales(
+  const { data: profesionales = [] } = usePublicProfesionales(
     municipioId ?? null,
     dep?.id ?? null
   )

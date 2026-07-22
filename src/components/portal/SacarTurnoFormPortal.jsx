@@ -33,6 +33,9 @@ const EMPTY = {
   telefono: '',
   // Datos del turno
   dependencia: '', fecha: '', canal: 'whatsapp', motivo: '',
+  // Especialidad — solo aplica si la dependencia elegida tiene
+  // profesionales con especialidad cargada (ver especialidadesDisponibles).
+  especialidad: '',
   // ¿Para quién es?
   paraQuien: 'mi',
   // Datos del familiar — solo se usan si paraQuien === 'familiar'
@@ -226,11 +229,16 @@ export default function SacarTurnoFormPortal() {
   // siempre existe acá, con auth_mode === 'supabase'.
   const { vecinoSession } = useVecino()
 
-  const [form, setForm] = useState(() => ({ ...EMPTY, telefono: vecinoSession?.telefono ?? '' }))
+  const [form, setForm] = useState(() => ({
+    ...EMPTY,
+    telefono: vecinoSession?.telefono ?? '',
+    especialidad: especialidadURL,
+  }))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState('')
   const [resultado, setResultado] = useState(null)
   const [deps, setDeps]           = useState([])
+  const [profesionalesDep, setProfesionalesDep] = useState([])
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
   const depPreselectado = useRef(false)  // flag para solo preseleccionar una vez
 
@@ -257,6 +265,30 @@ export default function SacarTurnoFormPortal() {
       .catch(err => console.warn('[SacarTurno] fetch deps:', err))
     return () => { cancelled = true }
   }, [portalMunicipioId])
+
+  // Profesionales de la dependencia elegida — vista pública
+  // (sin telefono/email), usada solo para armar el selector de
+  // especialidad cuando la dependencia tiene ≥1 profesional con
+  // especialidad cargada. Genérico: no hardcodeado a CIC.
+  useEffect(() => {
+    let cancelled = false
+    if (!form.dependencia) { setProfesionalesDep([]); return }
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+    const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+    fetch(
+      `${SUPABASE_URL}/rest/v1/profesionales_publico?dependencia_id=eq.${form.dependencia}&activo=eq.true&select=especialidad`,
+      {
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        }
+      }
+    )
+      .then(res => res.json())
+      .then(data => { if (!cancelled) setProfesionalesDep(data ?? []) })
+      .catch(err => console.warn('[SacarTurno] fetch profesionales:', err))
+    return () => { cancelled = true }
+  }, [form.dependencia])
 
   // Preselección de dependencia desde ?dep= en la URL
   useEffect(() => {
@@ -285,6 +317,12 @@ export default function SacarTurnoFormPortal() {
   function resolveDep(depId) {
     return deps.find(d => d.id === depId) ?? null
   }
+
+  // Valores únicos de especialidad entre los profesionales activos de
+  // la dependencia elegida. Si no hay ninguno, el selector no se muestra.
+  const especialidadesDisponibles = Array.from(
+    new Set(profesionalesDep.map(p => p.especialidad).filter(Boolean))
+  )
 
   const isFamiliar = form.paraQuien === 'familiar'
 
@@ -354,9 +392,9 @@ export default function SacarTurnoFormPortal() {
       if (isFamiliar) {
         payload.metadata = buildFamiliarMetadata(form, vecinoSession)
       }
-      // Si hay especialidad en URL, guardarla en metadata
-      if (especialidadURL) {
-        payload.metadata = { ...(payload.metadata || {}), especialidad: especialidadURL }
+      // Especialidad — precargada desde ?esp= o elegida a mano en el selector
+      if (form.especialidad) {
+        payload.metadata = { ...(payload.metadata || {}), especialidad: form.especialidad }
       }
 
       const { data: turno, error: tErr } = await supabase
@@ -470,7 +508,7 @@ export default function SacarTurnoFormPortal() {
       <Select
         label="Dependencia"
         value={form.dependencia}
-        onChange={v => set('dependencia', v)}
+        onChange={v => setForm(s => ({ ...s, dependencia: v, especialidad: '' }))}
         placeholder="Seleccionar..."
         options={deps.map(d => ({ value: d.id, label: d.nombre }))}
       />
@@ -481,6 +519,20 @@ export default function SacarTurnoFormPortal() {
         onChange={e => set('fecha', e.target.value)}
         required
       />
+      {especialidadesDisponibles.length > 0 && (
+        <div className="col-span-2">
+          <Select
+            label="Servicio / Especialidad"
+            value={form.especialidad}
+            onChange={v => set('especialidad', v)}
+            placeholder="Seleccionar..."
+            options={especialidadesDisponibles.map(e => ({
+              value: e,
+              label: e.charAt(0).toUpperCase() + e.slice(1),
+            }))}
+          />
+        </div>
+      )}
       <div className="col-span-2">
         <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-primary-700">
           Motivo <span className="font-normal normal-case tracking-normal text-primary-400">(opcional)</span>
