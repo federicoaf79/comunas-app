@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
+import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -312,19 +313,22 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
   const [error, setError] = useState('')
   const [pendiente, setPendiente] = useState(false)
 
+  // Mismo patrón que SacarTurnoFormPortal.jsx — municipio_id es
+  // obligatorio en la policy de INSERT de `vecinos`
+  // (user_id=auth.uid() AND municipio_id IS NOT NULL). Mientras el
+  // hook no resuelve, portalMunicipioId es null y canSubmit lo
+  // bloquea más abajo — nunca se dispara el insert con el campo vacío.
+  const portalMunicipioQ = usePortalMunicipioId()
+  const portalMunicipioId = portalMunicipioQ.data ?? null
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    if (!portalMunicipioId) {
+      setError('Todavía estamos cargando los datos del municipio. Probá de nuevo en un momento.')
+      return
+    }
     setSubmitting(true)
-
-    // TEMPORAL — prueba de identidad de objeto en memoria, no solo de
-    // nombre de variable. Si el `supabase` de esta línea fuera un
-    // objeto distinto al usado más abajo en signUp/getSession/insert
-    // (imposible por scoping de JS ya que es el mismo import de
-    // módulo, pero lo confirmamos en runtime igual), el tag no
-    // coincidiría entre los logs.
-    if (!supabase.__instanceTag) supabase.__instanceTag = Math.random().toString(36).slice(2)
-    const instanceTagAlInicio = supabase.__instanceTag
 
     try {
       // 1. Leer configuración de registro
@@ -357,38 +361,14 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         throw new Error('No se pudo crear la cuenta')
       }
 
-      // TEMPORAL — diagnóstico del bug de RLS en el insert de vecinos.
-      // authData.session: lo que devolvió signUp() mismo (null si el
-      // proyecto tiene "Confirm email" activado — en ese caso NO hay
-      // sesión hasta que el usuario confirme por mail).
-      // getSession(): lo que el cliente cree tener adjunto en este
-      // momento exacto, justo antes del insert.
-      const { data: sessionCheck } = await supabase.auth.getSession()
-      console.log('[RegistroTab] DIAGNÓSTICO sesión post-signUp:', {
-        'authData.session (de signUp)': authData.session,
-        'getSession().session':          sessionCheck?.session,
-        'access_token presente':          !!sessionCheck?.session?.access_token,
-        'instanceTag (signUp/getSession)': supabase.__instanceTag,
-        'instanceTag coincide con el de inicio de handleSubmit': supabase.__instanceTag === instanceTagAlInicio,
-      })
-
       const userId = authData.user.id
 
       // 3. Buscar si existe vecino con ese DNI
-      const { data: existingVecino, error: existingError } = await supabase
+      const { data: existingVecino } = await supabase
         .from('vecinos')
         .select('*')
         .eq('dni', dni.trim())
         .single()
-
-      // TEMPORAL — este error se ignoraba en silencio; si falla por RLS
-      // acá, el código sigue como si no existiera nadie con ese DNI.
-      if (existingError) {
-        console.warn('[RegistroTab] DIAGNÓSTICO error en SELECT existingVecino (ignorado, sigue a "crear nuevo"):', {
-          code: existingError.code, message: existingError.message,
-          details: existingError.details, hint: existingError.hint,
-        })
-      }
 
       let vecinoFinal
 
@@ -404,13 +384,7 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
           .select()
           .single()
 
-        if (updateError) {
-          console.error('[RegistroTab] DIAGNÓSTICO error en UPDATE vecinos:', {
-            code: updateError.code, message: updateError.message,
-            details: updateError.details, hint: updateError.hint,
-          })
-          throw updateError
-        }
+        if (updateError) throw updateError
         vecinoFinal = updated
       } else {
         // Crear nuevo vecino
@@ -418,48 +392,22 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         const nombreSolo = partes.shift() ?? ''
         const apellido = partes.join(' ') || nombreSolo
 
-        // TEMPORAL — confirmar userId y sesión en el momento exacto del insert.
-        const { data: sessionAtInsert } = await supabase.auth.getSession()
-        console.log('[RegistroTab] DIAGNÓSTICO justo antes del INSERT:', {
-          userId,
-          'sessionAtInsert.session?.user?.id': sessionAtInsert?.session?.user?.id,
-          'coinciden userId === session.user.id': userId === sessionAtInsert?.session?.user?.id,
-          'access_token presente': !!sessionAtInsert?.session?.access_token,
-          'instanceTag justo antes del insert': supabase.__instanceTag,
-          'instanceTag coincide con el de inicio de handleSubmit': supabase.__instanceTag === instanceTagAlInicio,
-        })
-
-        // La variable `supabase` de esta llamada es LITERALMENTE la
-        // misma referencia que hizo signUp/getSession arriba — no hay
-        // forma de que sea otra sin una reasignación local, que ya
-        // confirmamos por grep que no existe en este archivo.
-        const insertPayload = {
-          user_id: userId,
-          dni: dni.trim(),
-          nombre: nombreSolo,
-          apellido,
-          nombre_completo: nombre.trim(),
-          telefono: telefono.trim(),
-          portal_estado: portalEstado,
-        }
-        console.log('[RegistroTab] DIAGNÓSTICO payload insert completo:', {
-          municipio_id: insertPayload.municipio_id,
-          tipo: typeof insertPayload.municipio_id,
-          payload_completo: insertPayload,
-        })
         const { data: newVecino, error: insertError } = await supabase
           .from('vecinos')
-          .insert(insertPayload)
+          .insert({
+            user_id: userId,
+            municipio_id: portalMunicipioId,
+            dni: dni.trim(),
+            nombre: nombreSolo,
+            apellido,
+            nombre_completo: nombre.trim(),
+            telefono: telefono.trim(),
+            portal_estado: portalEstado,
+          })
           .select()
           .single()
 
-        if (insertError) {
-          console.error('[RegistroTab] DIAGNÓSTICO error en INSERT vecinos:', {
-            code: insertError.code, message: insertError.message,
-            details: insertError.details, hint: insertError.hint,
-          })
-          throw insertError
-        }
+        if (insertError) throw insertError
         vecinoFinal = newVecino
       }
 
@@ -481,7 +429,7 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
     }
   }
 
-  const canSubmit = !!email.trim() && !!password && !!dni.trim() && !!nombre.trim()
+  const canSubmit = !!email.trim() && !!password && !!dni.trim() && !!nombre.trim() && !!portalMunicipioId
 
   if (pendiente) {
     return (
