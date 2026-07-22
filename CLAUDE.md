@@ -32,6 +32,11 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 **MEDIO — CORS SuperAdmin:** APIs status externas pueden fallar → crear Vercel Function proxy.
 **BAJO — Mensajería SMS:** consume mockData.js — no hay Twilio real.
 **BAJO — Médico de guardia:** sigue siendo mockData en SalaPrimerosAuxilios.jsx — pendiente reemplazar con tabla `profesionales`.
+**MEDIO — "Vista semana" puede omitir turnos reales en silencio (Sala Primeros Auxilios, posiblemente Juez de Paz/SUM/TablazoCross):** `CalendarioSemanal.jsx` solo sabe leer `evento.fecha_hora` (ISO) o el par `evento.fecha`+`evento.hora` — pero `turnos_agenda` NO tiene columna `fecha_hora`, solo `fecha` + `hora_inicio` + `hora_fin` por separado. Si el mapeo a `eventos` no combina esos campos, `isoDeEvento()` devuelve `null` y el turno se descarta sin error visible (grilla vacía, no crashea). Confirmado en vivo en 2026-07-22: Sala Primeros Auxilios tenía turnos reales esa semana y su Vista semana los mostraba vacíos — mismo bug que tenía CIC Salud, arreglado ese día en `CicSalud.jsx`. Fix ya probado, aplicar igual en cada módulo que use `CalendarioSemanal`:
+```js
+fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
+```
+(`ARG_OFFSET` de `lib/datetime.js`). No tocar `CalendarioSemanal.jsx` — el problema está en cómo cada página arma su array `eventos`, no en el componente compartido.
 
 ---
 
