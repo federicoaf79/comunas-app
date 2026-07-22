@@ -25,6 +25,17 @@ const COLOR_POR_ESPECIALIDAD = {
   kinesiologia: '#059669',  // verde excepción — Kinesiología
   odontologia:  '#DC2626',  // rojo — Odontología
 }
+const COLOR_ESPECIALIDAD_DEFAULT = '#64748B' // slate — especialidad sin color mapeado
+
+// Normaliza para matchear contra COLOR_POR_ESPECIALIDAD sin importar
+// mayúsculas/acentos del dato real (ej. "Clínico" en vez de 'clinico').
+function normalizarEspecialidad(s) {
+  return (s ?? '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .trim()
+}
 
 const ESTADO_DIA = {
   pendiente:  'estado-pendiente',
@@ -123,7 +134,12 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
     fechaTo: vistaActual === 'semana' ? ymdLocal(addDays(inicioSemana, 6)) : undefined,
   }, { municipioIdOverride: municipioId })
 
-  const { data: profesionales = [] } = useProfesionales({ dependenciaId: depCicSalud?.id })
+  // Bug previo: se llamaba useProfesionales({ dependenciaId }) pero el
+  // hook espera (municipioId, dependenciaId) posicional — el objeto
+  // terminaba pisando el param municipioId y la query nunca traía
+  // datos reales (filtro de especialidad y color-coding silenciosamente
+  // vacíos).
+  const { data: profesionales = [] } = useProfesionales(municipioId, depCicSalud?.id)
 
   // Lista única de especialidades
   const especialidades = useMemo(() => {
@@ -185,7 +201,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
   if (vistaActual === 'semana') {
     const eventosCalendario = turnosFiltrados.map(t => {
       const prof = profesionales.find(p => p.id === t.profesional_id)
-      const especialidad = prof?.especialidad?.toLowerCase() || 'clinico'
+      const especialidad = normalizarEspecialidad(prof?.especialidad)
       return {
         id: t.id,
         fecha: t.fecha_hora?.split('T')[0],
@@ -193,7 +209,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         horaFin: t.hora_fin ? timeOf(t.hora_fin) : undefined,
         titulo: vecinoLabel(t),
         subtitulo: prof?.especialidad || 'Sin especialidad',
-        color: COLOR_POR_ESPECIALIDAD[especialidad] || COLOR_POR_ESPECIALIDAD.clinico,
+        color: COLOR_POR_ESPECIALIDAD[especialidad] || COLOR_ESPECIALIDAD_DEFAULT,
       }
     })
 
@@ -370,7 +386,9 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
 
       {modalTurnoOpen && depCicSalud && (
         <TurnoPresencialModal
+          open
           dependencia={depCicSalud}
+          municipioId={municipioId}
           fecha={ymdSeleccionada}
           onClose={() => {
             setModalTurnoOpen(false)

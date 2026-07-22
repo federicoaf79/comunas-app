@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { createVecino, updateVecino } from '../../hooks/useVecinos'
+import { useProfesionales } from '../../hooks/useProfesionales'
 import { useQueryClient } from '@tanstack/react-query'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
@@ -42,13 +43,6 @@ const HORA_AHORA = () => {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const ESPECIALIDAD_OPTS = [
-  { value: 'general',     label: 'Medicina General' },
-  { value: 'obstetra',    label: 'Obstetra' },
-  { value: 'ecografia',   label: 'Ecografía' },
-  { value: 'posta_rural', label: 'Posta Sanitaria Rural' },
-]
-
 // Columnas necesarias para evaluar hcCompleta() — agregamos todos
 // los campos clínicos al SELECT del buscador. Si la migration
 // 20260514_vecinos_hc_obligatorios no se aplicó, Postgres devuelve
@@ -69,7 +63,7 @@ function vecinoLabel(v) {
 }
 
 function emptyTurnoForm() {
-  return { query: '', motivo: '', hora: HORA_AHORA(), especialidad: 'general' }
+  return { query: '', motivo: '', hora: HORA_AHORA(), especialidad: '' }
 }
 
 export default function TurnoPresencialModal({
@@ -93,6 +87,24 @@ export default function TurnoPresencialModal({
   const [hcSeed, setHcSeed] = useState({})
 
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+
+  // Especialidades reales de la dependencia — mismo patrón data-driven
+  // que el selector de SacarTurnoFormPortal.jsx (portal), en vez de una
+  // lista fija que no coincidía con los valores reales de `profesionales`.
+  const { data: profesionalesDep = [] } = useProfesionales(
+    municipioId ?? dependencia?.municipio_id,
+    dependencia?.id,
+  )
+  const especialidadOpts = useMemo(() => {
+    const vistos = new Set()
+    const opts = []
+    for (const p of profesionalesDep) {
+      if (!p.especialidad || !p.activo || vistos.has(p.especialidad)) continue
+      vistos.add(p.especialidad)
+      opts.push({ value: p.especialidad, label: p.especialidad })
+    }
+    return opts.sort((a, b) => a.label.localeCompare(b.label))
+  }, [profesionalesDep])
 
   // Reset al abrir/cerrar para que cada alta arranque limpia.
   useEffect(() => {
@@ -250,7 +262,7 @@ export default function TurnoPresencialModal({
         hora_fin,
         estado:         'confirmado',
         canal:          'presencial',
-        especialidad:   form.especialidad || 'general',
+        especialidad:   form.especialidad || null,
         motivo:         form.motivo.trim() || null,
       }
       const { data: row, error: tErr } = await supabase
@@ -445,8 +457,9 @@ export default function TurnoPresencialModal({
         <Select
           label="Especialidad"
           value={form.especialidad}
-          onChange={v => set('especialidad', v || 'general')}
-          options={ESPECIALIDAD_OPTS}
+          onChange={v => set('especialidad', v)}
+          options={especialidadOpts}
+          placeholder={especialidadOpts.length > 0 ? 'Seleccionar…' : 'Sin especialidades cargadas'}
         />
 
         <Input
