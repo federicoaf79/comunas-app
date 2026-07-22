@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useModulosActivos } from '../../hooks/useModulos'
 import { useDependenciasAdmin } from '../../hooks/useDependenciaPublica'
+import { moduloParaTipo } from '../../lib/moduloPorTipo'
 import OnboardingChecklist from '../admin/OnboardingChecklist'
 import { useOnboardingProgress } from '../../hooks/useOnboardingProgress'
 
@@ -679,6 +680,17 @@ export default function AdminLayout() {
     }
   }, [modulos])
 
+  // config por módulo (ej. { solo_informativo: true }) — separado del
+  // gate on/off de arriba a propósito. Algunas dependencias dinámicas
+  // (Sala PA) nunca declararon `modulo` en su entrada de sidebar, así
+  // que nunca pasaron por tieneModulo — agregarlas ahí introduciría
+  // un gate on/off nuevo que no existía. Esto solo lee `config`.
+  const configByModulo = useMemo(() => {
+    const map = new Map()
+    for (const m of (modulos ?? [])) map.set(m.modulo, m.config)
+    return map
+  }, [modulos])
+
   const accesoByDepId = useMemo(() => {
     const map = new Map()
     for (const r of (perfil?.dependencias_acceso ?? [])) {
@@ -696,8 +708,16 @@ export default function AdminLayout() {
   function entryParaDep({ tipo, label, basePath, modulo, icon, dep }) {
     if (modulo && !tieneModulo(modulo)) return null
     const tLower = (tipo ?? '').toLowerCase()
+    // solo_informativo por config del módulo — mismo comportamiento
+    // que TIPOS_INFO_ONLY sin importar el tipo. Resuelve el módulo
+    // por el prop explícito (CIC_BLUEPRINT) o, si no vino, por el
+    // mapeo tipo→módulo (dependencias dinámicas como Sala PA).
+    const moduloConfig = modulo || moduloParaTipo(tipo)
+    const soloInformativo = moduloConfig
+      ? configByModulo.get(moduloConfig)?.solo_informativo === true
+      : false
     // Info-only: link plano sin verificar permisos (siempre visible)
-    if (TIPOS_INFO_ONLY.has(tLower)) {
+    if (TIPOS_INFO_ONLY.has(tLower) || soloInformativo) {
       return { kind: 'link', to: basePath, label, icon }
     }
     // Permisos: directores ven todo; el resto solo si tienen acceso
@@ -724,7 +744,7 @@ export default function AdminLayout() {
       })
       .filter(Boolean)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deps, accesoByDepId, esDirector, tieneModulo])
+  }, [deps, accesoByDepId, esDirector, tieneModulo, configByModulo])
 
   // DEPENDENCIAS dinámicas: el resto de filas de la tabla que NO
   // están en CIC. Dedupe por tipo (un tipo = una entrada aunque
@@ -760,7 +780,7 @@ export default function AdminLayout() {
     info.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
     return { depsPrincipales: principales, depsInfo: info }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deps, accesoByDepId, esDirector, tieneModulo])
+  }, [deps, accesoByDepId, esDirector, tieneModulo, configByModulo])
 
   // Filtramos top + gestión por módulo (mismo patrón que antes).
   const navTopFiltrado = useMemo(() => NAV_TOP.filter(item => tieneModulo(item.modulo)), [tieneModulo])

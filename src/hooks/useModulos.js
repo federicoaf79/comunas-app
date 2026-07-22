@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { supabase, supabasePublic } from '../lib/supabase'
 
 // =============================================================
 // useModulos — gating del producto por módulos contratados.
@@ -39,6 +39,25 @@ export function useTieneModulo(municipioId, modulo) {
   const { data } = useModulosActivos(municipioId)
   if (!data || data.length === 0) return true
   return data.some(m => m.modulo === modulo)
+}
+
+// Variante pública (portal, sin sesión) de useModulosActivos — misma
+// tabla, cliente `supabasePublic` en vez del autenticado. Requiere la
+// policy de SELECT pública sobre `modulos_config` (creada julio 2026).
+export function useModulosConfigPublico(municipioId) {
+  return useQuery({
+    queryKey: ['modulos-config-publico', municipioId ?? '__NONE__'],
+    queryFn:  async () => {
+      const { data, error } = await supabasePublic
+        .from('modulos_config')
+        .select('modulo, config')
+        .eq('municipio_id', municipioId)
+      if (error) throw error
+      return data ?? []
+    },
+    enabled:   !!municipioId,
+    staleTime: 5 * 60_000,
+  })
 }
 
 // Catálogo público de módulos. Lo consumen:

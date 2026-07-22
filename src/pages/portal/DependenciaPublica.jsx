@@ -4,6 +4,8 @@ import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
 import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
 import { usePublicProfesionales } from '../../hooks/useProfesionales'
+import { useModulosConfigPublico } from '../../hooks/useModulos'
+import { moduloParaTipo } from '../../lib/moduloPorTipo'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -226,7 +228,17 @@ export default function DependenciaPublica() {
   const telefono  = telLink(dep?.telefono)
   const waUrl     = whatsappLink(dep?.whatsapp)
   const canal     = canalLabel(dep?.canal_atencion)
-  const aceptaTurnos = TIPOS_CON_TURNOS.has(tipoMatch)
+
+  // solo_informativo (modulos_config.config) — independiente del
+  // toggle modulo_turnos, que solo afecta el selector de /portal/turno.
+  // Si el módulo de esta dependencia está marcado solo_informativo,
+  // no mostramos el botón de autogestión sin importar el tipo.
+  const { data: modulosConfig = [] } = useModulosConfigPublico(municipioId ?? null)
+  const moduloDep = moduloParaTipo(tipoMatch)
+  const soloInformativo = moduloDep
+    ? modulosConfig.find(m => m.modulo === moduloDep)?.config?.solo_informativo === true
+    : false
+  const aceptaTurnos = TIPOS_CON_TURNOS.has(tipoMatch) && !soloInformativo
 
   // Banner para admin si la landing está prácticamente vacía. Sirve
   // para que el equipo se entere de que falta cargar contenido sin
