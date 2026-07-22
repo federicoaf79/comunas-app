@@ -72,9 +72,15 @@ const TABS = [
 // (nunca pasa por el paso de validación de CicSalud.jsx, que es para
 // las órdenes físicas externas). Sin turno_id todavía — se linkea
 // cuando el vecino reserve el turno con el especialista.
+//
+// OJO: profesionalId (FK a `profesionales`, el médico general) y
+// validadaPor (FK a `usuarios`, la cuenta de staff logueada) son dos
+// ids distintos — mismo patrón que ya usa CicSalud.jsx.validarOrden()
+// con validada_por. Pasarle el id equivocado a cada uno tira foreign
+// key violation.
 async function crearDerivacionInterna({
-  municipioId, vecinoId, profesionalId, dependenciaDestinoId, especialidadDestino,
-  diagnostico, indicaciones,
+  municipioId, vecinoId, profesionalId, validadaPor, dependenciaDestinoId,
+  especialidadDestino, diagnostico, indicaciones,
 }) {
   const nowIso = new Date().toISOString()
   const { error } = await supabase.from('ordenes_derivacion').insert({
@@ -88,7 +94,7 @@ async function crearDerivacionInterna({
     origen:                 'digital',
     estado:                 'validada',
     turno_id:               null,
-    validada_por:           profesionalId,
+    validada_por:           validadaPor,
     validada_at:            nowIso,
   })
   if (error) throw error
@@ -450,6 +456,7 @@ function AtencionFormInner({
             municipioId,
             vecinoId:              turno.vecino_id ?? turno.vecino?.id,
             profesionalId:         profesionalAtencion.id,
+            validadaPor:           profesionalId,
             dependenciaDestinoId:  dependenciaIdTurno,
             especialidadDestino:   derivarEspecialidad,
             diagnostico:           form.diagnostico,
