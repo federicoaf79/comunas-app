@@ -203,6 +203,7 @@ const router = createBrowserRouter([
                   { path: '/admin/sala',                       element: <SalaPrimerosAuxilios /> },
                   { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
                   { path: '/admin/cic-salud',                  element: <CicSalud /> },
+                  { path: '/admin/cic-salud/atencion/:turnoId', element: <AtencionDetalle /> },
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
                   { path: '/admin/dependencia/odontologia', element: <Odontologia /> },

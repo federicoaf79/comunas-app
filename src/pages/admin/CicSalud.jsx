@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
@@ -118,6 +118,7 @@ export default function CicSalud() {
 }
 
 function TurnosTab({ depCicSalud, municipioId, canCreate }) {
+  const navigate = useNavigate()
   const [vistaActual, setVistaActual] = useState('dia')
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() => new Date())
   const [especialidadFiltro, setEspecialidadFiltro] = useState('todas')
@@ -261,7 +262,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         <CalendarioSemanal
           weekStart={inicioSemana}
           eventos={eventosCalendario}
-          onEventoClick={(e) => console.log('Evento:', e)}
+          onEventoClick={(e) => navigate(`/admin/cic-salud/atencion/${e.id}`)}
         />
       </div>
     )
@@ -349,7 +350,8 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
             return (
               <div
                 key={t.id}
-                className="flex items-center gap-4 rounded-xl border border-border bg-white p-4 transition-shadow hover:shadow-md"
+                onClick={() => navigate(`/admin/cic-salud/atencion/${t.id}`)}
+                className="flex cursor-pointer items-center gap-4 rounded-xl border border-border bg-white p-4 transition-shadow hover:shadow-md"
               >
                 <Avatar nombre={vecinoLabel(t)} size="md" />
                 <div className="flex-1">
@@ -372,7 +374,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
                 {requiereValidacion && (
                   <Button
                     size="sm"
-                    onClick={() => validarOrden(t.id)}
+                    onClick={(e) => { e.stopPropagation(); validarOrden(t.id) }}
                     loading={validandoOrden === t.id}
                   >
                     Validar orden

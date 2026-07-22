@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
-import { useDependenciaByTipo } from '../../hooks/useTurnos'
 import {
   useAtencionPorTurno, edadDesdeFechaNac,
 } from '../../hooks/useAtenciones'
@@ -81,13 +80,17 @@ const TABS = [
 export default function AtencionDetalle() {
   const { turnoId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { perfil } = useAuth()
   const { municipioId } = useEffectiveMunicipioId()
   const [tab, setTab] = useState('atencion')
 
-  // Dependencia salud para filtrar el catálogo de insumos.
-  const depSaludQ = useDependenciaByTipo('caps')
-  const dependenciaSaludId = depSaludQ.data?.id ?? null
+  // Esta página se monta desde dos rutas (Sala Primeros Auxilios y
+  // CIC Salud) — el botón "volver" debe apuntar al módulo de origen,
+  // no siempre a Sala PA.
+  const esCicSalud = location.pathname.startsWith('/admin/cic-salud')
+  const backPath   = esCicSalud ? '/admin/cic-salud' : '/admin/sala'
+  const backLabel  = esCicSalud ? 'Volver a CIC — Servicios de Salud' : 'Volver a Sala Primeros Auxilios'
 
   // Turno con vecino + dependencia para el header.
   const turnoQ = useQuery({
@@ -102,6 +105,10 @@ export default function AtencionDetalle() {
   })
   const turno   = turnoQ.data ?? null
   const vecino  = turno?.vecino ?? null
+  // Dependencia real del turno para filtrar el catálogo de insumos —
+  // antes se asumía siempre 'caps' (Sala Primeros Auxilios), lo cual
+  // filtraba mal al abrir esta página desde CIC Salud.
+  const dependenciaSaludId = turno?.dependencia_id ?? turno?.dependencia?.id ?? null
 
   // Atención existente para este turno (puede ser null si todavía
   // no se abrió). La compartimos con el form vía el cache de
@@ -120,7 +127,7 @@ export default function AtencionDetalle() {
   if (turnoQ.error || !turno) {
     return (
       <div className="space-y-5">
-        <BackHeader />
+        <BackHeader backPath={backPath} backLabel={backLabel} />
         <div className="card p-10 text-center">
           <p className="font-sora text-lg font-semibold text-primary">Turno no encontrado</p>
           <p className="mt-2 text-sm text-primary-500">
@@ -141,7 +148,9 @@ export default function AtencionDetalle() {
         dni={vecino?.dni}
         estadoTurno={turno.estado}
         estadoBadge={estadoBadge}
-        onBack={() => navigate('/admin/sala')}
+        backPath={backPath}
+        backLabel={backLabel}
+        onBack={() => navigate(backPath)}
       />
 
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
@@ -278,7 +287,7 @@ export default function AtencionDetalle() {
   )
 }
 
-function BackHeader({ nombre, dni, estadoTurno, estadoBadge, onBack }) {
+function BackHeader({ nombre, dni, estadoTurno, estadoBadge, onBack, backPath = '/admin/sala', backLabel = 'Volver a Sala Primeros Auxilios' }) {
   return (
     <header className="flex flex-wrap items-center gap-3">
       {onBack ? (
@@ -287,11 +296,11 @@ function BackHeader({ nombre, dni, estadoTurno, estadoBadge, onBack }) {
           onClick={onBack}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"
         >
-          ← Volver a Sala Primeros Auxilios
+          ← {backLabel}
         </button>
       ) : (
-        <Link to="/admin/sala" className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
-          ← Volver a Sala Primeros Auxilios
+        <Link to={backPath} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
+          ← {backLabel}
         </Link>
       )}
       {nombre && (
