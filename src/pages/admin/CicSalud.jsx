@@ -259,7 +259,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         </div>
 
         <CalendarioSemanal
-          inicioSemana={inicioSemana}
+          weekStart={inicioSemana}
           eventos={eventosCalendario}
           onEventoClick={(e) => console.log('Evento:', e)}
         />
