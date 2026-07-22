@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
 
-const COLS = 'id, nombre, especialidad, matricula, telefono, email, dias_atencion, hora_desde, hora_hasta, frecuencia_nota, activo, dependencia_id, municipio_id'
+const COLS = 'id, nombre, especialidad, matricula, telefono, email, dias_atencion, hora_desde, hora_hasta, frecuencia_nota, activo, dependencia_id, municipio_id, es_medico_general'
 
 // Columnas expuestas a vecinos sin sesión (vista profesionales_publico,
 // sin telefono/email/matricula/frecuencia_nota — solo lo necesario para

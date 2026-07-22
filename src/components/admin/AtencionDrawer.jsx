@@ -8,6 +8,7 @@ import {
   edadDesdeFechaNac,
 } from '../../hooks/useAtenciones'
 import { useUpdateTurnoEstado } from '../../hooks/useTurnos'
+import { useProfesionales } from '../../hooks/useProfesionales'
 import { updateVecino } from '../../hooks/useVecinos'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -65,6 +66,32 @@ const TABS = [
   { value: 'insumos',  label: 'Insumos utilizados' },
   { value: 'hc',       label: 'Historia clínica' },
 ]
+
+// Derivación interna — la emite el propio Médico General del CIC hacia
+// un especialista de la misma dependencia. Queda validada al crearse
+// (nunca pasa por el paso de validación de CicSalud.jsx, que es para
+// las órdenes físicas externas). Sin turno_id todavía — se linkea
+// cuando el vecino reserve el turno con el especialista.
+async function crearDerivacionInterna({
+  vecinoId, profesionalId, dependenciaDestinoId, especialidadDestino,
+  diagnostico, indicaciones,
+}) {
+  const nowIso = new Date().toISOString()
+  const { error } = await supabase.from('ordenes_derivacion').insert({
+    vecino_id:              vecinoId,
+    profesional_id:         profesionalId,
+    dependencia_destino_id: dependenciaDestinoId,
+    especialidad_destino:   especialidadDestino,
+    diagnostico:            diagnostico   || null,
+    indicaciones:           indicaciones  || null,
+    origen:                 'interna',
+    estado:                 'validada',
+    turno_id:               null,
+    validada_por:           profesionalId,
+    validada_at:            nowIso,
+  })
+  if (error) throw error
+}
 
 export default function AtencionDrawer({ turno, dependenciaSaludId, municipioId, onClose }) {
   const { perfil } = useAuth()
@@ -278,6 +305,7 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
   const [ok, setOk] = useState('')
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const [hcModalOpen, setHcModalOpen] = useState(false)
+  const [derivarEspecialidad, setDerivarEspecialidad] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
 
   const qc           = useQueryClient()
@@ -285,6 +313,26 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
   const updateMut    = useUpdateAtencion()
   const closeMut     = useCloseAtencion()
   const updateTurnoM = useUpdateTurnoEstado()
+
+  // Derivación interna — solo tiene sentido si el turno tiene un
+  // profesional asignado y ese profesional es el Médico General del
+  // CIC. El selector de especialidad destino sale de los demás
+  // profesionales activos de la misma dependencia.
+  const dependenciaIdTurno   = turno.dependencia_id ?? turno.dependencia?.id ?? null
+  const profesionalAtencion  = turno.profesional ?? null
+  const esMedicoGeneral      = profesionalAtencion?.es_medico_general === true
+  const { data: profesionalesDep = [] } = useProfesionales(municipioId, dependenciaIdTurno)
+  const especialidadesDestino = useMemo(() => {
+    const vistos = new Set()
+    const opts = []
+    for (const p of profesionalesDep) {
+      if (!p.especialidad || p.activo === false || p.es_medico_general) continue
+      if (vistos.has(p.especialidad)) continue
+      vistos.add(p.especialidad)
+      opts.push({ value: p.especialidad, label: p.especialidad })
+    }
+    return opts.sort((a, b) => a.label.localeCompare(b.label))
+  }, [profesionalesDep])
 
   const yaCerrada = atencion?.estado === 'cerrada' || atencion?.estado === 'derivada'
 
@@ -322,9 +370,10 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
     return () => clearTimeout(t)
   }, [ok])
 
-  // Si el médico llena "Derivar a", el cierre marca la atención
-  // como 'derivada' y el botón se relabel a "Cerrar y derivar".
-  const esDerivacion = !!form.derivacion_destino?.trim()
+  // Si el médico llena "Derivar a" (texto libre) o elige una
+  // especialidad interna, el cierre marca la atención como 'derivada'
+  // y el botón se relabel a "Cerrar y derivar".
+  const esDerivacion = !!form.derivacion_destino?.trim() || !!derivarEspecialidad
   const labelCerrar  = esDerivacion ? 'Cerrar y derivar' : 'Cerrar atención'
 
   function payloadForm(estado = 'borrador') {
@@ -379,9 +428,30 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         atencionId: atencion.id,
         estado:     targetEstado,
       })
+
+      // 3) Derivación interna (opcional) — se registra recién acá,
+      //    al cerrar, para no crear filas duplicadas en cada "Guardar"
+      //    intermedio mientras el médico todavía está escribiendo.
+      let derivacionAviso = ''
+      if (derivarEspecialidad && esMedicoGeneral) {
+        try {
+          await crearDerivacionInterna({
+            vecinoId:              turno.vecino_id ?? turno.vecino?.id,
+            profesionalId:         profesionalAtencion.id,
+            dependenciaDestinoId:  dependenciaIdTurno,
+            especialidadDestino:   derivarEspecialidad,
+            diagnostico:           form.diagnostico,
+            indicaciones:          form.indicaciones,
+          })
+        } catch (e) {
+          console.error('[AtencionDrawer] crearDerivacionInterna error:', e)
+          derivacionAviso = ' — no pudimos registrar la derivación interna.'
+        }
+      }
+
       setOk(errores.length === 0
-        ? (targetEstado === 'derivada' ? '✓ Atención derivada' : '✓ Atención cerrada')
-        : `Cerrada con ${errores.length} insumo${errores.length === 1 ? '' : 's'} sin descontar — revisá stock.`)
+        ? (targetEstado === 'derivada' ? `✓ Atención derivada${derivacionAviso}` : '✓ Atención cerrada')
+        : `Cerrada con ${errores.length} insumo${errores.length === 1 ? '' : 's'} sin descontar — revisá stock.${derivacionAviso}`)
     } catch (e) {
       setError(e?.message ?? 'No pudimos cerrar la atención.')
     }
@@ -473,6 +543,30 @@ function AtencionFormInner({ turno, atencion, municipioId, profesionalId, extraS
         onChange={e => set('proxima_consulta', e.target.value)}
         disabled={inputsDisabled}
       />
+
+      {/* Derivar a especialista del CIC — solo visible para el Médico
+          General. Genera una derivación interna estructurada
+          (ordenes_derivacion, origen='interna', validada automática)
+          al cerrar la atención. Convive con el campo de texto libre
+          de abajo, no lo reemplaza. */}
+      {esMedicoGeneral && (
+        <div className="space-y-1.5 rounded-md border border-accent-100 bg-accent-50/40 p-3">
+          <Select
+            label="Derivar a especialista del CIC (opcional)"
+            value={derivarEspecialidad}
+            onChange={v => setDerivarEspecialidad(v)}
+            options={especialidadesDestino}
+            placeholder={especialidadesDestino.length > 0
+              ? 'Seleccionar especialidad…'
+              : 'No hay especialistas cargados en esta dependencia'}
+            disabled={inputsDisabled}
+          />
+          <p className="text-xs text-primary-500">
+            Queda validada automáticamente — el vecino podrá sacar turno
+            directo con el especialista sin subir orden médica.
+          </p>
+        </div>
+      )}
 
       {/* Derivar a — textarea siempre visible. Si tiene contenido,
           el botón "Cerrar atención" se relabel a "Cerrar y derivar"

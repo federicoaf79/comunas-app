@@ -34,9 +34,10 @@ import { dateTimeOf } from '../../lib/datetime'
 
 const TURNO_SELECT = `
   id, fecha, hora_inicio, hora_fin, motivo, especialidad, estado, vecino_id, dependencia_id,
-  municipio_id, canal, numero_turno, metadata,
+  municipio_id, canal, numero_turno, metadata, profesional_id,
   vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, fecha_nac, telefono ),
-  dependencia:dependencia_id ( id, nombre, tipo )
+  dependencia:dependencia_id ( id, nombre, tipo ),
+  profesional:profesional_id ( id, nombre, especialidad, es_medico_general )
 `
 
 // Paleta y labels de especialidades — alineadas con SalaPrimerosAuxilios
