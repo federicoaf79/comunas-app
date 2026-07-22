@@ -364,11 +364,20 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
       const userId = authData.user.id
 
       // 3. Buscar si existe vecino con ese DNI
-      const { data: existingVecino } = await supabase
+      const { data: existingVecino, error: existingError } = await supabase
         .from('vecinos')
         .select('*')
         .eq('dni', dni.trim())
         .single()
+
+      // TEMPORAL — este error se ignoraba en silencio; si falla por RLS
+      // acá, el código sigue como si no existiera nadie con ese DNI.
+      if (existingError) {
+        console.warn('[RegistroTab] DIAGNÓSTICO error en SELECT existingVecino (ignorado, sigue a "crear nuevo"):', {
+          code: existingError.code, message: existingError.message,
+          details: existingError.details, hint: existingError.hint,
+        })
+      }
 
       let vecinoFinal
 
@@ -384,13 +393,28 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
           .select()
           .single()
 
-        if (updateError) throw updateError
+        if (updateError) {
+          console.error('[RegistroTab] DIAGNÓSTICO error en UPDATE vecinos:', {
+            code: updateError.code, message: updateError.message,
+            details: updateError.details, hint: updateError.hint,
+          })
+          throw updateError
+        }
         vecinoFinal = updated
       } else {
         // Crear nuevo vecino
         const partes = nombre.trim().split(/\s+/)
         const nombreSolo = partes.shift() ?? ''
         const apellido = partes.join(' ') || nombreSolo
+
+        // TEMPORAL — confirmar userId y sesión en el momento exacto del insert.
+        const { data: sessionAtInsert } = await supabase.auth.getSession()
+        console.log('[RegistroTab] DIAGNÓSTICO justo antes del INSERT:', {
+          userId,
+          'sessionAtInsert.session?.user?.id': sessionAtInsert?.session?.user?.id,
+          'coinciden userId === session.user.id': userId === sessionAtInsert?.session?.user?.id,
+          'access_token presente': !!sessionAtInsert?.session?.access_token,
+        })
 
         const { data: newVecino, error: insertError } = await supabase
           .from('vecinos')
@@ -406,7 +430,13 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
           .select()
           .single()
 
-        if (insertError) throw insertError
+        if (insertError) {
+          console.error('[RegistroTab] DIAGNÓSTICO error en INSERT vecinos:', {
+            code: insertError.code, message: insertError.message,
+            details: insertError.details, hint: insertError.hint,
+          })
+          throw insertError
+        }
         vecinoFinal = newVecino
       }
 
