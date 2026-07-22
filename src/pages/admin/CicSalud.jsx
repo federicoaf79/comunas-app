@@ -4,7 +4,7 @@ import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { useProfesionales } from '../../hooks/useProfesionales'
-import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
+import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import { supabase } from '../../lib/supabase'
 import Avatar from '../../components/ui/Avatar'
 import Spinner from '../../components/ui/Spinner'
@@ -203,9 +203,12 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
     const eventosCalendario = turnosFiltrados.map(t => {
       const prof = profesionales.find(p => p.id === t.profesional_id)
       const especialidad = normalizarEspecialidad(prof?.especialidad)
+      // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
+      // por separado. Hay que combinarlos acá; CalendarioSemanal.jsx solo
+      // sabe leer fecha_hora (ISO) o el par fecha+hora, nunca hora_inicio.
       return {
         id: t.id,
-        fecha_hora: t.fecha_hora,
+        fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
         titulo: vecinoLabel(t),
         subtitulo: prof?.especialidad || 'Sin especialidad',
         color: COLOR_POR_ESPECIALIDAD[especialidad] || COLOR_ESPECIALIDAD_DEFAULT,
