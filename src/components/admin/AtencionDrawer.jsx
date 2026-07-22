@@ -85,7 +85,7 @@ async function crearDerivacionInterna({
     especialidad_destino:   especialidadDestino,
     diagnostico:            diagnostico   || null,
     indicaciones:           indicaciones  || null,
-    origen:                 'interna',
+    origen:                 'digital',
     estado:                 'validada',
     turno_id:               null,
     validada_por:           profesionalId,
@@ -558,7 +558,7 @@ function AtencionFormInner({
 
       {/* Derivar a especialista del CIC — solo visible para el Médico
           General. Genera una derivación interna estructurada
-          (ordenes_derivacion, origen='interna', validada automática)
+          (ordenes_derivacion, origen='digital', validada automática)
           al cerrar la atención. Convive con el campo de texto libre
           de abajo, no lo reemplaza. */}
       {esMedicoGeneral && (
