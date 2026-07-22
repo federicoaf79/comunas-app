@@ -317,6 +317,15 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
     setError('')
     setSubmitting(true)
 
+    // TEMPORAL — prueba de identidad de objeto en memoria, no solo de
+    // nombre de variable. Si el `supabase` de esta línea fuera un
+    // objeto distinto al usado más abajo en signUp/getSession/insert
+    // (imposible por scoping de JS ya que es el mismo import de
+    // módulo, pero lo confirmamos en runtime igual), el tag no
+    // coincidiría entre los logs.
+    if (!supabase.__instanceTag) supabase.__instanceTag = Math.random().toString(36).slice(2)
+    const instanceTagAlInicio = supabase.__instanceTag
+
     try {
       // 1. Leer configuración de registro
       const { data: configData } = await supabase
@@ -359,6 +368,8 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         'authData.session (de signUp)': authData.session,
         'getSession().session':          sessionCheck?.session,
         'access_token presente':          !!sessionCheck?.session?.access_token,
+        'instanceTag (signUp/getSession)': supabase.__instanceTag,
+        'instanceTag coincide con el de inicio de handleSubmit': supabase.__instanceTag === instanceTagAlInicio,
       })
 
       const userId = authData.user.id
@@ -414,8 +425,14 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
           'sessionAtInsert.session?.user?.id': sessionAtInsert?.session?.user?.id,
           'coinciden userId === session.user.id': userId === sessionAtInsert?.session?.user?.id,
           'access_token presente': !!sessionAtInsert?.session?.access_token,
+          'instanceTag justo antes del insert': supabase.__instanceTag,
+          'instanceTag coincide con el de inicio de handleSubmit': supabase.__instanceTag === instanceTagAlInicio,
         })
 
+        // La variable `supabase` de esta llamada es LITERALMENTE la
+        // misma referencia que hizo signUp/getSession arriba — no hay
+        // forma de que sea otra sin una reasignación local, que ya
+        // confirmamos por grep que no existe en este archivo.
         const { data: newVecino, error: insertError } = await supabase
           .from('vecinos')
           .insert({
