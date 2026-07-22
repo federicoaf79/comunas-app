@@ -69,6 +69,12 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 ### `profesionales`
 `id, municipio_id, dependencia_id, nombre, especialidad, matricula, telefono, email, dias_atencion text[], hora_desde, hora_hasta, frecuencia_nota, duracion_turno_min int DEFAULT 30, max_turnos_por_slot int DEFAULT 1, requiere_orden bool DEFAULT false, activo`
 
+### `profesionales_publico` (vista, julio 2026)
+Vista de solo lectura sobre `profesionales` para consultas de vecino sin sesión — usar SIEMPRE esta vista (nunca la tabla real) desde código que corre en el portal público.
+Columnas: `id, municipio_id, dependencia_id, nombre, especialidad, activo, dias_atencion, hora_desde, hora_hasta, duracion_turno_min, max_turnos_por_slot, requiere_orden` — **excluye `telefono`, `email`, `matricula` y `frecuencia_nota`** (no solo los dos primeros).
+Hook dedicado: `usePublicProfesionales(municipioId, dependenciaId)` en `useProfesionales.js`, cliente `supabasePublic`. La tabla real `profesionales` ya no tiene policy pública amplia — solo accesible autenticado (admin/staff) vía `useProfesionales()`.
+Consumido por: `DependenciaPublica.jsx` (sección "Profesionales que atienden") y `CicSaludPortal.jsx`. El selector de especialidad en `SacarTurnoFormPortal.jsx` hace fetch directo a esta vista con `select=especialidad` únicamente.
+
 ### `turnos_agenda`
 `id, municipio_id, dependencia_id, profesional_id, vecino_id, fecha, hora_inicio, hora_fin, estado (pendiente/confirmado/cancelado/atendido), orden_medica_url, orden_medica_nombre, motivo, notas_admin`
 
