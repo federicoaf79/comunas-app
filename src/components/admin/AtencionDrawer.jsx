@@ -9,11 +9,13 @@ import {
 } from '../../hooks/useAtenciones'
 import { useUpdateTurnoEstado } from '../../hooks/useTurnos'
 import { useProfesionales } from '../../hooks/useProfesionales'
+import { useOrdenesDerivacionVecino } from '../../hooks/useVecinoData'
 import { updateVecino } from '../../hooks/useVecinos'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { camposHCFaltantes, hcCompleta } from '../../lib/historiaClinica'
 import HistoriaClinicaForm from '../hc/HistoriaClinicaForm'
+import DerivacionCard from '../hc/DerivacionCard'
 import Modal from '../ui/Modal'
 import Spinner from '../ui/Spinner'
 import Button from '../ui/Button'
@@ -1095,6 +1097,8 @@ export function InsumosTab({ atencion, municipioId, dependenciaSaludId, onSwitch
 
 export function HCTab({ vecinoId, atencionActualId }) {
   const hcQ = useAtencionesVecino(vecinoId, { limit: 50 })
+  // Cliente autenticado siempre — este tab vive del lado admin.
+  const derivQ = useOrdenesDerivacionVecino(vecinoId, supabase)
   const [expandedId, setExpandedId] = useState(null)
 
   // Excluimos la atención que se está editando ahora para no
@@ -1162,6 +1166,30 @@ export function HCTab({ vecinoId, atencionActualId }) {
             )
           })}
         </ul>
+      )}
+
+      {/* Derivaciones estructuradas (ordenes_derivacion) — conviven con
+          el "Derivado a" de texto libre de cada atención, mostrado
+          arriba al expandir cada fila. */}
+      <h3 className="text-xs font-bold uppercase tracking-wider text-primary-500">
+        Derivaciones
+      </h3>
+      {derivQ.isLoading ? (
+        <div className="flex justify-center p-6"><Spinner /></div>
+      ) : (derivQ.data ?? []).length === 0 ? (
+        <p className="text-sm text-primary-400">Sin derivaciones registradas.</p>
+      ) : (
+        <div className="space-y-2">
+          {(derivQ.data ?? []).map(d => (
+            <DerivacionCard key={d.id} derivacion={d}>
+              <p className="mt-2 text-xs text-primary-500">
+                {d.turno_id
+                  ? '✓ Ya usada — vinculada a un turno reservado.'
+                  : 'Sin usar todavía.'}
+              </p>
+            </DerivacionCard>
+          ))}
+        </div>
       )}
     </div>
   )

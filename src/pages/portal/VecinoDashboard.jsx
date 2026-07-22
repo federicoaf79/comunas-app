@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino } from '../../hooks/useVecinoData'
+import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino, useOrdenesDerivacionVecino } from '../../hooks/useVecinoData'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
 import { supabase } from '../../lib/supabase'
@@ -304,7 +304,7 @@ function AtencionDocumentos({ atencionId }) {
   )
 }
 
-function SaludTab({ vecino, atenciones, isLoading, error }) {
+function SaludTab({ vecino, atenciones, isLoading, error, derivaciones, derivacionesLoading }) {
   const navigate = useNavigate()
   const [carpetaActiva, setCarpetaActiva] = useState(null)
 
@@ -374,6 +374,61 @@ function SaludTab({ vecino, atenciones, isLoading, error }) {
 
       {/* Datos vitales */}
       <DatosVitalesCard vecino={vecino} />
+
+      {/* Derivaciones — internas (Médico General del CIC) y físicas.
+          Las pendientes de usar (turno_id null) tienen CTA directo a
+          sacar el turno con el especialista. */}
+      {!derivacionesLoading && derivaciones?.length > 0 && (
+        <div>
+          <h3 className="font-sora text-base font-bold text-primary">Mis derivaciones</h3>
+          <p className="mt-0.5 text-xs text-primary-500">
+            Derivaciones a especialistas — usá las que todavía no reservaste.
+          </p>
+          <div className="mt-2 space-y-3">
+            {derivaciones.map(d => {
+              const yaUsada = !!d.turno_id
+              const depNombre = d.dependencia_destino?.nombre || ''
+              return (
+                <div key={d.id} className={'card p-4' + (yaUsada ? '' : ' border-accent-200')}>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-primary">
+                        {d.especialidad_destino || 'Especialidad no especificada'}
+                      </p>
+                      {depNombre && <p className="mt-0.5 text-xs text-primary-400">{depNombre}</p>}
+                    </div>
+                    <span
+                      className={
+                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ' +
+                        (yaUsada
+                          ? 'bg-primary-50 text-primary-600 ring-primary-200'
+                          : 'bg-ok-50 text-ok-700 ring-ok-100')
+                      }
+                    >
+                      {yaUsada ? 'Ya reservada' : 'Disponible'}
+                    </span>
+                  </div>
+                  {yaUsada ? (
+                    <p className="mt-2 text-xs text-primary-500">
+                      Ya usaste esta derivación para reservar un turno.
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => navigate(
+                        `/portal/turno?dep=${encodeURIComponent(depNombre)}&esp=${encodeURIComponent(d.especialidad_destino ?? '')}&requiere_orden=true`
+                      )}
+                      className="btn-primary mt-3 px-3 py-1.5 text-xs"
+                    >
+                      Reservar turno con el especialista →
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Historia clínica */}
       <div>
@@ -1096,6 +1151,7 @@ export default function VecinoDashboard() {
   const ready = !authLoading
   const turnosQ = useTurnosVecino(vecinoSession?.id, supabase, ready)
   const atencionesQ = useAtencionesVecino(vecinoSession?.id, supabase, ready)
+  const derivacionesQ = useOrdenesDerivacionVecino(vecinoSession?.id, supabase, ready)
   const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase, ready)
   const reservasQ = useReservasVecino(vecinoSession?.id)
   const solicitudesQ = useSolicitudesVecino(vecinoSession?.id, { enabled: ready })
@@ -1138,6 +1194,8 @@ export default function VecinoDashboard() {
             atenciones={atencionesQ.data ?? []}
             isLoading={atencionesQ.isLoading}
             error={atencionesQ.error}
+            derivaciones={derivacionesQ.data ?? []}
+            derivacionesLoading={derivacionesQ.isLoading}
           />
         )}
         {tab === 'datos'    && <DatosTab vecino={vecinoSession} />}

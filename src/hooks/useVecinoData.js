@@ -236,6 +236,44 @@ export function useAtencionesVecino(vecinoId, client = supabaseAnon, ready = tru
   })
 }
 
+// ─────────────────────────────────────────────────────────────────
+// Derivaciones del vecino (internas/digitales + físicas) — Fase 4.
+//
+// Se embebe dependencia_destino (nombre) pero NO profesional: la
+// tabla `profesionales` solo es legible por staff autenticado (sin
+// policy pública para vecinos), así que ese embed devolvería null
+// del lado del portal. dependencia_destino sí es legible por ambos.
+// ─────────────────────────────────────────────────────────────────
+
+const ORDEN_DERIVACION_COLS = `
+  id, vecino_id, profesional_id, dependencia_destino_id, especialidad_destino,
+  diagnostico, indicaciones, origen, estado, turno_id, created_at,
+  dependencia_destino:dependencia_destino_id ( id, nombre )
+`
+
+async function fetchOrdenesDerivacionVecino(vecinoId, clientType) {
+  if (!vecinoId) return []
+  const client = clientType === 'auth' ? supabase : supabaseAnon
+  const { data, error } = await client
+    .from('ordenes_derivacion')
+    .select(ORDEN_DERIVACION_COLS)
+    .eq('vecino_id', vecinoId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+  if (error) throw error
+  return data ?? []
+}
+
+export function useOrdenesDerivacionVecino(vecinoId, client = supabaseAnon, ready = true) {
+  const clientType = client === supabase ? 'auth' : 'anon'
+  const enabled = !!vecinoId && ready
+  return useQuery({
+    queryKey: ['vecino', 'ordenes-derivacion', vecinoId ?? '__none__', clientType],
+    queryFn:  () => fetchOrdenesDerivacionVecino(vecinoId, clientType),
+    enabled,
+  })
+}
+
 // Documentos de una atención específica (para mostrar en el portal)
 async function fetchDocumentosAtencion(atencionId, clientType) {
   if (!atencionId) return []
