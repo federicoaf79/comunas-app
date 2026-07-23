@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { normalizePhoneE164 } from '../../lib/historiaClinica'
 import { useOrdenMedicaUpload } from '../../hooks/useOrdenMedicaUpload'
+import { createAuditLogVecino } from '../../hooks/useAuditLog'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
@@ -450,6 +451,12 @@ export default function SacarTurnoFormPortal() {
         .select('id, numero_turno, fecha, hora_inicio, estado')
         .single()
       if (tErr) throw tErr
+
+      createAuditLogVecino({
+        accion: 'create', entidad: 'turnos_agenda', entidadId: turno.id,
+        descripcion: `Turno sacado por el vecino — ${fecha} ${hora_inicio}`,
+        municipioId: dep.municipio_id, vecinoId: vecinoSession.id,
+      }).catch(e => console.warn('[SacarTurnoFormPortal] audit log:', e.message))
 
       // Si hay una derivación digital cubriendo esta especialidad, la
       // linkeamos al turno recién creado (así no se puede reusar en
