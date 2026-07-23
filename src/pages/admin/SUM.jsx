@@ -94,11 +94,20 @@ function vecinoNombre(v) {
   return v.nombre_completo || v.apellido || v.nombre || 'Solicitante'
 }
 
-function horarioLabel(hi, hf) {
-  const a = (hi ?? '').slice(0, 5)
-  const b = (hf ?? '').slice(0, 5)
-  if (!a && !b) return '—'
-  return `${a} – ${b}`
+// sum_reservas no tiene hora_inicio/hora_fin — la franja horaria vive
+// entera en la columna `horario` (manana/tarde/noche/dia_completo).
+// Antes se llamaba horarioLabel(r.hora_inicio, r.hora_fin), que siempre
+// daba '—' porque esas columnas no existen en esta tabla (a diferencia
+// de turnos_agenda). Mismos rangos que HORARIO_OPTS en
+// SumReservaFormModal.jsx, para que el alta y el listado coincidan.
+const HORARIO_RANGO = {
+  manana:       '08:00 – 13:00',
+  tarde:        '14:00 – 18:00',
+  noche:        '19:00 – 23:00',
+  dia_completo: '08:00 – 23:00',
+}
+function horarioLabel(horario) {
+  return HORARIO_RANGO[(horario ?? '').toLowerCase()] ?? '—'
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -185,7 +194,7 @@ function ReservasTab({ depSum, canApprove }) {
             {reservas.map(r => (
               <Tr key={r.id}>
                 <Td className="whitespace-nowrap">{dateOf(r.fecha)}</Td>
-                <Td className="whitespace-nowrap">{horarioLabel(r.hora_inicio, r.hora_fin)}</Td>
+                <Td className="whitespace-nowrap">{horarioLabel(r.horario)}</Td>
                 <Td>
                   <p className="font-medium text-primary">{vecinoNombre(r.vecino)}</p>
                   {r.vecino?.dni && (
@@ -270,7 +279,7 @@ function MonthCalendar({ year, month, reservasByDate }) {
           const occupants = d != null ? (reservasByDate.get(ymd(d)) ?? []) : []
           const ocupado = occupants.length > 0
           const tooltip = occupants
-            .map(r => `${vecinoNombre(r.vecino)} · ${horarioLabel(r.hora_inicio, r.hora_fin)} · ${r.motivo || ''}`)
+            .map(r => `${vecinoNombre(r.vecino)} · ${horarioLabel(r.horario)} · ${r.motivo || ''}`)
             .join('\n')
           return (
             <div
