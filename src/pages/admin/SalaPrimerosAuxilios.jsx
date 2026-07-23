@@ -477,7 +477,6 @@ export default function SalaPrimerosAuxilios() {
         open={turnoModalOpen}
         onClose={() => setTurnoModalOpen(false)}
         dependencia={depSalud}
-        profesionalId={perfil?.id ?? null}
         municipioId={municipioId}
         onCreated={() => qc.invalidateQueries({ queryKey: ['turnos'] })}
       />
