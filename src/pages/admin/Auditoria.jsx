@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import Spinner from '../../components/ui/Spinner'
 import StatCard from '../../components/ui/StatCard'
@@ -50,6 +51,11 @@ function actorLabel(row) {
   const u = row?.usuarios
   if (u?.nombre) return u.nombre
   return u?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
+}
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Auditoria] audit log:', e.message))
 }
 
 // Exportación genérica a CSV con BOM UTF-8 para Excel
@@ -136,13 +142,19 @@ function AccesosTab({ municipioId }) {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => exportarCSV(rows, 'auditoria-accesos', [
-            { label: 'Fecha', key: 'created_at' },
-            { label: 'Usuario', key: 'usuarios.nombre' },
-            { label: 'Email', key: 'usuarios.email' },
-            { label: 'Acción', key: 'accion' },
-            { label: 'Descripción', key: 'descripcion' },
-          ])}
+          onClick={() => {
+            exportarCSV(rows, 'auditoria-accesos', [
+              { label: 'Fecha', key: 'created_at' },
+              { label: 'Usuario', key: 'usuarios.nombre' },
+              { label: 'Email', key: 'usuarios.email' },
+              { label: 'Acción', key: 'accion' },
+              { label: 'Descripción', key: 'descripcion' },
+            ])
+            logAudit({
+              accion: 'export', entidad: 'audit_log',
+              descripcion: `Exportación CSV de accesos (${rows.length} filas)`,
+            })
+          }}
           className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={rows.length === 0}
         >
@@ -208,14 +220,20 @@ function CambiosTab({ municipioId }) {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => exportarCSV(rows, 'auditoria-cambios', [
-            { label: 'Fecha', key: 'created_at' },
-            { label: 'Usuario', key: 'usuarios.nombre' },
-            { label: 'Email', key: 'usuarios.email' },
-            { label: 'Acción', key: 'accion' },
-            { label: 'Entidad', key: 'entidad' },
-            { label: 'Descripción', key: 'descripcion' },
-          ])}
+          onClick={() => {
+            exportarCSV(rows, 'auditoria-cambios', [
+              { label: 'Fecha', key: 'created_at' },
+              { label: 'Usuario', key: 'usuarios.nombre' },
+              { label: 'Email', key: 'usuarios.email' },
+              { label: 'Acción', key: 'accion' },
+              { label: 'Entidad', key: 'entidad' },
+              { label: 'Descripción', key: 'descripcion' },
+            ])
+            logAudit({
+              accion: 'export', entidad: 'audit_log',
+              descripcion: `Exportación CSV de cambios (${rows.length} filas)`,
+            })
+          }}
           className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={rows.length === 0}
         >

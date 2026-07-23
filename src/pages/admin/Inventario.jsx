@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import {
   useInventario, useMovimientos, useOrdenesCompra, usePartidasTipo,
   useCreateInventarioItem, useUpdateInventarioItem,
@@ -27,6 +28,11 @@ import { dateOf, dateTimeOf, todayArgYMD } from '../../lib/datetime'
 const fmtMoney = new Intl.NumberFormat('es-AR', {
   style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
 })
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Inventario] audit log:', e.message))
+}
 
 const TABS = [
   { value: 'stock',       label: 'Stock general' },
@@ -685,6 +691,10 @@ function MovimientosTab({ municipioId, dependencias }) {
     a.download = `movimientos-${todayArgYMD()}.csv`
     a.click()
     URL.revokeObjectURL(url)
+    logAudit({
+      accion: 'export', entidad: 'inventario_movimientos',
+      descripcion: `Exportación CSV de movimientos de inventario (${movimientos.length} filas)`,
+    })
   }
 
   return (

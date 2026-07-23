@@ -6,6 +6,7 @@ import {
 import { usePartidasTipo } from '../../hooks/useInventario'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import Tabs from '../../components/ui/Tabs'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
@@ -349,6 +350,11 @@ function PartidaTab({ municipioId, dependencias }) {
 // Tab 3 — Exportar
 // ─────────────────────────────────────────────────────────────────
 
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Rendicion] audit log:', e.message))
+}
+
 // Escapa una celda para CSV: comillas dobles + escapeo interno
 // de comillas. Compatible con Excel y Google Sheets.
 function csvCell(v) {
@@ -399,6 +405,10 @@ function ExportTab({ municipioId, partidasTipo }) {
       g.comprobante_url ?? '',
     ])
     csvDownload(`rendicion-${mes}-${todayArgYMD()}.csv`, headers, rows)
+    logAudit({
+      accion: 'export', entidad: 'gastos',
+      descripcion: `Exportación CSV de rendición mensual ${mes} (${items.length} filas)`,
+    })
   }
 
   function exportarAnual() {
@@ -432,6 +442,10 @@ function ExportTab({ municipioId, partidasTipo }) {
       ]
     })
     csvDownload(`presupuesto-${anio}-${todayArgYMD()}.csv`, headers, rows)
+    logAudit({
+      accion: 'export', entidad: 'presupuesto_partidas',
+      descripcion: `Exportación CSV de presupuesto anual ${anio} (${rows.length} filas)`,
+    })
   }
 
   const mensualVacio = (gastosMesQ.data ?? []).length === 0

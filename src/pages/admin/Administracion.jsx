@@ -14,6 +14,7 @@ import {
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
 import StatCard from '../../components/ui/StatCard'
@@ -76,6 +77,11 @@ const estadoClass = Object.fromEntries(ESTADOS_GASTOS.map(e => [e.value, e.class
 
 function sum(rows, key = 'monto') {
   return rows.reduce((a, r) => a + Number(r[key] ?? 0), 0)
+}
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Administracion] audit log:', e.message))
 }
 
 // Exportación genérica a CSV con BOM UTF-8 para Excel
@@ -739,14 +745,20 @@ function GastosTab({ municipioId, dependencias, canApprove }) {
         <div className="flex gap-2 self-end">
           <button
             type="button"
-            onClick={() => exportarCSV(gastos, 'gastos', [
-              { label: 'Fecha', key: 'fecha' },
-              { label: 'Dependencia', key: 'dependencias.nombre' },
-              { label: 'Descripción', key: 'descripcion' },
-              { label: 'Categoría', key: 'categoria' },
-              { label: 'Monto', key: 'monto' },
-              { label: 'Estado', key: 'estado' },
-            ])}
+            onClick={() => {
+              exportarCSV(gastos, 'gastos', [
+                { label: 'Fecha', key: 'fecha' },
+                { label: 'Dependencia', key: 'dependencias.nombre' },
+                { label: 'Descripción', key: 'descripcion' },
+                { label: 'Categoría', key: 'categoria' },
+                { label: 'Monto', key: 'monto' },
+                { label: 'Estado', key: 'estado' },
+              ])
+              logAudit({
+                accion: 'export', entidad: 'gastos',
+                descripcion: `Exportación CSV de gastos (${gastos.length} filas)`,
+              })
+            }}
             className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={gastos.length === 0}
           >
@@ -906,12 +918,18 @@ function IngresosTab({ municipioId }) {
         <div className="flex gap-2 self-end">
           <button
             type="button"
-            onClick={() => exportarCSV(ingresos, 'ingresos', [
-              { label: 'Fecha', key: 'fecha' },
-              { label: 'Origen', key: 'origen' },
-              { label: 'Descripción', key: 'descripcion' },
-              { label: 'Monto', key: 'monto' },
-            ])}
+            onClick={() => {
+              exportarCSV(ingresos, 'ingresos', [
+                { label: 'Fecha', key: 'fecha' },
+                { label: 'Origen', key: 'origen' },
+                { label: 'Descripción', key: 'descripcion' },
+                { label: 'Monto', key: 'monto' },
+              ])
+              logAudit({
+                accion: 'export', entidad: 'ingresos',
+                descripcion: `Exportación CSV de ingresos (${ingresos.length} filas)`,
+              })
+            }}
             className="inline-flex items-center gap-2 rounded-lg border-2 border-primary bg-white px-4 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={ingresos.length === 0}
           >

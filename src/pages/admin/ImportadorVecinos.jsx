@@ -1,7 +1,13 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import Spinner from '../../components/ui/Spinner'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[ImportadorVecinos] audit log:', e.message))
+}
 
 // ─── Schema fields ────────────────────────────────────────────────────────────
 const SCHEMA_FIELDS = [
@@ -621,6 +627,14 @@ export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
       const allVecinos = [...existingVecinos, ...newVecinos]
       const fuzzyPairs  = detectFuzzyDuplicates(allVecinos)
       setImportResult({ inserted, updated, skipped, errors, needsReview, fuzzyPairs })
+      // Resumen agregado — loguear fila por fila sería impráctico
+      // para importaciones de cientos de vecinos.
+      logAudit({
+        accion: inserted > 0 ? 'create' : 'update',
+        entidad: 'vecinos',
+        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualización${updated === 1 ? '' : 'es'}`,
+        metadata: { inserted, updated, skipped, errors, needsReview },
+      })
       onDone?.(newVecinos)
     }
   }

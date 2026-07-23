@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import {
   useBienesPatrimonio, useCreateBien, useUpdateBien,
   useMantenimientos, useCreateMantenimiento, useResumenPatrimonio,
@@ -370,6 +371,10 @@ function SegurosTab({ municipioId, dependencias }) {
       { label: 'Observaciones', get: b => b.observaciones ?? '' },
     ]
     descargarCsv(`patrimonio-${todayArgYMD()}.csv`, bienes, cols)
+    logAudit({
+      accion: 'export', entidad: 'patrimonio_bienes',
+      descripcion: `Exportación CSV de inventario patrimonial (${bienes.length} filas)`,
+    })
   }
 
   return (
@@ -989,6 +994,11 @@ function MantenimientoFormModal({ bienId, onClose }) {
 // ─────────────────────────────────────────────────────────────────
 // CSV helpers — copia local del patrón de Auditoria.jsx
 // ─────────────────────────────────────────────────────────────────
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Patrimonio] audit log:', e.message))
+}
 
 function csvEscape(v) {
   if (v == null) return ''
