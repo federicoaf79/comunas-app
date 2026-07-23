@@ -150,34 +150,42 @@ export default function Patrimonio() {
 // KPIs compartidos (inmuebles)
 // ─────────────────────────────────────────────────────────────────
 
-function KpisInmuebles({ municipioId }) {
+// Compartido por Inmuebles y Muebles — cada uno pasa su propio `tipo`
+// para que los 4 KPIs reflejen SOLO esa categoría de bien, en vez del
+// total global del patrimonio en las 3 pestañas (hallazgo de la
+// auditoría de UX 2026-07-23). La pestaña "Seguros y valuación" es
+// la excepción intencional: por diseño muestra el patrimonio
+// completo (con o sin seguro cargado), no un tipo puntual — no se
+// tocó, calcula sus propios KPIs localmente sobre `bienes` sin filtro.
+function KpisInmuebles({ municipioId, tipo, labelTotal }) {
   const { data: resumen, isLoading } = useResumenPatrimonio(municipioId)
-  const inmuebles = resumen?.porTipo?.inmueble ?? 0
-  const conSeguro = (resumen?.segurosVigentes ?? 0) + (resumen?.segurosPorVencer ?? 0)
+  const total    = resumen?.porTipo?.[tipo] ?? 0
+  const detalle  = resumen?.porTipoDetalle?.[tipo]
+  const conSeguro = (detalle?.segurosVigentes ?? 0) + (detalle?.segurosPorVencer ?? 0)
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        label="Total inmuebles"
-        value={isLoading ? '…' : inmuebles}
+        label={labelTotal}
+        value={isLoading ? '…' : total}
         accent="primary"
       />
       <StatCard
         label="Valor fiscal total"
-        value={isLoading ? '…' : fmtMoney.format(resumen?.valorFiscalTotal ?? 0)}
-        hint="Suma de todos los bienes"
+        value={isLoading ? '…' : fmtMoney.format(detalle?.valorFiscalTotal ?? 0)}
+        hint="Suma de bienes de esta categoría"
         accent="accent"
       />
       <StatCard
         label="Con seguro activo"
         value={isLoading ? '…' : conSeguro}
-        hint={`${resumen?.segurosPorVencer ?? 0} por vencer`}
+        hint={`${detalle?.segurosPorVencer ?? 0} por vencer`}
         accent="ok"
       />
       <StatCard
         label="Requieren atención"
-        value={isLoading ? '…' : (resumen?.requierenAtencion ?? 0)}
+        value={isLoading ? '…' : (detalle?.requierenAtencion ?? 0)}
         hint="Estado regular o malo"
-        accent={resumen?.requierenAtencion > 0 ? 'danger' : 'primary'}
+        accent={(detalle?.requierenAtencion ?? 0) > 0 ? 'danger' : 'primary'}
       />
     </div>
   )
@@ -198,7 +206,7 @@ function InmueblesTab({ municipioId, dependencias }) {
 
   return (
     <div className="space-y-5">
-      <KpisInmuebles municipioId={municipioId} />
+      <KpisInmuebles municipioId={municipioId} tipo="inmueble" labelTotal="Total inmuebles" />
 
       <div className="flex justify-end">
         <Button onClick={() => setModalNew(true)}>+ Registrar inmueble</Button>
@@ -244,12 +252,6 @@ function MueblesTab({ municipioId, dependencias }) {
   const [modalNew, setModalNew] = useState(false)
   const [detalle, setDetalle]   = useState(null)
 
-  // KPIs del subset "muebles" usan el resumen global filtrado por
-  // tipo — el resumen ya viene desglosado por tipo así que no hace
-  // falta otra query.
-  const { data: resumen, isLoading: lr } = useResumenPatrimonio(municipioId)
-  const totalMuebles = resumen?.porTipo?.equipamiento ?? 0
-
   return (
     <div className="space-y-5">
       <div className="rounded-md border border-primary-100 bg-primary-50/60 p-3 text-xs text-primary-700">
@@ -262,27 +264,7 @@ function MueblesTab({ municipioId, dependencias }) {
         computación, maquinaria menor, etc).
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total muebles" value={lr ? '…' : totalMuebles} accent="primary" />
-        <StatCard
-          label="Valor fiscal total"
-          value={lr ? '…' : fmtMoney.format(resumen?.valorFiscalTotal ?? 0)}
-          hint="Suma global del patrimonio"
-          accent="accent"
-        />
-        <StatCard
-          label="Con seguro activo"
-          value={lr ? '…' : ((resumen?.segurosVigentes ?? 0) + (resumen?.segurosPorVencer ?? 0))}
-          hint={`${resumen?.segurosPorVencer ?? 0} por vencer`}
-          accent="ok"
-        />
-        <StatCard
-          label="Requieren atención"
-          value={lr ? '…' : (resumen?.requierenAtencion ?? 0)}
-          hint="Estado regular o malo"
-          accent={resumen?.requierenAtencion > 0 ? 'danger' : 'primary'}
-        />
-      </div>
+      <KpisInmuebles municipioId={municipioId} tipo="equipamiento" labelTotal="Total muebles" />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="w-full sm:max-w-xs">

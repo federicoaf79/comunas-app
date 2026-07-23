@@ -238,9 +238,20 @@ export function useCreateMantenimiento() {
 // Resumen — KPIs del módulo Patrimonio
 // ─────────────────────────────────────────────────────────────────
 
+// `porTipoDetalle` desglosa los mismos 4 KPIs por tipo de bien
+// (inmueble/equipamiento/vehiculo) — antes solo `porTipo` (el conteo)
+// se calculaba por tipo, y las pestañas de Patrimonio.jsx usaban los
+// totales GLOBALES (valorFiscalTotal, segurosVigentes, etc.) sin
+// importar la pestaña activa, mostrando el mismo número en Inmuebles
+// y en Muebles (hallazgo de la auditoría de UX 2026-07-23).
+function emptyDetalle() {
+  return { valorFiscalTotal: 0, segurosVigentes: 0, segurosPorVencer: 0, segurosVencidos: 0, requierenAtencion: 0 }
+}
+
 async function fetchResumen(municipioId) {
   const empty = {
     porTipo:           {},
+    porTipoDetalle:    {},
     total:             0,
     valorFiscalTotal:  0,
     segurosVigentes:   0,
@@ -259,22 +270,24 @@ async function fetchResumen(municipioId) {
   }
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-  const out = { ...empty, porTipo: {} }
+  const out = { ...empty, porTipo: {}, porTipoDetalle: {} }
   for (const r of (data ?? [])) {
     const tipo = (r.tipo ?? '').toLowerCase()
     out.porTipo[tipo] = (out.porTipo[tipo] ?? 0) + 1
+    const det = out.porTipoDetalle[tipo] ?? (out.porTipoDetalle[tipo] = emptyDetalle())
     out.total += 1
     out.valorFiscalTotal += Number(r.valor_fiscal ?? 0)
+    det.valorFiscalTotal += Number(r.valor_fiscal ?? 0)
     if (r.seguro_vencimiento) {
       const v = new Date(r.seguro_vencimiento)
       const dias = Math.floor((v.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      if (dias < 0)        out.segurosVencidos  += 1
-      else if (dias <= 30) out.segurosPorVencer += 1
-      else                 out.segurosVigentes  += 1
+      if (dias < 0)        { out.segurosVencidos  += 1; det.segurosVencidos  += 1 }
+      else if (dias <= 30) { out.segurosPorVencer += 1; det.segurosPorVencer += 1 }
+      else                 { out.segurosVigentes  += 1; det.segurosVigentes  += 1 }
     }
     // "Requieren atención" agrupa estados malo/regular y bienes con
     // seguro vencido — la dirección debería revisar estos primero.
-    if (r.estado === 'malo' || r.estado === 'regular') out.requierenAtencion += 1
+    if (r.estado === 'malo' || r.estado === 'regular') { out.requierenAtencion += 1; det.requierenAtencion += 1 }
   }
   return out
 }
