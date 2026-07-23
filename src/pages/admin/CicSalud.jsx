@@ -375,7 +375,11 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
                     {prof?.especialidad || 'Sin especialidad'} · {prof?.nombre || 'Sin profesional'}
                   </p>
                   <p className="text-xs text-primary-400">
-                    {timeOf(t.fecha_hora)} {t.motivo && `· ${t.motivo}`}
+                    {/* turnos_agenda no tiene columna fecha_hora — solo fecha +
+                        hora_inicio por separado (mismo fix que la Vista Semana
+                        de más arriba, que arma eventosCalendario aparte). */}
+                    {timeOf(t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined)}
+                    {' '}{t.motivo && `· ${t.motivo}`}
                   </p>
                 </div>
                 {tieneOrden && (
