@@ -129,10 +129,8 @@ export default function Odontologia() {
   const fechaDesde = ymdLocal(semanaInicio)
   const fechaHasta = ymdLocal(addDays(semanaInicio, 6))
   const { data: turnosRaw = [], isLoading: loadingTurnos } = useTurnos(
-    municipioId,
-    depOdonto?.id,
-    fechaDesde,
-    fechaHasta
+    { dependenciaId: depOdonto?.id, fechaFrom: fechaDesde, fechaTo: fechaHasta },
+    { municipioIdOverride: municipioId },
   )
 
   // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio

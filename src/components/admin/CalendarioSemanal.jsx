@@ -64,8 +64,13 @@ const _ymdArgFmt = new Intl.DateTimeFormat('en-CA', {
   timeZone: ARG_TZ,
   year: 'numeric', month: '2-digit', day: '2-digit',
 })
+// Devuelve null (en vez de tirar RangeError) si `d` no resuelve a una
+// fecha válida — un iso malformado no debe crashear el calendario, solo
+// hace que ese evento no matchee ninguna columna y quede afuera en silencio.
 function ymdArg(d) {
-  return _ymdArgFmt.format(d instanceof Date ? d : new Date(d))
+  const date = d instanceof Date ? d : new Date(d)
+  if (isNaN(date)) return null
+  return _ymdArgFmt.format(date)
 }
 
 // Minutos desde el inicio del calendario (07:00). timeOf() ya
