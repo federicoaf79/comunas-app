@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useAtenciones] audit log:', e.message))
+}
 
 // =============================================================
 // useAtenciones — asiento clínico de la Sala Primeros Auxilios.
@@ -136,14 +142,26 @@ async function createAtencion(data) {
   const { data: row, error } = await supabase
     .from('atenciones').insert(payload).select(ATENCION_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'atenciones', entidadId: row.id,
+    descripcion: `Atención abierta — ${row.vecino?.nombre_completo ?? row.vecino_id} (${row.motivo ?? 'sin motivo'})`,
+  })
   return row
 }
 
+// metadata solo lista los campos tocados (Object.keys), nunca su
+// contenido — diagnóstico/tratamiento/indicaciones son datos
+// clínicos sensibles.
 async function updateAtencion({ id, ...patch }) {
   patch.updated_at = new Date().toISOString()
   const { data: row, error } = await supabase
     .from('atenciones').update(patch).eq('id', id).select(ATENCION_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'atenciones', entidadId: id,
+    descripcion: `Atención actualizada — ${row.vecino?.nombre_completo ?? id}`,
+    metadata: { campos: Object.keys(patch).filter(k => k !== 'updated_at') },
+  })
   return row
 }
 
@@ -223,6 +241,11 @@ async function closeAtencion({ atencionId, registradoPor, estado = 'cerrada' }) 
       .from('turnos_agenda').update({ estado: 'atendido' }).eq('id', atencion.turno_id)
     if (tErr) console.warn('[useAtenciones] update turno→atendido falló:', tErr.message)
   }
+
+  logAudit({
+    accion: 'update', entidad: 'atenciones', entidadId: atencionId,
+    descripcion: `Atención ${estado} — ${cerrada.vecino?.nombre_completo ?? atencionId}${errores.length ? ` (${errores.length} insumo(s) con error de descuento)` : ''}`,
+  })
 
   return { atencion: cerrada, errores }
 }
