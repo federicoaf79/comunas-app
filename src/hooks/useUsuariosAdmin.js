@@ -1,5 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useUsuariosAdmin] audit log:', e.message))
+}
 
 // =============================================================
 // useUsuariosAdmin — mutaciones del panel /admin/usuarios.
@@ -40,6 +46,11 @@ export async function updateDependenciasAcceso(id, dependencias_acceso) {
   if (!data || data.length === 0) {
     throw new Error('No se pudo guardar (RLS o usuario no editable). Revisá las policies de UPDATE en usuarios.')
   }
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `Permisos por dependencia actualizados (${sanitized.length} dependencia${sanitized.length === 1 ? '' : 's'})`,
+    metadata: { dependencias_acceso: sanitized },
+  })
   return data[0]
 }
 

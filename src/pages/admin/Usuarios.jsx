@@ -5,6 +5,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useUpdatePermisosUsuario } from '../../hooks/useUsuariosAdmin'
+import { createAuditLog } from '../../hooks/useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[Usuarios] audit log:', e.message))
+}
 import Avatar from '../../components/ui/Avatar'
 import Spinner from '../../components/ui/Spinner'
 import Select from '../../components/ui/Select'
@@ -91,19 +97,31 @@ async function fetchUsuarios(municipioId) {
 }
 
 async function updateUsuarioRol(id, nuevoRol) {
-  const { error } = await supabase
+  const { data: row, error } = await supabase
     .from('usuarios')
     .update({ roles: [nuevoRol] })
     .eq('id', id)
+    .select('nombre, email')
+    .single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `Rol actualizado — ${row?.nombre ?? row?.email ?? id} → ${nuevoRol}`,
+  })
 }
 
 async function toggleUsuarioActivo(id, activo) {
-  const { error } = await supabase
+  const { data: row, error } = await supabase
     .from('usuarios')
     .update({ activo })
     .eq('id', id)
+    .select('nombre, email')
+    .single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `${activo ? 'Activación' : 'Desactivación'} de usuario — ${row?.nombre ?? row?.email ?? id}`,
+  })
 }
 
 async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id }) {
@@ -121,6 +139,10 @@ async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id
 
   const data = await response.json()
   if (!response.ok) throw new Error(data.error)
+  logAudit({
+    accion: 'create', entidad: 'usuarios', entidadId: data.userId,
+    descripcion: `Alta de usuario — ${nombre} (${email}), rol ${rol}`,
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────
