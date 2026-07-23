@@ -50,25 +50,6 @@ function clearCachedPerfil() {
   try { sessionStorage.removeItem(PERFIL_CACHE_KEY) } catch { /* no-op */ }
 }
 
-// Mismo storage key que VecinoContext.jsx (STORAGE_KEY) — duplicado
-// a propósito para no acoplar los dos contextos con un import
-// cruzado. Si un vecino ya inició sesión por Supabase Auth, esa
-// sesión queda cacheada acá con auth_mode:'supabase'. La usamos para
-// saltear la consulta a 'usuarios' (que para estas cuentas siempre
-// devuelve 406 — 0 filas — porque un vecino no tiene perfil de staff).
-const VECINO_SESSION_KEY = 'comunas_vecino_session'
-
-function isVecinoAuthSession(userId) {
-  try {
-    const raw = localStorage.getItem(VECINO_SESSION_KEY)
-    if (!raw) return false
-    const obj = JSON.parse(raw)
-    return obj?.auth_mode === 'supabase' && obj?.user_id === userId
-  } catch {
-    return false
-  }
-}
-
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [perfil, setPerfil]   = useState(null)
@@ -82,17 +63,16 @@ export function AuthProvider({ children }) {
   const noPerfilCache = useRef(new Set())
 
   const fetchPerfil = useCallback(async (userId) => {
-    // Si ya sabemos que este usuario NO tiene perfil, retornar null
-    // inmediatamente sin hacer la query. Esto evita errores 406
-    // repetidos en consola para sesiones de vecino.
+    // Si ya sabemos que este usuario NO tiene perfil (porque una
+    // consulta real anterior devolvió "no rows"), retornar null
+    // inmediatamente sin repetir la query. Esto evita errores 406
+    // repetidos en consola para sesiones de vecino puro — pero solo
+    // después de haber confirmado con una consulta real, nunca de
+    // antemano. Una cuenta puede ser staff Y vecino a la vez (caso
+    // normal del producto, no la excepción) — adivinar "es vecino
+    // → no puede ser staff" rompía el acceso al panel admin para esas
+    // cuentas duales.
     if (noPerfilCache.current.has(userId)) {
-      return null
-    }
-    // Vecino ya identificado por VecinoContext (sesión Supabase Auth
-    // con auth_mode:'supabase' en localStorage) — se sabe de antemano
-    // que no tiene perfil de staff, así que ni siquiera consultamos.
-    if (isVecinoAuthSession(userId)) {
-      noPerfilCache.current.add(userId)
       return null
     }
     // Query 1: perfil base, sin joins. Sin envoltorio de timeout —
