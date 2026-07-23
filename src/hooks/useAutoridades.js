@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { supabaseAnon } from '../lib/supabaseAnon'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useAutoridades] audit log:', e.message))
+}
 
 // =============================================================
 // useAutoridades — hooks para la sección "Autoridades de la
@@ -108,6 +114,10 @@ export function useCreateAutoridad({ municipioIdOverride } = {}) {
         .select()
         .single()
       if (error) throw error
+      logAudit({
+        accion: 'create', entidad: 'autoridades', entidadId: data.id,
+        descripcion: `Alta de autoridad — ${data.nombre} (${data.cargo})`,
+      })
       return data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['autoridades'] }),
@@ -125,6 +135,10 @@ export function useUpdateAutoridad() {
         .select()
         .single()
       if (error) throw error
+      logAudit({
+        accion: 'update', entidad: 'autoridades', entidadId: id,
+        descripcion: `Autoridad actualizada — ${data.nombre}`,
+      })
       return data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['autoridades'] }),
@@ -137,6 +151,10 @@ export function useDeleteAutoridad() {
     mutationFn: async (id) => {
       const { error } = await supabase.from('autoridades').delete().eq('id', id)
       if (error) throw error
+      logAudit({
+        accion: 'delete', entidad: 'autoridades', entidadId: id,
+        descripcion: `Autoridad eliminada (${id})`,
+      })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['autoridades'] }),
   })

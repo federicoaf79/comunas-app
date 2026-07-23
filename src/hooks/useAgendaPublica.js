@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useAgendaPublica] audit log:', e.message))
+}
 
 // Helper: Date → YYYY-MM-DD en TZ Argentina
 const fmtDateArg = (d) => new Intl.DateTimeFormat('en-CA', {
@@ -132,11 +138,19 @@ export function useUpsertAgendaPublica() {
         const { data, error } = await supabase.from('agenda_publica')
           .update(fields).eq('id', id).select(COLS_ADMIN).single()
         if (error) throw error
+        logAudit({
+          accion: 'update', entidad: 'agenda_publica', entidadId: data.id,
+          descripcion: `Evento de agenda pública actualizado — ${data.titulo}`,
+        })
         return data
       }
       const { data, error } = await supabase.from('agenda_publica')
         .insert({ municipio_id, ...fields }).select(COLS_ADMIN).single()
       if (error) throw error
+      logAudit({
+        accion: 'create', entidad: 'agenda_publica', entidadId: data.id,
+        descripcion: `Evento de agenda pública creado — ${data.titulo}`,
+      })
       return data
     },
     onSuccess: () => {
@@ -152,6 +166,10 @@ export function useDeleteAgendaPublica() {
     mutationFn: async (id) => {
       const { error } = await supabase.from('agenda_publica').delete().eq('id', id)
       if (error) throw error
+      logAudit({
+        accion: 'delete', entidad: 'agenda_publica', entidadId: id,
+        descripcion: `Evento de agenda pública eliminado (${id})`,
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['agenda-publica'] })

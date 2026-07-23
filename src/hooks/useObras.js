@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+// Independiente de `obras_historial` (historial contextual por obra,
+// visible en el detalle) — audit_log es el trail global de /admin/auditoria.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useObras] audit log:', e.message))
+}
 
 // =============================================================
 // useObras — listado de obras públicas + historial de cambios.
@@ -177,6 +185,10 @@ async function createObra({ payload, usuarioId }) {
         avanceNuevo:   retry.data.porcentaje_avance,
         nota:          'Obra creada.',
       })
+      logAudit({
+        accion: 'create', entidad: 'obras', entidadId: retry.data.id,
+        descripcion: `Obra creada — ${retry.data.nombre ?? retry.data.id}`,
+      })
       return retry.data
     }
     throw error
@@ -187,6 +199,10 @@ async function createObra({ payload, usuarioId }) {
     estadoNuevo: data.estado,
     avanceNuevo: data.porcentaje_avance,
     nota:        'Obra creada.',
+  })
+  logAudit({
+    accion: 'create', entidad: 'obras', entidadId: data.id,
+    descripcion: `Obra creada — ${data.nombre ?? data.id}`,
   })
   return data
 }
@@ -228,6 +244,10 @@ async function updateObra({ id, patch, prev, usuarioId, nota }) {
       nota:            nota || buildNotaAutomatica({ cambioEstado, cambioAvance }),
     })
   }
+  logAudit({
+    accion: 'update', entidad: 'obras', entidadId: id,
+    descripcion: `Obra actualizada — ${data.nombre ?? id}`,
+  })
   return data
 }
 

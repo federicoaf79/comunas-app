@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { createAuditLog } from '../../hooks/useAuditLog'
 import Spinner from '../../components/ui/Spinner'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[GestionDependencias] audit log:', e.message))
+}
 
 function Toggle({ checked, onChange, disabled }) {
   return (
@@ -45,6 +51,7 @@ export default function GestionDependencias() {
   }, [municipioId])
 
   async function updateField(id, field, value) {
+    const dep = deps.find(d => d.id === id)
     setDeps(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d))
     setSaving(prev => ({ ...prev, [id]: true }))
     setOk(prev => ({ ...prev, [id]: false }))
@@ -52,6 +59,10 @@ export default function GestionDependencias() {
     setSaving(prev => ({ ...prev, [id]: false }))
     setOk(prev => ({ ...prev, [id]: true }))
     setTimeout(() => setOk(prev => ({ ...prev, [id]: false })), 2000)
+    logAudit({
+      accion: 'update', entidad: 'dependencias', entidadId: id,
+      descripcion: `Dependencia "${dep?.nombre ?? id}" — ${field} → ${value}`,
+    })
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>

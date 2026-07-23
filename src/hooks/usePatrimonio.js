@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[usePatrimonio] audit log:', e.message))
+}
 
 // =============================================================
 // usePatrimonio — bienes patrimoniales del municipio + historial
@@ -136,6 +142,10 @@ async function createBien(data) {
   const { data: row, error } = await supabase
     .from('bienes_patrimonio').insert(data).select(BIEN_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'bienes_patrimonio', entidadId: row.id,
+    descripcion: `Alta de bien patrimonial — ${row.nombre ?? row.id}`,
+  })
   return row
 }
 
@@ -143,6 +153,10 @@ async function updateBien({ id, ...patch }) {
   const { data: row, error } = await supabase
     .from('bienes_patrimonio').update(patch).eq('id', id).select(BIEN_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'bienes_patrimonio', entidadId: id,
+    descripcion: `Bien patrimonial actualizado — ${row.nombre ?? id}`,
+  })
   return row
 }
 
@@ -197,6 +211,10 @@ async function createMantenimiento(data) {
   const { data: row, error } = await supabase
     .from('patrimonio_mantenimiento').insert(data).select(MANT_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'patrimonio_mantenimiento', entidadId: row.id,
+    descripcion: `Mantenimiento registrado — bien ${row.bien_id}`,
+  })
   return row
 }
 

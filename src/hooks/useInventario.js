@@ -340,12 +340,20 @@ async function createInventarioItem(data) {
   const { data: row, error } = await supabase
     .from('inventario').insert(data).select(INV_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'inventario', entidadId: row.id,
+    descripcion: `Alta de ítem de inventario — ${row.nombre ?? row.id}`,
+  })
   return row
 }
 async function updateInventarioItem({ id, ...patch }) {
   const { data: row, error } = await supabase
     .from('inventario').update(patch).eq('id', id).select(INV_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'inventario', entidadId: id,
+    descripcion: `Ítem de inventario actualizado — ${row.nombre ?? id}`,
+  })
   return row
 }
 
@@ -408,6 +416,10 @@ async function createMovimiento({ inventarioId, tipo, cantidad, motivo, registra
   const { data: mov, error: movErr } = await supabase
     .from('movimientos_inventario').insert(payload).select(MOV_COLS).single()
   if (movErr) throw movErr
+  logAudit({
+    accion: 'create', entidad: 'movimientos_inventario', entidadId: mov.id,
+    descripcion: `Movimiento de inventario (${tipo}) — cantidad ${cantidad}`,
+  })
   return mov
 }
 

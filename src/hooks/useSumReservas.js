@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { monthRange } from './useAdministracion'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useSumReservas] audit log:', e.message))
+}
 
 // =============================================================
 // useSumReservas — reservas del Salón de Usos Múltiples.
@@ -105,6 +111,10 @@ export async function createSumReserva(data) {
     console.error('[useSumReservas] createSumReserva error:', error)
     throw error
   }
+  logAudit({
+    accion: 'create', entidad: 'sum_reservas', entidadId: row.id,
+    descripcion: `Reserva de SUM — ${row.solicitante ?? row.id} (${row.fecha})`,
+  })
   return row
 }
 
@@ -119,6 +129,10 @@ export async function updateSumReservaEstado(id, estado) {
     console.error('[useSumReservas] updateSumReservaEstado error:', error)
     throw error
   }
+  logAudit({
+    accion: 'update', entidad: 'sum_reservas', entidadId: id,
+    descripcion: `Reserva de SUM "${row.solicitante ?? id}" → ${estado}`,
+  })
   return row
 }
 

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useDominios] audit log:', e.message))
+}
 
 // =============================================================
 // useDominios — gestión de dominios/subdominios vinculados a
@@ -34,6 +40,10 @@ export function useCreateDominio() {
         .from('dominios_municipio')
         .insert(data)
       if (error) throw error
+      logAudit({
+        accion: 'create', entidad: 'dominios_municipio',
+        descripcion: `Dominio vinculado — ${data.dominio ?? 'sin nombre'}`,
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['dominios'] })
@@ -50,6 +60,10 @@ export function useUpdateDominio() {
         .update(updates)
         .eq('id', id)
       if (error) throw error
+      logAudit({
+        accion: 'update', entidad: 'dominios_municipio', entidadId: id,
+        descripcion: `Dominio actualizado (${id})`,
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['dominios'] })
@@ -66,6 +80,10 @@ export function useDeleteDominio() {
         .delete()
         .eq('id', id)
       if (error) throw error
+      logAudit({
+        accion: 'delete', entidad: 'dominios_municipio', entidadId: id,
+        descripcion: `Dominio eliminado (${id})`,
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['dominios'] })

@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useExpedientes] audit log:', e.message))
+}
 
 // =============================================================
 // useExpedientes — expedientes administrados por Juez de Paz.
@@ -82,6 +88,10 @@ export async function createExpediente(data) {
     console.error('[useExpedientes] createExpediente error:', error)
     throw error
   }
+  logAudit({
+    accion: 'create', entidad: 'expedientes_juzgado', entidadId: row.id,
+    descripcion: `Expediente abierto — ${row.caratula ?? row.numero ?? row.id}`,
+  })
   return row
 }
 
@@ -96,6 +106,10 @@ export async function updateExpediente(id, patch) {
     console.error('[useExpedientes] updateExpediente error:', error)
     throw error
   }
+  logAudit({
+    accion: 'update', entidad: 'expedientes_juzgado', entidadId: id,
+    descripcion: `Expediente actualizado — ${row.caratula ?? row.numero ?? id}`,
+  })
   return row
 }
 

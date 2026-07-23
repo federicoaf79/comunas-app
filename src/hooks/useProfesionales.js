@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useProfesionales] audit log:', e.message))
+}
 
 const COLS = 'id, nombre, especialidad, matricula, telefono, email, dias_atencion, hora_desde, hora_hasta, frecuencia_nota, activo, dependencia_id, municipio_id, es_medico_general'
 
@@ -125,11 +131,19 @@ export function useUpsertProfesional() {
           .update(fields).eq('id', id).select(COLS).single()
         if (error) throw error
         profesional = data
+        logAudit({
+          accion: 'update', entidad: 'profesionales', entidadId: profesional.id,
+          descripcion: `Profesional actualizado — ${profesional.nombre}`,
+        })
       } else {
         const { data, error } = await supabase.from('profesionales')
           .insert({ municipio_id, dependencia_id, ...fields }).select(COLS).single()
         if (error) throw error
         profesional = data
+        logAudit({
+          accion: 'create', entidad: 'profesionales', entidadId: profesional.id,
+          descripcion: `Alta de profesional — ${profesional.nombre}`,
+        })
       }
 
       // Sincronizar con agenda_publica
@@ -151,6 +165,10 @@ export function useDeleteProfesional() {
     mutationFn: async (id) => {
       const { error } = await supabase.from('profesionales').delete().eq('id', id)
       if (error) throw error
+      logAudit({
+        accion: 'delete', entidad: 'profesionales', entidadId: id,
+        descripcion: `Profesional eliminado (${id})`,
+      })
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['profesionales'] }),
   })

@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { usePortalConfigBundle } from './useConfigPortal'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useHistoriaMunicipio] audit log:', e.message))
+}
 
 // =============================================================
 // useHistoriaMunicipio — clave `historia_municipio` en
@@ -105,6 +111,10 @@ export function useUpdateHistoria({ municipioIdOverride } = {}) {
           { onConflict: 'municipio_id,clave' },
         )
       if (error) throw error
+      logAudit({
+        accion: 'update', entidad: 'configuracion_portal', entidadId: municipioId,
+        descripcion: 'Historia del municipio actualizada',
+      })
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['historia-municipio'] })

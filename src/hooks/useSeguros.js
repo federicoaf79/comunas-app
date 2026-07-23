@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useSeguros] audit log:', e.message))
+}
 
 // =============================================================
 // useSeguros — gestión de pólizas de seguros y elementos cubiertos
@@ -159,6 +165,10 @@ async function createSeguro(data) {
   const { data: row, error } = await supabase
     .from('seguros').insert(data).select(SEG_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'seguros', entidadId: row.id,
+    descripcion: `Alta de póliza — ${row.compania ?? ''} ${row.numero_poliza ?? row.id}`,
+  })
   return row
 }
 
@@ -166,6 +176,10 @@ async function updateSeguro({ id, ...data }) {
   const { error } = await supabase
     .from('seguros').update(data).eq('id', id)
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'seguros', entidadId: id,
+    descripcion: `Póliza actualizada (${id})`,
+  })
 }
 
 async function deleteSeguro(id) {
@@ -178,6 +192,10 @@ async function deleteSeguro(id) {
   const { error } = await supabase
     .from('seguros').delete().eq('id', id)
   if (error) throw error
+  logAudit({
+    accion: 'delete', entidad: 'seguros', entidadId: id,
+    descripcion: `Póliza eliminada (${id})`,
+  })
 }
 
 async function addSeguroItem(data) {

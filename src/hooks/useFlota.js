@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useFlota] audit log:', e.message))
+}
 
 // =============================================================
 // useFlota — vehículos, combustible y service
@@ -147,6 +153,10 @@ async function createVehiculo(data) {
   const { data: row, error } = await supabase
     .from('vehiculos').insert(data).select(VEH_COLS).single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'vehiculos', entidadId: row.id,
+    descripcion: `Alta de vehículo — ${row.patente ?? row.id}`,
+  })
   return row
 }
 
@@ -160,6 +170,10 @@ async function createCombustible(data) {
   if (data.km_al_cargar) {
     await maybeBumpKm(data.vehiculo_id, Number(data.km_al_cargar))
   }
+  logAudit({
+    accion: 'create', entidad: 'combustible_log', entidadId: row.id,
+    descripcion: `Carga de combustible — vehículo ${row.vehiculo?.patente ?? data.vehiculo_id}`,
+  })
   return row
 }
 
@@ -170,6 +184,10 @@ async function createService(data) {
   if (data.km_al_service) {
     await maybeBumpKm(data.vehiculo_id, Number(data.km_al_service))
   }
+  logAudit({
+    accion: 'create', entidad: 'service_vehiculos', entidadId: row.id,
+    descripcion: `Service registrado — vehículo ${row.vehiculo?.patente ?? data.vehiculo_id}`,
+  })
   return row
 }
 
@@ -187,12 +205,20 @@ async function updateVehiculoKm({ id, km }) {
   const { error } = await supabase
     .from('vehiculos').update({ km_actuales: km }).eq('id', id)
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'vehiculos', entidadId: id,
+    descripcion: `Kilometraje actualizado — ${km} km`,
+  })
 }
 
 async function updateVehiculo({ id, ...data }) {
   const { error } = await supabase
     .from('vehiculos').update(data).eq('id', id)
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'vehiculos', entidadId: id,
+    descripcion: `Vehículo actualizado (${id})`,
+  })
 }
 
 export function useCreateVehiculo() {
