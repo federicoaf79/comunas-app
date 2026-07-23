@@ -632,7 +632,7 @@ export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
       logAudit({
         accion: inserted > 0 ? 'create' : 'update',
         entidad: 'vecinos',
-        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualización${updated === 1 ? '' : 'es'}`,
+        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualizaci${updated === 1 ? 'ón' : 'ones'}`,
         metadata: { inserted, updated, skipped, errors, needsReview },
       })
       onDone?.(newVecinos)
