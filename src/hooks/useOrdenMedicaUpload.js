@@ -31,10 +31,10 @@ export function useOrdenMedicaUpload() {
         .from('documentos-hc')
         .getPublicUrl(filePath)
 
-      // Obtener usuario autenticado para validada_por
-      const { data: { user } } = await supabase.auth.getUser()
-
-      // Crear registro en ordenes_derivacion
+      // Crear registro en ordenes_derivacion — validada_por queda en su
+      // default/null hasta que el staff la valide de verdad en
+      // validarOrden() (CicSalud.jsx). No completar acá: quien sube el
+      // archivo es el vecino, no quien la valida.
       const { error: insertError } = await supabase
         .from('ordenes_derivacion')
         .insert({
@@ -44,7 +44,6 @@ export function useOrdenMedicaUpload() {
           archivo_url: publicUrl,
           archivo_nombre: file.name,
           estado: 'pendiente',
-          validada_por: user?.id || null,
         })
 
       if (insertError) throw insertError
