@@ -4,7 +4,13 @@ import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import { useQueryClient } from '@tanstack/react-query'
-import { todayArgYMD, shortDateOf, timeOf } from '../../lib/datetime'
+import { todayArgYMD, shortDateOf, ARG_OFFSET } from '../../lib/datetime'
+
+// turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
+// por separado (mismo fix que CicSalud.jsx).
+function combinarFechaHora(t) {
+  return t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined
+}
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
@@ -145,7 +151,7 @@ function TurnosDiaTab({ depJuez, onOpenNuevo }) {
   }
 
   const ordenados = (turnos ?? []).slice().sort((a, b) =>
-    (a.fecha_hora ?? '').localeCompare(b.fecha_hora ?? '')
+    (a.hora_inicio ?? '').localeCompare(b.hora_inicio ?? '')
   )
 
   return (
@@ -186,7 +192,7 @@ function TurnosDiaTab({ depJuez, onOpenNuevo }) {
             {ordenados.map(t => (
               <Tr key={t.id}>
                 <Td className="whitespace-nowrap font-semibold text-primary">
-                  {timeOf(t.fecha_hora) || '—'}
+                  {t.hora_inicio || '—'}
                   {t.numero_turno && (
                     <span className="ml-1 text-xs font-normal text-primary-400">#{t.numero_turno}</span>
                   )}
@@ -240,7 +246,7 @@ function AgendaSemanalTab({ depJuez }) {
   const eventos = useMemo(() => (turnos ?? []).map(t => ({
     id:          t.id,
     tipo:        'turno_juez',
-    fecha_hora:  t.fecha_hora,
+    fecha_hora:  combinarFechaHora(t),
     titulo:      vecinoNombre(t.vecino),
     subtitulo:   t.motivo || 'Juzgado de Paz',
     estado:      t.estado,

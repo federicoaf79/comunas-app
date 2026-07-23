@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
-import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
+import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
@@ -135,7 +135,13 @@ export default function Odontologia() {
     fechaHasta
   )
 
-  const turnos = useMemo(() => turnosRaw.filter(Boolean), [turnosRaw])
+  // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
+  // por separado. Se combinan acá (mismo fix que CicSalud.jsx); antes se
+  // leía t.fecha_hora directo, que siempre era undefined.
+  const turnos = useMemo(() => turnosRaw.filter(Boolean).map(t => ({
+    ...t,
+    fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
+  })), [turnosRaw])
   const hoy = todayArgYMD()
 
   // Métricas del día
@@ -161,7 +167,7 @@ export default function Odontologia() {
         : 'Sin vecino'
       return {
         id:          t.id,
-        start:       t.fecha_hora,
+        fecha_hora:  t.fecha_hora,
         title:       label,
         dni:         v?.dni || '',
         telefono:    v?.telefono || '',

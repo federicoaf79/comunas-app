@@ -6,7 +6,7 @@ import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useSalaPaConfigAdmin, DEFAULT_SALA_PA_CONFIG } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
 import { useMedicoGuardia } from '../../hooks/useMedicoGuardia'
-import { shortDateOf, todayArgYMD, timeOf } from '../../lib/datetime'
+import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
 import Spinner from '../../components/ui/Spinner'
@@ -454,7 +454,9 @@ export default function SalaPrimerosAuxilios() {
               return {
                 id:          t.id,
                 tipo:        'turno_sala',
-                fecha_hora:  t.fecha_hora,
+                // turnos_agenda no tiene columna fecha_hora — combinar
+                // fecha + hora_inicio (mismo fix que CicSalud.jsx).
+                fecha_hora:  t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
                 titulo:      vecinoLabel(t),
                 subtitulo:   `${espLabel}${t.profesional?.nombre ? ' · ' + t.profesional.nombre : (t.motivo ? ' · ' + t.motivo : '')}`,
                 estado:      t.estado,
