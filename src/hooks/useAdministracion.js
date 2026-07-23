@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla
+// (red, RLS, etc.) — mismo criterio que AuthContext.signIn.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useAdministracion] audit log:', e.message))
+}
 
 // =============================================================
 // useAdministracion — gastos, ingresos y presupuesto del municipio
@@ -149,8 +156,14 @@ export async function createGasto(data) {
     console.error('[useAdministracion] createGasto error:', error)
     throw error
   }
+  logAudit({
+    accion: 'create', entidad: 'gastos', entidadId: row.id,
+    descripcion: `Alta de gasto — ${row.descripcion ?? '(sin descripción)'} ($${row.monto ?? 0})`,
+  })
   return row
 }
+
+const ESTADO_GASTO_ACCION = { aprobado: 'approve', rechazado: 'reject' }
 
 export async function updateGastoEstado(id, estado) {
   const { data: row, error } = await supabase
@@ -163,6 +176,10 @@ export async function updateGastoEstado(id, estado) {
     console.error('[useAdministracion] updateGastoEstado error:', error)
     throw error
   }
+  logAudit({
+    accion: ESTADO_GASTO_ACCION[estado] ?? 'update', entidad: 'gastos', entidadId: id,
+    descripcion: `Gasto "${row.descripcion ?? id}" → ${estado}`,
+  })
   return row
 }
 
