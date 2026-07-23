@@ -918,6 +918,7 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
   const tipoEfectivo = superaLimite ? 'cotizacion' : form.tipo
 
   const canSubmit =
+    !!form.numero.trim() &&
     !!form.dependencia_id &&
     !!form.proveedor.trim() &&
     !!form.descripcion.trim() &&
@@ -970,7 +971,7 @@ function OrdenFormModal({ municipioId, dependencias, onClose }) {
       }
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="N° de orden (opcional)" value={form.numero} onChange={e => set('numero', e.target.value)} />
+        <Input label="N° de orden" value={form.numero} onChange={e => set('numero', e.target.value)} required />
         <Select
           label="Dependencia" value={form.dependencia_id} onChange={v => set('dependencia_id', v)}
           placeholder="Seleccionar..."
