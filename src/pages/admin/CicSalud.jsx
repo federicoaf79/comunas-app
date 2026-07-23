@@ -6,6 +6,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useProfesionales } from '../../hooks/useProfesionales'
 import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import { supabase } from '../../lib/supabase'
+import { createAuditLog } from '../../hooks/useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[CicSalud] audit log:', e.message))
+}
 import Avatar from '../../components/ui/Avatar'
 import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
@@ -164,7 +170,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
     setValidandoOrden(turnoId)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      await supabase
+      const { data: ordenes } = await supabase
         .from('ordenes_derivacion')
         .update({
           estado: 'validada',
@@ -173,11 +179,19 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         })
         .eq('turno_id', turnoId)
         .eq('estado', 'pendiente')
+        .select('id')
 
       await supabase
         .from('turnos_agenda')
         .update({ estado: 'confirmado' })
         .eq('id', turnoId)
+
+      for (const orden of (ordenes ?? [])) {
+        logAudit({
+          accion: 'approve', entidad: 'ordenes_derivacion', entidadId: orden.id,
+          descripcion: `Orden de derivación validada — turno ${turnoId}`,
+        })
+      }
 
       refetchTurnos()
     } catch (e) {

@@ -13,6 +13,12 @@ import { useOrdenesDerivacionVecino } from '../../hooks/useVecinoData'
 import { updateVecino } from '../../hooks/useVecinos'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { createAuditLog } from '../../hooks/useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[AtencionDrawer] audit log:', e.message))
+}
 import { camposHCFaltantes, hcCompleta } from '../../lib/historiaClinica'
 import HistoriaClinicaForm from '../hc/HistoriaClinicaForm'
 import DerivacionCard from '../hc/DerivacionCard'
@@ -85,7 +91,7 @@ async function crearDerivacionInterna({
   especialidadDestino, diagnostico, indicaciones,
 }) {
   const nowIso = new Date().toISOString()
-  const { error } = await supabase.from('ordenes_derivacion').insert({
+  const { data: row, error } = await supabase.from('ordenes_derivacion').insert({
     municipio_id:           municipioId,
     vecino_id:              vecinoId,
     profesional_id:         profesionalId,
@@ -98,8 +104,12 @@ async function crearDerivacionInterna({
     turno_id:               null,
     validada_por:           validadaPor,
     validada_at:            nowIso,
-  })
+  }).select('id').single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'ordenes_derivacion', entidadId: row.id,
+    descripcion: `Derivación interna creada — vecino ${vecinoId} → ${especialidadDestino ?? 'especialidad no especificada'}`,
+  })
 }
 
 export default function AtencionDrawer({ turno, dependenciaSaludId, municipioId, onClose }) {
