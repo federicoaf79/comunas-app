@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useTurnosByVecino } from '../../hooks/useTurnos'
-import { dateTimeOf } from '../../lib/datetime'
+import { dateTimeOf, ARG_OFFSET } from '../../lib/datetime'
 import Spinner from '../ui/Spinner'
 import CanalBadge from '../turnos/CanalBadge'
 
@@ -26,7 +27,15 @@ const ESTADO_LABEL = {
 
 export default function VecinoTurnos() {
   const { id: vecinoId } = useParams()
-  const { turnos, isLoading, error } = useTurnosByVecino(vecinoId)
+  const { turnos: turnosRaw, isLoading, error } = useTurnosByVecino(vecinoId)
+
+  // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
+  // por separado (mismo fix ya aplicado en SalaPrimerosAuxilios.jsx /
+  // CicSalud.jsx). Sin esto, dateTimeOf(t.fecha_hora) siempre daba '—'.
+  const turnos = useMemo(() => (turnosRaw ?? []).map(t => ({
+    ...t,
+    fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
+  })), [turnosRaw])
 
   if (isLoading) {
     return (
