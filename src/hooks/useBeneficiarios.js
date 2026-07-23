@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+// Todo este archivo es staff-driven.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useBeneficiarios] audit log:', e.message))
+}
 
 // Helper: Date → YYYY-MM-DD en TZ Argentina
 const fmtDateArg = (d) => new Intl.DateTimeFormat('en-CA', {
@@ -95,6 +102,10 @@ export async function createBeneficiario(data) {
     console.error('[useBeneficiarios] createBeneficiario error:', error)
     throw error
   }
+  logAudit({
+    accion: 'create', entidad: 'beneficiarios', entidadId: row.id,
+    descripcion: `Alta de beneficiario — ${row.vecino?.nombre_completo ?? row.vecino_id} (${row.tipo_ayuda ?? row.programa ?? 'sin programa'})`,
+  })
   return row
 }
 
@@ -109,6 +120,10 @@ export async function updateBeneficiarioEstado(id, estado) {
     console.error('[useBeneficiarios] updateBeneficiarioEstado error:', error)
     throw error
   }
+  logAudit({
+    accion: 'update', entidad: 'beneficiarios', entidadId: id,
+    descripcion: `Beneficiario "${row.vecino?.nombre_completo ?? id}" → ${estado}`,
+  })
   return row
 }
 
