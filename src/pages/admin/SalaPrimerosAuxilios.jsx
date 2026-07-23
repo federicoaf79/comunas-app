@@ -390,7 +390,10 @@ export default function SalaPrimerosAuxilios() {
                         className="flex w-full flex-wrap items-start gap-3 px-5 py-3 text-left transition-colors hover:bg-primary-50/50"
                       >
                         <span className="w-14 shrink-0 text-sm font-semibold text-primary">
-                          {timeOf(t.fecha_hora) || '—'}
+                          {/* turnos_agenda no tiene columna fecha_hora — solo fecha +
+                              hora_inicio por separado (mismo fix que la Vista Semana
+                              de más abajo, línea ~459). */}
+                          {timeOf(t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined) || '—'}
                         </span>
                         <Avatar name={vecinoLabel(t)} size="sm" />
                         <div className="min-w-0 flex-1">
