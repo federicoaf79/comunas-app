@@ -14,9 +14,13 @@ import { timeOf, longDateOf, shortDateOf } from '../../lib/datetime'
 //   FOOTER  ~10%  Total, duración por turno, generado por COMUNAS,
 //                 línea de firma del médico.
 //
-// El elemento se monta siempre pero está oculto en pantalla; el
-// bloque `@media print` definido en SalaPrimerosAuxilios.jsx hace
-// visible SOLO este nodo durante la impresión.
+// El elemento se monta siempre pero está oculto en pantalla (regla
+// `.planilla-print { display: none }` co-localizada acá mismo, ver
+// abajo — no depende de que la página que lo use declare ese CSS).
+// El resto de las reglas `@media print` (posicionamiento, tipografía)
+// vive en la página que expone el botón "Imprimir" (hoy: solo
+// SalaPrimerosAuxilios.jsx) y hace visible SOLO este nodo durante
+// la impresión.
 // =============================================================
 
 // Cantidad mínima de filas que la planilla siempre muestra. Si hay
@@ -43,6 +47,8 @@ export default function PlanillaImprimir({
   dependenciaId,
   municipioId,
   duracionTurnoMin = 30,
+  dependenciaNombre = 'Sala de Primeros Auxilios',
+  subtitulo = 'CAPS',
 }) {
   // useTurnos siempre activo: el componente está mounted detrás
   // del layout y necesita los datos listos cuando el usuario
@@ -73,7 +79,16 @@ export default function PlanillaImprimir({
   const fechaLarga = longDateOf(fecha)
 
   return (
-    <div className="planilla-print" aria-hidden="true">
+    <>
+      {/* Regla base "oculto en pantalla" co-localizada con el componente:
+          no depender de que la página que lo monta declare este CSS —
+          ver hallazgo de auditoría 2026-07-23 (Odontologia.jsx montaba
+          esta planilla sin nunca ocultarla). El resto de las reglas de
+          @media print (posicionamiento, tipografía, etc.) sigue viviendo
+          en la página que expone el botón "Imprimir" (hoy solo Sala de
+          Primeros Auxilios). */}
+      <style>{`.planilla-print { display: none; }`}</style>
+      <div className="planilla-print" aria-hidden="true">
       {/* ===== HEADER ===== */}
       <header className="planilla-header">
         <div className="planilla-header-row">
@@ -83,9 +98,9 @@ export default function PlanillaImprimir({
             <div className="planilla-logo" aria-hidden="true" />
           )}
           <div className="planilla-titles">
-            <h1 className="planilla-title">SALA DE PRIMEROS AUXILIOS</h1>
+            <h1 className="planilla-title">{dependenciaNombre.toUpperCase()}</h1>
             <p className="planilla-sub">
-              CAPS — {muniNombre}
+              {subtitulo ? `${subtitulo} — ${muniNombre}` : muniNombre}
             </p>
           </div>
         </div>
@@ -184,6 +199,7 @@ export default function PlanillaImprimir({
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   )
 }

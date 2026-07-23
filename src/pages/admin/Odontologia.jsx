@@ -312,10 +312,11 @@ export default function Odontologia() {
                   + Nuevo turno
                 </button>
                 <PlanillaImprimir
-                  turnos={turnosHoy}
                   fecha={hoy}
+                  dependenciaId={depOdonto.id}
                   municipioId={municipioId}
                   dependenciaNombre="Consultorio Odontológico"
+                  subtitulo={null}
                 />
               </div>
             </div>
