@@ -10,7 +10,7 @@ import {
   currentMonthYYYYMM, currentYear, monthRange,
 } from '../../hooks/useAdministracion'
 import { useStockCritico } from '../../hooks/useInventario'
-import { dateTimeOf, timeOf, todayArgYMD } from '../../lib/datetime'
+import { dateTimeOf, timeOf, todayArgYMD, ARG_OFFSET } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
 // =============================================================
@@ -1541,7 +1541,15 @@ export default function AdminDashboard() {
   // useTurnos devuelve { turnos, isLoading, ... } — NO un useQuery
   // crudo. Acceder a `.data` daba siempre undefined → turnos hoy
   // aparecía vacío aunque hubiera filas.
-  const turnosHoy        = turnosQ.turnos ?? []
+  // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
+  // por separado (mismo fix ya aplicado en SalaPrimerosAuxilios.jsx /
+  // CicSalud.jsx). Sin esto, TurnoRow/ActividadTimelineCard mostraban
+  // "—" en el lugar de la hora para todos los turnos del día.
+  const turnosHoyRaw     = turnosQ.turnos ?? []
+  const turnosHoy        = useMemo(() => turnosHoyRaw.map(t => ({
+    ...t,
+    fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
+  })), [turnosHoyRaw])
   const turnosCount      = turnosHoy.length
 
   // Fallback: si no hay turnos hoy, traemos los próximos 5 turnos
@@ -1552,6 +1560,11 @@ export default function AdminDashboard() {
     enabled: !turnosQ.isLoading && turnosHoy.length === 0 && !!municipioId,
     limit:   5,
   })
+  const proximosTurnosRaw = proximosTurnosQ.data ?? []
+  const proximosTurnos    = useMemo(() => proximosTurnosRaw.map(t => ({
+    ...t,
+    fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
+  })), [proximosTurnosRaw])
   const turnosAtendidos  = turnosHoy.filter(t => t.estado === 'completado' || t.estado === 'atendido').length
   const turnosPctAtendidos = turnosCount > 0 ? Math.round((turnosAtendidos / turnosCount) * 100) : 0
 
@@ -1643,7 +1656,7 @@ export default function AdminDashboard() {
         <TurnosHoyCard
           turnos={turnosHoy}
           isLoading={turnosQ.isLoading}
-          proximos={proximosTurnosQ.data ?? []}
+          proximos={proximosTurnos}
           proximosLoading={proximosTurnosQ.isFetching}
         />
         <MedicoGuardiaCard
