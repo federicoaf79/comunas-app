@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
@@ -7,17 +6,18 @@ import Button from '../ui/Button'
 import { todayArgYMD } from '../../lib/datetime'
 
 // =============================================================
-// Modal "Nueva reserva del SUM" — el operador carga los datos
-// del solicitante (nombre + DNI) y la reserva. Si el DNI ya
-// existe en `vecinos`, lo reusamos; si no, lo creamos al vuelo
-// (registro mínimo: nombre, dni, municipio).
+// Modal "Nueva reserva del SUM" — el operador carga nombre + DNI
+// del solicitante como texto libre. `sum_reservas` NO tiene FK a
+// vecinos (columna `solicitante` es texto plano) ni columnas
+// hora_inicio/hora_fin/cant_personas — solo `horario` (la franja).
+// Ver schema real documentado en useSumReservas.js.
 // =============================================================
 
 const HORARIO_OPTS = [
-  { value: 'manana',       label: 'Mañana (8:00 – 13:00)',  hi: '08:00', hf: '13:00' },
-  { value: 'tarde',        label: 'Tarde (14:00 – 18:00)',  hi: '14:00', hf: '18:00' },
-  { value: 'noche',        label: 'Noche (19:00 – 23:00)',  hi: '19:00', hf: '23:00' },
-  { value: 'dia_completo', label: 'Día completo (8:00 – 23:00)', hi: '08:00', hf: '23:00' },
+  { value: 'manana',       label: 'Mañana (8:00 – 13:00)' },
+  { value: 'tarde',        label: 'Tarde (14:00 – 18:00)' },
+  { value: 'noche',        label: 'Noche (19:00 – 23:00)' },
+  { value: 'dia_completo', label: 'Día completo (8:00 – 23:00)' },
 ]
 
 function emptyForm() {
@@ -28,36 +28,7 @@ function emptyForm() {
     horario:  'manana',
     motivo:   '',
     costo:    '',
-    cant_personas: '',
   }
-}
-
-async function findOrCreateVecino({ dni, nombre, municipio_id }) {
-  const { data: existing, error: selErr } = await supabase
-    .from('vecinos')
-    .select('id')
-    .eq('dni', dni)
-    .limit(1)
-  if (selErr) throw selErr
-  if (existing && existing[0]) return existing[0]
-
-  const partes      = nombre.trim().split(/\s+/)
-  const nombreSolo  = partes.shift() ?? ''
-  const apellido    = partes.join(' ') || nombreSolo
-
-  const { data: created, error: insErr } = await supabase
-    .from('vecinos')
-    .insert({
-      municipio_id,
-      dni,
-      nombre:          nombreSolo,
-      apellido,
-      nombre_completo: nombre,
-    })
-    .select('id')
-    .single()
-  if (insErr) throw insErr
-  return created
 }
 
 export default function SumReservaFormModal({
@@ -70,8 +41,6 @@ export default function SumReservaFormModal({
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
-
-  const horarioObj = HORARIO_OPTS.find(h => h.value === form.horario) ?? HORARIO_OPTS[0]
 
   const canSubmit =
     !!form.nombre.trim() &&
@@ -87,20 +56,14 @@ export default function SumReservaFormModal({
       return
     }
     try {
-      const vecino = await findOrCreateVecino({
-        dni:          form.dni.trim(),
-        nombre:       form.nombre.trim(),
-        municipio_id: dependencia.municipio_id,
-      })
+      const dni = form.dni.trim()
       const payload = {
         municipio_id:   dependencia.municipio_id,
         dependencia_id: dependencia.id ?? null,
-        vecino_id:      vecino.id,
+        solicitante:    dni ? `${form.nombre.trim()} (DNI ${dni})` : form.nombre.trim(),
         fecha:          form.fecha,
-        hora_inicio:    horarioObj.hi,
-        hora_fin:       horarioObj.hf,
+        horario:        form.horario,
         motivo:         form.motivo.trim(),
-        cant_personas:  form.cant_personas ? Number(form.cant_personas) : null,
         costo:          form.costo === '' ? 0 : Number(form.costo),
         estado:         'pendiente',
       }
@@ -174,16 +137,6 @@ export default function SumReservaFormModal({
           value={form.costo}
           onChange={e => set('costo', e.target.value)}
           placeholder="0 si es sin cargo"
-        />
-        <Input
-          label="Cantidad de personas (opcional)"
-          type="number"
-          inputMode="numeric"
-          min="1"
-          max="150"
-          value={form.cant_personas}
-          onChange={e => set('cant_personas', e.target.value)}
-          placeholder="Capacidad máxima: 150"
         />
         <p className="text-xs text-primary-400 sm:col-span-2">
           Se crea como <strong>pendiente</strong>. Un administrador de comuna puede aprobarla o rechazarla después.
