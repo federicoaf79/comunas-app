@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { todayArgYMD } from '../lib/datetime'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useInventario] audit log:', e.message))
+}
 
 // =============================================================
 // useInventario — stock, movimientos y órdenes de compra
@@ -463,6 +469,10 @@ async function createOrdenCompra(data) {
     }
     throw error
   }
+  logAudit({
+    accion: 'create', entidad: 'ordenes_compra', entidadId: row.id,
+    descripcion: `Alta de OC ${row.numero ?? ''} — ${row.proveedor ?? '(sin proveedor)'} ($${row.monto_total ?? 0})`,
+  })
   return row
 }
 
@@ -494,6 +504,8 @@ export function useCreateOrdenCompra() {
 //                            vincula a la orden.
 //   pendiente → rechazada : si la orden tiene gasto_id, ese gasto se
 //                            marca como 'rechazado'.
+const ESTADO_OC_ACCION = { aprobada: 'approve', rechazada: 'reject' }
+
 async function updateOrdenEstado({ id, estado, fechaAprobacion }) {
   const patch = { estado }
   if (estado === 'aprobada') {
@@ -556,6 +568,11 @@ async function updateOrdenEstado({ id, estado, fechaAprobacion }) {
       .eq('id', row.gasto_id)
     if (upErr) console.warn('[useInventario] no se pudo rechazar el gasto vinculado:', upErr.message)
   }
+
+  logAudit({
+    accion: ESTADO_OC_ACCION[estado] ?? 'update', entidad: 'ordenes_compra', entidadId: id,
+    descripcion: `OC ${row.numero ?? id} — ${row.proveedor ?? ''} → ${estado}`,
+  })
 
   return row
 }
