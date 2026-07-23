@@ -55,7 +55,7 @@ export function useOnboardingProgress(municipioId) {
           .eq('municipio_id', municipioId)
           .eq('activa', true)
           .not('landing_hero_descripcion', 'is', null),
-        supabase.from('noticias_municipio')
+        supabase.from('noticias')
           .select('id', { count: 'exact', head: true })
           .eq('municipio_id', municipioId),
         supabase.from('autoridades')
@@ -64,7 +64,7 @@ export function useOnboardingProgress(municipioId) {
         supabase.from('usuarios')
           .select('id', { count: 'exact', head: true })
           .eq('municipio_id', municipioId)
-          .eq('rol', 'operador'),
+          .contains('roles', ['operador']),
         supabase.from('configuracion_portal')
           .select('valor')
           .eq('municipio_id', municipioId)
