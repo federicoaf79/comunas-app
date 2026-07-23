@@ -1,6 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { createAuditLog, createAuditLogVecino } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useReclamos] audit log:', e.message))
+}
+function logAuditVecino(args) {
+  createAuditLogVecino(args).catch(e => console.warn('[useReclamos] audit log (vecino):', e.message))
+}
+
+// createReclamo lo llaman TANTO staff (DependenciaGeneral.jsx,
+// registro presencial) COMO el vecino (NuevoReclamoPortal.jsx, o
+// anónimo vía la policy pública) — a diferencia del resto de las
+// entidades de este sprint, acá no hay un caller único. Detectamos
+// en tiempo de ejecución si hay una sesión de staff real (con fila
+// en `usuarios`) antes de decidir qué helper de auditoría usar.
+async function logReclamoCreate(row) {
+  try {
+    const { data: { user } = {} } = await supabase.auth.getUser()
+    if (user) {
+      const { data: staffRow } = await supabase.from('usuarios').select('id').eq('id', user.id).maybeSingle()
+      if (staffRow) {
+        logAudit({
+          accion: 'create', entidad: 'reclamos', entidadId: row.id,
+          descripcion: `Reclamo registrado — ${row.tipo ?? 'sin tipo'} (canal: ${row.canal})`,
+        })
+        return
+      }
+    }
+  } catch { /* si falla la detección, lo tratamos como vecino/anónimo */ }
+  logAuditVecino({
+    accion: 'create', entidad: 'reclamos', entidadId: row.id,
+    descripcion: `Reclamo cargado ${row.vecino_id ? 'por el vecino' : 'de forma anónima'} — ${row.tipo ?? 'sin tipo'}`,
+    municipioId: row.municipio_id, vecinoId: row.vecino_id,
+    metadata: row.vecino_id ? undefined : { actor: 'anonimo' },
+  })
+}
 
 // =============================================================
 // useReclamos — denuncias / reclamos ciudadanos.
@@ -86,6 +123,7 @@ export async function createReclamo(data) {
     console.error('[useReclamos] createReclamo error:', error)
     throw error
   }
+  logReclamoCreate(row)
   return row
 }
 
@@ -100,6 +138,10 @@ export async function updateReclamoEstado(id, estado) {
     console.error('[useReclamos] updateReclamoEstado error:', error)
     throw error
   }
+  logAudit({
+    accion: 'update', entidad: 'reclamos', entidadId: id,
+    descripcion: `Reclamo "${row.tipo ?? id}" → ${estado}`,
+  })
   return row
 }
 
@@ -131,6 +173,11 @@ export async function updateReclamoAdmin(id, updates) {
     console.error('[useReclamos] updateReclamoAdmin error:', error)
     throw error
   }
+  logAudit({
+    accion: 'update', entidad: 'reclamos', entidadId: id,
+    descripcion: `Reclamo "${row.tipo ?? id}" actualizado por admin`,
+    metadata: { campos: Object.keys(updates) },
+  })
   return row
 }
 
