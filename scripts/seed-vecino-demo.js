@@ -99,6 +99,38 @@ function logError(msg, error) {
   if (error) console.error('   ', error)
 }
 
+// Busca un registro existente por igualdad exacta de todos los campos
+// de `match` y lo actualiza con `data`; si no existe, inserta
+// `{...match, ...data}`. Hace re-ejecutable el resto del script sin
+// duplicar filas — antes cada corrida sumaba atenciones/turnos/
+// reservas/reclamo/beneficiario nuevos (ej: 13 turnos tras varias
+// corridas en vez de 3).
+async function upsertByMatch(table, match, data) {
+  let q = supabase.from(table).select('id')
+  for (const [k, v] of Object.entries(match)) q = q.eq(k, v)
+  const { data: existing, error: findError } = await q.maybeSingle()
+  if (findError) throw findError
+
+  if (existing) {
+    const { data: row, error } = await supabase
+      .from(table)
+      .update(data)
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return { row, created: false }
+  }
+
+  const { data: row, error } = await supabase
+    .from(table)
+    .insert({ ...match, ...data })
+    .select()
+    .single()
+  if (error) throw error
+  return { row, created: true }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════════════
@@ -284,35 +316,31 @@ async function main() {
     if (depSalud) {
       logSection('4. Crear atención médica (Historia Clínica)')
 
-      const { data: atencion, error: atencionError } = await supabase
-        .from('atenciones')
-        .insert({
-          municipio_id: MUNICIPIO_ID,
-          vecino_id: vecino.id,
-          dependencia_id: depSalud.id,
-          fecha_hora: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // Hace 30 días
-          motivo: 'Control de rutina y vacunación',
-          diagnostico: 'Paciente en buen estado general. Sin patologías detectadas.',
-          tratamiento: 'Vacuna antigripal administrada',
-          indicaciones: 'Continuar con controles anuales. Mantener actividad física regular.',
-          signos_vitales: JSON.stringify({
-            presion_arterial: '120/80',
-            frecuencia_cardiaca: 72,
-            temperatura: 36.5,
-            peso: 75,
-            altura: 175
-          }),
-          estado: 'cerrada'
-        })
-        .select()
-        .single()
-
-      if (atencionError) {
-        logError('Error al crear atención', atencionError)
-      } else {
+      try {
+        const { row: atencion, created } = await upsertByMatch(
+          'atenciones',
+          { vecino_id: vecino.id, dependencia_id: depSalud.id, motivo: 'Control de rutina y vacunación' },
+          {
+            municipio_id: MUNICIPIO_ID,
+            fecha_hora: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // Hace 30 días
+            diagnostico: 'Paciente en buen estado general. Sin patologías detectadas.',
+            tratamiento: 'Vacuna antigripal administrada',
+            indicaciones: 'Continuar con controles anuales. Mantener actividad física regular.',
+            signos_vitales: JSON.stringify({
+              presion_arterial: '120/80',
+              frecuencia_cardiaca: 72,
+              temperatura: 36.5,
+              peso: 75,
+              altura: 175
+            }),
+            estado: 'cerrada'
+          }
+        )
         resultados.atenciones.push(atencion.id)
-        logSuccess(`Atención creada en ${depSalud.nombre}`)
+        logSuccess(`Atención ${created ? 'creada' : 'actualizada'} en ${depSalud.nombre}`)
         logSuccess(`Atención ID: ${atencion.id}`)
+      } catch (atencionError) {
+        logError('Error al crear atención', atencionError)
       }
     } else {
       console.log('⚠️  Sin dependencia de salud — saltear atención')
@@ -323,69 +351,65 @@ async function main() {
     // ─────────────────────────────────────────────────────────────────
     logSection('5. Crear turnos médicos/legales')
 
-    const turnosData = []
+    const turnosDef = []
 
     // Turno 1: CAPS - Confirmado (en 7 días)
     if (depSalud) {
       const fecha1 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      turnosData.push({
-        municipio_id: MUNICIPIO_ID,
-        dependencia_id: depSalud.id,
-        vecino_id: vecino.id,
-        fecha: fecha1.toISOString().split('T')[0],
-        hora_inicio: '09:00',
-        hora_fin: '09:30',
-        estado: 'confirmado',
-        motivo: 'Control de seguimiento',
-        espacio_id: null // No es reserva deportiva
+      turnosDef.push({
+        match: { vecino_id: vecino.id, dependencia_id: depSalud.id, motivo: 'Control de seguimiento' },
+        data: {
+          municipio_id: MUNICIPIO_ID,
+          fecha: fecha1.toISOString().split('T')[0],
+          hora_inicio: '09:00',
+          hora_fin: '09:30',
+          estado: 'confirmado',
+          espacio_id: null // No es reserva deportiva
+        }
       })
     }
 
     // Turno 2: Juzgado - Pendiente (en 14 días)
     if (depJuzgado) {
       const fecha2 = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
-      turnosData.push({
-        municipio_id: MUNICIPIO_ID,
-        dependencia_id: depJuzgado.id,
-        vecino_id: vecino.id,
-        fecha: fecha2.toISOString().split('T')[0],
-        hora_inicio: '10:00',
-        hora_fin: '10:30',
-        estado: 'pendiente',
-        motivo: 'Certificación de firma',
-        espacio_id: null
+      turnosDef.push({
+        match: { vecino_id: vecino.id, dependencia_id: depJuzgado.id, motivo: 'Certificación de firma' },
+        data: {
+          municipio_id: MUNICIPIO_ID,
+          fecha: fecha2.toISOString().split('T')[0],
+          hora_inicio: '10:00',
+          hora_fin: '10:30',
+          estado: 'pendiente',
+          espacio_id: null
+        }
       })
     }
 
     // Turno 3: Odontología - Cancelado (hace 5 días)
     if (depOdontologia) {
       const fecha3 = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
-      turnosData.push({
-        municipio_id: MUNICIPIO_ID,
-        dependencia_id: depOdontologia.id,
-        vecino_id: vecino.id,
-        fecha: fecha3.toISOString().split('T')[0],
-        hora_inicio: '14:00',
-        hora_fin: '14:30',
-        estado: 'cancelado',
-        motivo: 'Limpieza dental',
-        espacio_id: null
+      turnosDef.push({
+        match: { vecino_id: vecino.id, dependencia_id: depOdontologia.id, motivo: 'Limpieza dental' },
+        data: {
+          municipio_id: MUNICIPIO_ID,
+          fecha: fecha3.toISOString().split('T')[0],
+          hora_inicio: '14:00',
+          hora_fin: '14:30',
+          estado: 'cancelado',
+          espacio_id: null
+        }
       })
     }
 
-    if (turnosData.length > 0) {
-      const { data: turnos, error: turnosError } = await supabase
-        .from('turnos_agenda')
-        .insert(turnosData)
-        .select()
-
-      if (turnosError) {
-        logError('Error al crear turnos', turnosError)
-      } else {
-        turnos.forEach(t => {
-          resultados.turnos.push(t.id)
-          logSuccess(`Turno ${t.estado} creado para ${t.fecha}`)
-        })
+    if (turnosDef.length > 0) {
+      for (const t of turnosDef) {
+        try {
+          const { row: turno, created } = await upsertByMatch('turnos_agenda', t.match, t.data)
+          resultados.turnos.push(turno.id)
+          logSuccess(`Turno ${turno.estado} ${created ? 'creado' : 'actualizado'} para ${turno.fecha}`)
+        } catch (turnoError) {
+          logError('Error al crear turno', turnoError)
+        }
       }
     } else {
       console.log('⚠️  Sin dependencias para turnos — saltear')
@@ -408,45 +432,41 @@ async function main() {
       if (espacios && espacios.length > 0) {
         const espacioId = espacios[0].id
 
-        const reservasData = [
+        const reservasDef = [
           // Reserva 1: Pendiente (mañana)
           {
-            municipio_id: MUNICIPIO_ID,
-            dependencia_id: depPolideportivo.id,
-            espacio_id: espacioId,
-            vecino_id: vecino.id,
-            fecha: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            hora_inicio: '18:00',
-            hora_fin: '19:30',
-            estado: 'pendiente',
-            motivo: 'Fútbol salón — Partido amistoso con amigos'
+            match: { vecino_id: vecino.id, espacio_id: espacioId, motivo: 'Fútbol salón — Partido amistoso con amigos' },
+            data: {
+              municipio_id: MUNICIPIO_ID,
+              dependencia_id: depPolideportivo.id,
+              fecha: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              hora_inicio: '18:00',
+              hora_fin: '19:30',
+              estado: 'pendiente'
+            }
           },
           // Reserva 2: Confirmada (en 3 días)
           {
-            municipio_id: MUNICIPIO_ID,
-            dependencia_id: depPolideportivo.id,
-            espacio_id: espacioId,
-            vecino_id: vecino.id,
-            fecha: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            hora_inicio: '20:00',
-            hora_fin: '21:00',
-            estado: 'confirmado',
-            motivo: 'Básquet'
+            match: { vecino_id: vecino.id, espacio_id: espacioId, motivo: 'Básquet' },
+            data: {
+              municipio_id: MUNICIPIO_ID,
+              dependencia_id: depPolideportivo.id,
+              fecha: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+              hora_inicio: '20:00',
+              hora_fin: '21:00',
+              estado: 'confirmado'
+            }
           }
         ]
 
-        const { data: reservas, error: reservasError } = await supabase
-          .from('turnos_agenda')
-          .insert(reservasData)
-          .select()
-
-        if (reservasError) {
-          logError('Error al crear reservas', reservasError)
-        } else {
-          reservas.forEach(r => {
-            resultados.reservas.push(r.id)
-            logSuccess(`Reserva ${r.estado} para ${r.fecha} ${r.hora_inicio}-${r.hora_fin}`)
-          })
+        for (const r of reservasDef) {
+          try {
+            const { row: reserva, created } = await upsertByMatch('turnos_agenda', r.match, r.data)
+            resultados.reservas.push(reserva.id)
+            logSuccess(`Reserva ${reserva.estado} ${created ? 'creada' : 'actualizada'} para ${reserva.fecha} ${reserva.hora_inicio}-${reserva.hora_fin}`)
+          } catch (reservaError) {
+            logError('Error al crear reserva', reservaError)
+          }
         }
       } else {
         console.log('⚠️  Sin espacios deportivos — saltear reservas')
@@ -460,26 +480,17 @@ async function main() {
     // ─────────────────────────────────────────────────────────────────
     logSection('7. Crear reclamo comunitario')
 
-    const { data: reclamo, error: reclamoError } = await supabase
-      .from('reclamos')
-      .insert({
-        municipio_id: MUNICIPIO_ID,
-        vecino_id: vecino.id,
-        tipo: 'alumbrado',
-        descripcion: 'Farola sin funcionar en esquina de Av. San Martín y Belgrano',
-        ubicacion: 'Av. San Martín y Belgrano',
-        estado: 'en_proceso',
-        prioridad: 'normal'
-      })
-      .select()
-      .single()
-
-    if (reclamoError) {
-      logError('Error al crear reclamo', reclamoError)
-    } else {
+    try {
+      const { row: reclamo, created } = await upsertByMatch(
+        'reclamos',
+        { vecino_id: vecino.id, tipo: 'alumbrado', descripcion: 'Farola sin funcionar en esquina de Av. San Martín y Belgrano' },
+        { municipio_id: MUNICIPIO_ID, ubicacion: 'Av. San Martín y Belgrano', estado: 'en_proceso', prioridad: 'normal' }
+      )
       resultados.reclamos.push(reclamo.id)
-      logSuccess(`Reclamo creado: ${reclamo.tipo}`)
+      logSuccess(`Reclamo ${created ? 'creado' : 'actualizado'}: ${reclamo.tipo}`)
       logSuccess(`Reclamo ID: ${reclamo.id}`)
+    } catch (reclamoError) {
+      logError('Error al crear reclamo', reclamoError)
     }
 
     // ─────────────────────────────────────────────────────────────────
@@ -488,25 +499,22 @@ async function main() {
     if (depSocial) {
       logSection('8. Crear beneficiario de Ayuda Social')
 
-      const { data: beneficiario, error: beneficiarioError } = await supabase
-        .from('beneficiarios')
-        .insert({
-          municipio_id: MUNICIPIO_ID,
-          vecino_id: vecino.id,
-          tipo_ayuda: 'bolson_alimentos',
-          descripcion: 'Bolsón mensual de alimentos',
-          estado: 'activo',
-          fecha_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Hace 3 meses
-        })
-        .select()
-        .single()
-
-      if (beneficiarioError) {
-        logError('Error al crear beneficiario', beneficiarioError)
-      } else {
+      try {
+        const { row: beneficiario, created } = await upsertByMatch(
+          'beneficiarios',
+          { vecino_id: vecino.id, tipo_ayuda: 'bolson_alimentos' },
+          {
+            municipio_id: MUNICIPIO_ID,
+            descripcion: 'Bolsón mensual de alimentos',
+            estado: 'activo',
+            fecha_inicio: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Hace 3 meses
+          }
+        )
         resultados.beneficiarios.push(beneficiario.id)
-        logSuccess(`Beneficiario creado: ${beneficiario.tipo_ayuda}`)
+        logSuccess(`Beneficiario ${created ? 'creado' : 'actualizado'}: ${beneficiario.tipo_ayuda}`)
         logSuccess(`Beneficiario ID: ${beneficiario.id}`)
+      } catch (beneficiarioError) {
+        logError('Error al crear beneficiario', beneficiarioError)
       }
     } else {
       console.log('⚠️  Sin dependencia de Ayuda Social — saltear beneficiario')
