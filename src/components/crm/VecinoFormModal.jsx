@@ -35,7 +35,13 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
     setSaving(true)
     setError('')
     try {
-      await onSubmit?.(form)
+      const apellido = form.apellido.trim()
+      const nombre   = form.nombre.trim()
+      // "Apellido, Nombre" — mismo formato que ya asume el resto del
+      // CRM (ver comentario en CrmVecinos.jsx) y que HistoriaClinicaForm.jsx
+      // ya calcula bien antes de insertar.
+      const nombre_completo = [apellido, nombre].filter(Boolean).join(', ') || apellido || nombre
+      await onSubmit?.({ ...form, apellido, nombre, nombre_completo })
       onClose()
     } catch (e) {
       setError(e?.message ?? 'No se pudo guardar el vecino.')
