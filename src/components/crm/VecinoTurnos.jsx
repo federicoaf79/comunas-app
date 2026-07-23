@@ -63,15 +63,19 @@ export default function VecinoTurnos() {
       {turnos.map(t => {
         const dependenciaNombre = t.dependencia_nombre ?? t.dependencia?.nombre
         const profesionalNombre = t.profesional_nombre ?? t.profesional?.nombre
+        // Título: dependencia/especialidad real del turno en vez del
+        // label genérico "Turno" repetido en cada fila (hallazgo de
+        // la auditoría de UX 2026-07-23) — numero_turno como último
+        // fallback, para cuando ninguno de los dos está cargado.
+        const titulo = dependenciaNombre || t.especialidad
+          || (t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno')
         return (
           <div key={t.id} className="flex items-start justify-between gap-3 p-4">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-primary">
-                {t.numero_turno ? `Turno #${t.numero_turno}` : 'Turno'}
-              </p>
+              <p className="text-sm font-medium text-primary">{titulo}</p>
               <p className="mt-1 text-xs text-primary-400">
                 {dateTimeOf(t.fecha_hora)}
-                {dependenciaNombre ? ` · ${dependenciaNombre}` : ''}
+                {t.especialidad && t.especialidad !== titulo ? ` · ${t.especialidad}` : ''}
                 {profesionalNombre ? ` · ${profesionalNombre}` : ''}
               </p>
             </div>

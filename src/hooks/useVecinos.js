@@ -18,8 +18,17 @@ const TIMEOUT_MS = 8000
 const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono, zona, email, portal_estado'
 
 // Columnas para la ficha de detalle del vecino — incluye datos
-// personales que el listado no necesita (email, dirección, sexo, etc.).
-const DETAIL_COLS = 'id, municipio_id, dni, nombre_completo, apellido, nombre, telefono, email, barrio, direccion, fecha_nac, sexo, localidad, zona'
+// personales que el listado no necesita (email, dirección, sexo, etc.)
+// y los campos clínicos de seguridad que hoy solo se cargan desde
+// AtencionDrawer.jsx (alergias, contacto de emergencia, grupo
+// sanguíneo) pero no se mostraban en la ficha del CRM (hallazgo de
+// la auditoría de UX 2026-07-23).
+const DETAIL_COLS = `
+  id, municipio_id, dni, nombre_completo, apellido, nombre, telefono,
+  email, barrio, direccion, fecha_nac, sexo, localidad, zona,
+  grupo_sanguineo, alergias, sin_alergias_conocidas,
+  contacto_emergencia_nombre, contacto_emergencia_telefono
+`
 
 // Escapa wildcards de ilike (% y _) para que no se interpreten como
 // comodines cuando el usuario los tipee en el buscador.

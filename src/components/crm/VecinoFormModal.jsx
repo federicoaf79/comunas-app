@@ -15,20 +15,31 @@ const ZONA_OPTS = [
   { value: 'rural',  label: 'Rural' },
 ]
 
-export default function VecinoFormModal({ open, onClose, onSubmit }) {
+export default function VecinoFormModal({ open, onClose, onSubmit, vecino = null }) {
   const [form, setForm]     = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
+  const isEdit = !!vecino
 
-  // Reset al abrir.
+  // Reset al abrir — si viene un `vecino` (editar), precarga sus
+  // datos actuales; si no (alta), arranca vacío.
   useEffect(() => {
     if (open) {
-      setForm(EMPTY)
+      setForm(vecino ? {
+        apellido:  vecino.apellido ?? '',
+        nombre:    vecino.nombre ?? '',
+        dni:       vecino.dni ?? '',
+        telefono:  vecino.telefono ?? '',
+        email:     vecino.email ?? '',
+        zona:      vecino.zona || 'urbano',
+        barrio:    vecino.barrio ?? '',
+        direccion: vecino.direccion ?? '',
+      } : EMPTY)
       setError('')
       setSaving(false)
     }
-  }, [open])
+  }, [open, vecino])
 
   async function handleSave() {
     if (saving) return
@@ -54,7 +65,7 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Nuevo vecino"
+      title={isEdit ? 'Editar vecino' : 'Nuevo vecino'}
       size="lg"
       footer={
         <>
@@ -64,7 +75,7 @@ export default function VecinoFormModal({ open, onClose, onSubmit }) {
             loading={saving}
             disabled={!form.apellido.trim() || !form.nombre.trim()}
           >
-            Guardar
+            {isEdit ? 'Guardar cambios' : 'Guardar'}
           </Button>
         </>
       }
