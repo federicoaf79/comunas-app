@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { createVecino, updateVecino } from '../../hooks/useVecinos'
 import { useProfesionales } from '../../hooks/useProfesionales'
+import { createAuditLog } from '../../hooks/useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[TurnoPresencialModal] audit log:', e.message))
+}
 import { useQueryClient } from '@tanstack/react-query'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
@@ -271,6 +277,10 @@ export default function TurnoPresencialModal({
         .select('id')
         .single()
       if (tErr) throw tErr
+      logAudit({
+        accion: 'create', entidad: 'turnos_agenda', entidadId: row.id,
+        descripcion: `Turno presencial creado — ${vecino?.nombre_completo ?? vecino?.id ?? 'vecino'} (${fecha} ${hora_inicio})`,
+      })
       onCreated?.(row)
       onClose?.()
     } catch (e) {

@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabasePublic } from '../lib/supabase'
 import { todayArgYMD } from '../lib/datetime'
+import { createAuditLog, createAuditLogVecino } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useTurnosAgenda] audit log:', e.message))
+}
+function logAuditVecino(args) {
+  createAuditLogVecino(args).catch(e => console.warn('[useTurnosAgenda] audit log (vecino):', e.message))
+}
 
 const COLS = `
   id, fecha, hora_inicio, hora_fin, estado,
@@ -126,6 +135,11 @@ export function useCrearTurnoAgenda() {
         .select(COLS)
         .single()
       if (error) throw error
+      logAuditVecino({
+        accion: 'create', entidad: 'turnos_agenda', entidadId: data.id,
+        descripcion: `Turno sacado por el vecino — ${fecha} ${hora_inicio}`,
+        municipioId: municipio_id, vecinoId: vecino_id,
+      })
       return data
     },
     onSuccess: () => {
@@ -147,6 +161,10 @@ export function useUpdateEstadoTurnoAgenda() {
         .select(COLS)
         .single()
       if (error) throw error
+      logAudit({
+        accion: 'update', entidad: 'turnos_agenda', entidadId: id,
+        descripcion: `Turno de ${data.vecino?.nombre_completo ?? data.vecino_id ?? 'vecino'} → ${estado}`,
+      })
       return data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['turnos-agenda'] }),

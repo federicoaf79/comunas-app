@@ -3,6 +3,14 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { ARG_OFFSET, todayArgYMD } from '../lib/datetime'
 import { createCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+// Todo lo de este archivo es staff (usa el cliente `supabase`
+// autenticado) — nunca vecino.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useTurnos] audit log:', e.message))
+}
 
 const TIMEOUT_MS = 8000
 
@@ -186,6 +194,11 @@ export async function createTurno(data) {
     console.warn('[useTurnos] calendar sync falló (turno creado igual):', e?.message)
   }
 
+  logAudit({
+    accion: 'create', entidad: 'turnos_agenda', entidadId: turno.id,
+    descripcion: `Turno creado — ${turno.vecino?.nombre_completo ?? turno.vecino_id ?? 'vecino'} (${turno.fecha} ${turno.hora_inicio})`,
+  })
+
   return turno
 }
 
@@ -200,7 +213,12 @@ export async function updateTurnoEstado(id, estado) {
     console.error('[useTurnos] updateTurnoEstado error:', error)
     throw error
   }
-  return normalizeTurno(row)
+  const turno = normalizeTurno(row)
+  logAudit({
+    accion: 'update', entidad: 'turnos_agenda', entidadId: id,
+    descripcion: `Turno de ${turno.vecino?.nombre_completo ?? turno.vecino_id ?? 'vecino'} → ${estado}`,
+  })
+  return turno
 }
 
 export async function cancelarTurno(id) {
@@ -229,7 +247,12 @@ export async function cancelarTurno(id) {
     console.warn('[useTurnos] calendar delete falló:', e?.message)
   }
 
-  return normalizeTurno(row)
+  const turno = normalizeTurno(row)
+  logAudit({
+    accion: 'update', entidad: 'turnos_agenda', entidadId: id,
+    descripcion: `Turno de ${turno.vecino?.nombre_completo ?? turno.vecino_id ?? 'vecino'} → cancelado`,
+  })
+  return turno
 }
 
 // fetchDependencias — fallback cuando el embed de turnos no trae

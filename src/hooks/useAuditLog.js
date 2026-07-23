@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
+import { supabase, supabasePublic } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 
@@ -194,4 +194,41 @@ export function useCreateAuditLog() {
     mutationFn: createAuditLog,
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['audit-log'] }),
   })
+}
+
+// Auditoría para acciones disparadas por un VECINO desde el portal
+// (no staff). `usuario_id` siempre queda null — un vecino no tiene
+// fila en `usuarios`, y esa columna tiene FK a usuarios.id, así que
+// pasarle el auth.uid() del vecino (o inventar uno) rompe con
+// violación de FK. Quién hizo la acción se guarda en datos_despues
+// como { actor: 'vecino', vecino_id }.
+//
+// Usa supabasePublic (no supabase) porque se llama desde contextos
+// 100% públicos — "acceso rápido" (DNI+teléfono) ni siquiera tiene
+// sesión de Supabase Auth, así que no hay nada que resolver vía
+// supabase.auth.getUser() como hace createAuditLog().
+//
+// Requiere policy de INSERT para anon en audit_log con
+// WITH CHECK (usuario_id IS NULL) — sin esa policy el insert
+// devuelve 401 y esta función lo absorbe silenciosamente (best-effort).
+export async function createAuditLogVecino({
+  accion, entidad, entidadId, descripcion, municipioId, vecinoId, metadata,
+} = {}) {
+  if (!accion) throw new Error('createAuditLogVecino: accion es requerida.')
+  const { error } = await supabasePublic
+    .from('audit_log')
+    .insert({
+      municipio_id:  municipioId ?? null,
+      usuario_id:    null,
+      accion,
+      entidad:       entidad ?? null,
+      entidad_id:    entidadId == null ? null : String(entidadId),
+      descripcion:   descripcion ?? null,
+      datos_despues: { actor: 'vecino', vecino_id: vecinoId ?? null, ...(metadata ?? {}) },
+    })
+  if (error) {
+    if (/relation .*audit_log.*does not exist/i.test(error.message ?? '')) return
+    console.warn('[useAuditLog] createAuditLogVecino error:', error.message)
+    throw error
+  }
 }
