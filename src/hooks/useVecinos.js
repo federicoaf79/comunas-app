@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
+import { createAuditLog } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla.
+function logAudit(args) {
+  createAuditLog(args).catch(e => console.warn('[useVecinos] audit log:', e.message))
+}
 
 const PAGE_SIZE  = 50
 const TIMEOUT_MS = 8000
@@ -114,9 +120,16 @@ export async function createVecino(data) {
     .select(COLS)
     .single()
   if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'vecinos', entidadId: row.id,
+    descripcion: `Alta de vecino — ${row.nombre_completo ?? `${row.nombre ?? ''} ${row.apellido ?? ''}`.trim()} (DNI ${row.dni ?? '—'})`,
+  })
   return row
 }
 
+// No se registran los valores editados en metadata (alergias,
+// teléfono, contacto de emergencia, etc. son datos sensibles) —
+// solo qué campos cambiaron, no su contenido.
 export async function updateVecino(id, data) {
   const { data: row, error } = await supabase
     .from('vecinos')
@@ -125,6 +138,11 @@ export async function updateVecino(id, data) {
     .select(COLS)
     .single()
   if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'vecinos', entidadId: id,
+    descripcion: `Datos actualizados — ${row.nombre_completo ?? id}`,
+    metadata: { campos: Object.keys(data) },
+  })
   return row
 }
 
