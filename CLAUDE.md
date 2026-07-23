@@ -26,9 +26,11 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ## ⚠️ Riesgos abiertos
 
-**CRÍTICO — Columna `activa` en tabla `dependencias`:** es `activa` (NO `activo`). Bug corregido en junio 2026.
-**CRÍTICO — `useMunicipios.js:199`:** inserta deps con `activo: true` → cambiar a `activa: true`.
-**CRÍTICO — Migraciones post-base:** 13 migraciones de mayo 2026 con estado desconocido en prod.
+**CRÍTICO — Columna `activa` en tabla `dependencias`:** es `activa` (NO `activo`). Bug corregido en junio 2026. `useMunicipios.js:199` (alta de dependencias en el wizard de municipio) ya usa `activa: true` — resuelto, no reabrir.
+**CRÍTICO — Migraciones post-base:** 13 migraciones de mayo 2026 con estado desconocido en prod. Patrón confirmado 2026-07-23: varios archivos en `supabase/migrations/` documentan un schema (columnas, triggers) que NO coincide con el schema real en prod — el archivo se edita localmente después de correrlo una vez y nunca se vuelve a ejecutar. Antes de asumir que una columna/trigger de una migración existe en prod, confirmar con el spec de PostgREST (`GET /rest/v1/` → `definitions.<tabla>.properties`) o pedir el SQL de `information_schema`/`pg_constraint` al usuario.
+**MEDIO — `beneficiarios`/`reclamos` sin columna `updated_at`:** ambas tablas confirmadas sin esa columna en prod (vía spec de PostgREST) aunque la migración base (`20260509000003_beneficiarios_reclamos.sql`) la define con trigger `set_updated_at()`. `useReclamos.js` ya no la referencia (fix `3b30d06`). `useBeneficiarios.js` tampoco la selecciona en ningún lado (solo queda en un comentario de schema desactualizado) — sin bug funcional confirmado hoy, pero si `updateBeneficiarioEstado` empieza a fallar con "column updated_at does not exist", es porque el trigger de la migración sí llegó a crearse en prod sin la columna.
+**ALTO — `hc_documentos` mismatch total de schema:** la tabla real en prod es `id, vecino_id, subido_por_rol, tipo, nombre, storage_path, fecha, created_at, atencion_id`. El código (`useHC.js`, `useAtenciones.js`, `useVecinoData.js`) asume `municipio_id, consulta_id, descripcion, mime_type, uploaded_by` — ninguna existe en prod — y nunca usa `subido_por_rol`/`nombre`/`fecha`, que sí existen. Rompe el 100% de las queries a `hc_documentos` (subir/ver adjuntos de una atención). Pendiente decidir: ¿migrar schema al que asume el código, o reescribir el código al schema real? No tocado todavía — decisión de diseño, no un fix mecánico.
+**BAJO — `partidas_tipo` sin policy de SELECT:** tabla catálogo (sin `municipio_id`, `codigo` como PK) usada por el selector de partida en "Nueva solicitud" de Inventario. Estaba vacía (sin migración en el repo) — se cargó un set de 12 partidas típicas el 2026-07-23 vía service_role, pero la tabla tiene RLS habilitado sin policy de SELECT para `authenticated`, así que el staff sigue viendo el selector vacío hasta que se agregue esa policy (SQL pendiente de que el usuario la corra).
 **MEDIO — CORS SuperAdmin:** APIs status externas pueden fallar → crear Vercel Function proxy.
 **BAJO — Mensajería SMS:** consume mockData.js — no hay Twilio real.
 **BAJO — Médico de guardia:** sigue siendo mockData en SalaPrimerosAuxilios.jsx — pendiente reemplazar con tabla `profesionales`.
@@ -37,6 +39,23 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
 ```
 (`ARG_OFFSET` de `lib/datetime.js`). No tocar `CalendarioSemanal.jsx` — el problema está en cómo cada página arma su array `eventos`, no en el componente compartido.
+
+---
+
+## Auditoría — Log de operaciones (`audit_log`)
+
+Especificación original (mayo 2026): registrar login/alta/modificación/aprobación/rechazo/eliminación/exportación. `useAuditLog.js` (`createAuditLog()` / `useCreateAuditLog()`) existe desde entonces pero **no se llamaba desde ningún lado** hasta el sprint del 2026-07-23 — ni siquiera `AuthContext.signIn()`, que hace un `insert` directo a `audit_log` bypaseando el helper (accion `'LOGIN'` en mayúscula, inconsistente con el resto que usa minúscula — cabo suelto pre-existente, no tocado).
+
+**Límite de diseño confirmado:** `audit_log.usuario_id` tiene FK a `usuarios.id` → `createAuditLog()` solo es seguro para acciones de **staff**. Un vecino autenticado (sesión Supabase Auth del portal) no tiene fila en `usuarios`, así que llamarlo desde una acción vecino-driven (crear su propio turno, cargar un reclamo desde el portal) rompe con violación de FK. Pendiente de resolver cuando se audite `turnos_agenda`/`reclamos` (Fase 3) — no aplicado a ciegas.
+
+**Patrón de wiring usado (repetir en las próximas fases):** función `logAudit(args)` local a cada hook/página que envuelve `createAuditLog(args).catch(...)` — nunca bloquea la mutación real si el log falla. Se llama DESPUÉS de que la mutación principal tuvo éxito, con `entidadId` de la fila real y `descripcion` legible; `metadata` opcional solo cuando aporta algo (ej. el array completo de `dependencias_acceso`).
+
+**Fase 1 — completa y verificada en vivo (2026-07-23):**
+- `gastos` (`useAdministracion.js`): create/approve/reject
+- `ordenes_compra` (`useInventario.js`): create/approve/reject
+- `usuarios` (`Usuarios.jsx`, `useUsuariosAdmin.js`): alta (`invitarUsuario`, código revisado sin probar en vivo porque dispara email real), cambio de rol, activar/desactivar, permisos por dependencia
+
+**Fases pendientes** (mismo orden acordado): 2 — `vecinos`/`atenciones`/`ordenes_derivacion`; 3 — `turnos_agenda`/`beneficiarios`/`reclamos` (resolver la FK de vecino antes de tocar `turnos_agenda`); 4 — exportaciones CSV (6 puntos: Administración, Rendición, Inventario, Importador Vecinos, Auditoría, Patrimonio); 5 — resto administrativo (dependencias, profesionales, expedientes, inventario, flota, seguros, patrimonio, obras, SUM, agenda pública, autoridades, dominios, historia municipio).
 
 ---
 
