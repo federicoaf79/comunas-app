@@ -62,3 +62,49 @@ export function useUpdatePermisosUsuario() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
   })
 }
+
+// Reemplaza el array completo de `modulos_acceso` para un usuario —
+// mismo patrón que updateDependenciasAcceso() de arriba, pero clave
+// por `modulo` (slug de modulos_config.modulo) en vez de
+// dependencia_id: cubre módulos de gestión que no son dependencias
+// físicas (Vales, Administración, Reclamos). Mutación separada a
+// propósito, no se mezcla con dependencias_acceso.
+export async function updateModulosAcceso(id, modulos_acceso) {
+  if (!Array.isArray(modulos_acceso)) {
+    throw new Error('modulos_acceso debe ser un array JS (no string).')
+  }
+  const sanitized = modulos_acceso
+    .filter(m => m?.modulo)
+    .map(m => ({
+      modulo:            String(m.modulo),
+      puede_gestionar:   !!m.puede_gestionar,
+      puede_administrar: !!m.puede_administrar,
+    }))
+  const { data, error } = await supabase
+    .from('usuarios')
+    .update({ modulos_acceso: sanitized })
+    .eq('id', id)
+    .select('id, modulos_acceso')
+  if (error) {
+    console.error('[useUsuariosAdmin] updateModulosAcceso error:', error)
+    throw error
+  }
+  if (!data || data.length === 0) {
+    throw new Error('No se pudo guardar (RLS o usuario no editable). Revisá las policies de UPDATE en usuarios.')
+  }
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `Permisos por módulo actualizados (${sanitized.length} módulo${sanitized.length === 1 ? '' : 's'})`,
+    metadata: { modulos_acceso: sanitized },
+  })
+  return data[0]
+}
+
+export function useUpdatePermisosModulosUsuario() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, modulos_acceso }) =>
+      updateModulosAcceso(id, modulos_acceso),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
+  })
+}
