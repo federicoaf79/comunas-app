@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useTieneModulo } from '../../hooks/useModulos'
-import { useUpdatePermisosUsuario } from '../../hooks/useUsuariosAdmin'
+import { useUpdatePermisosUsuario, useUpdatePermisosModulosUsuario } from '../../hooks/useUsuariosAdmin'
 import { createAuditLog } from '../../hooks/useAuditLog'
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
@@ -89,7 +89,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, puede_emitir_vales, puede_gestionar_reclamos, created_at')
+    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, modulos_acceso, nombre, email, activo, puede_emitir_vales, created_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
@@ -142,25 +142,6 @@ async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
   logAudit({
     accion: 'update', entidad: 'usuarios', entidadId: id,
     descripcion: `${puedeEmitir ? 'Habilitado' : 'Revocado'} permiso de emisión de vales — ${row?.nombre ?? row?.email ?? id}`,
-  })
-}
-
-// Permiso puntual de gestión de Reclamos — mismo patrón exacto que
-// toggleUsuarioPuedeEmitirVales() de arriba (columna boolean simple
-// en `usuarios`, no el mecanismo de dependencias_acceso: Reclamos
-// no es una dependencia). Gatea el sidebar + la ruta /admin/reclamos
-// en AdminLayout.jsx / Reclamos.jsx — no toca RLS de la tabla reclamos.
-async function toggleUsuarioPuedeGestionarReclamos(id, puedeGestionar) {
-  const { data: row, error } = await supabase
-    .from('usuarios')
-    .update({ puede_gestionar_reclamos: puedeGestionar })
-    .eq('id', id)
-    .select('nombre, email')
-    .single()
-  if (error) throw error
-  logAudit({
-    accion: 'update', entidad: 'usuarios', entidadId: id,
-    descripcion: `${puedeGestionar ? 'Habilitado' : 'Revocado'} permiso de gestión de reclamos — ${row?.nombre ?? row?.email ?? id}`,
   })
 }
 
@@ -275,7 +256,20 @@ export default function Usuarios() {
 
   const { municipioId } = useEffectiveMunicipioId()
   const tieneVales = useTieneModulo(municipioId, 'vales')
+  // Disponibilidad de los 3 módulos de gestión que ahora entran a la
+  // matriz "Permisos por persona" (Parte D) — controla qué filas de
+  // MODULOS_GESTION_DEFS se muestran, no reemplaza el gate real de
+  // sidebar/ruta (eso vive en AdminLayout.jsx/las páginas mismas).
+  const tieneAdministracion = useTieneModulo(municipioId, 'administracion')
   const tieneReclamos = useTieneModulo(municipioId, 'reclamos')
+  const modulosGestionDisponibles = useMemo(() => {
+    const defs = [
+      { modulo: 'vales', label: 'Vales Electrónicos', activo: tieneVales },
+      { modulo: 'administracion', label: 'Administración', activo: tieneAdministracion },
+      { modulo: 'reclamos', label: 'Reclamos', activo: tieneReclamos },
+    ]
+    return defs.filter(d => d.activo).map(({ modulo, label }) => ({ modulo, label }))
+  }, [tieneVales, tieneAdministracion, tieneReclamos])
 
   const rolesAsignables = useMemo(
     () => rolesAsignablesPara(perfil?.roles ?? []),
@@ -318,14 +312,6 @@ export default function Usuarios() {
     onSettled:  () => setBusyId(null),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
     onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el permiso de emisión de vales.'),
-  })
-
-  const toggleGestionarReclamosMut = useMutation({
-    mutationFn: ({ id, puedeGestionar }) => toggleUsuarioPuedeGestionarReclamos(id, puedeGestionar),
-    onMutate:   ({ id }) => setBusyId(id),
-    onSettled:  () => setBusyId(null),
-    onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
-    onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el permiso de gestión de reclamos.'),
   })
 
   const invitarMut = useMutation({
@@ -373,10 +359,6 @@ export default function Usuarios() {
   function handleToggleEmitirVales(u) {
     setError('')
     toggleEmitirValesMut.mutate({ id: u.id, puedeEmitir: !u.puede_emitir_vales })
-  }
-  function handleToggleGestionarReclamos(u) {
-    setError('')
-    toggleGestionarReclamosMut.mutate({ id: u.id, puedeGestionar: !u.puede_gestionar_reclamos })
   }
   async function handleInvitar(payload) {
     setError('')
@@ -432,6 +414,7 @@ export default function Usuarios() {
         <PermisosPorPersona
           usuarios={usuariosQ.data ?? []}
           dependencias={depsActivas}
+          modulosGestion={modulosGestionDisponibles}
           isLoading={usuariosQ.isLoading}
           puedeEditarUsuario={puedeEditarUsuario}
           onInvitar={() => { setError(''); setModalOpen(true) }}
@@ -482,7 +465,6 @@ export default function Usuarios() {
               <Th>Rol</Th>
               <Th>Estado</Th>
               {tieneVales && <Th>Emite vales</Th>}
-              {tieneReclamos && <Th>Gestiona reclamos</Th>}
               <Th>Último acceso</Th>
               <Th className="text-right">Acciones</Th>
             </Tr>
@@ -537,25 +519,6 @@ export default function Usuarios() {
                         </button>
                       ) : (
                         <span className="text-xs text-primary-300">{u.puede_emitir_vales ? '🎫 Sí' : 'No'}</span>
-                      )}
-                    </Td>
-                  )}
-                  {tieneReclamos && (
-                    <Td>
-                      {editable ? (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleGestionarReclamos(u)}
-                          disabled={busyId === u.id}
-                          className={u.puede_gestionar_reclamos
-                            ? 'inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 hover:opacity-80'
-                            : 'inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500 ring-1 ring-inset ring-gray-200 hover:opacity-80'}
-                          title="Permiso puntual para gestionar reclamos, otorgado por admin_comuna"
-                        >
-                          {u.puede_gestionar_reclamos ? '📋 Sí' : 'No'}
-                        </button>
-                      ) : (
-                        <span className="text-xs text-primary-300">{u.puede_gestionar_reclamos ? '📋 Sí' : 'No'}</span>
                       )}
                     </Td>
                   )}
@@ -635,6 +598,35 @@ const GRUPO_LABEL = {
   info: 'Solo información',
 }
 
+// Módulos de gestión (Parte D) — no son filas de `dependencias`, así
+// que no pasan por DepIcon/grupoDeTipo. Mismos glifos que usa el
+// sidebar (AdminLayout.jsx NAV_GESTION) para consistencia visual.
+function ModuloGestionIcon({ modulo, className = 'h-5 w-5' }) {
+  const base = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '2', className, 'aria-hidden': 'true' }
+  if (modulo === 'vales') return (
+    <svg {...base}>
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <path strokeLinecap="round" strokeDasharray="2 2" d="M9 6v12" />
+      <circle cx="5.5" cy="12" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="18.5" cy="12" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  )
+  if (modulo === 'administracion') return (
+    <svg {...base}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h13M8 12h13M8 17h13M3 7h.01M3 12h.01M3 17h.01" />
+      <circle cx="3" cy="7"  r="0.6" fill="currentColor" />
+      <circle cx="3" cy="12" r="0.6" fill="currentColor" />
+      <circle cx="3" cy="17" r="0.6" fill="currentColor" />
+    </svg>
+  )
+  // reclamos (y cualquier módulo futuro sin glifo propio)
+  return (
+    <svg {...base}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  )
+}
+
 // Saved row de dependencias_acceso para (usuarioId, depId), o
 // `{ puede_gestionar: false, puede_administrar: false }` por defecto.
 function savedRowFor(usuario, depId) {
@@ -646,6 +638,17 @@ function savedRowFor(usuario, depId) {
 // cambio se cancela (key se elimina de cambiosPendientes).
 function savedFlag(usuario, depId, kind) {
   const r = savedRowFor(usuario, depId)
+  return kind === 'gestion' ? !!r?.puede_gestionar : !!r?.puede_administrar
+}
+
+// Equivalentes de savedRowFor/savedFlag para modulos_acceso (Parte D)
+// — mismo mecanismo, clave por `modulo` en vez de dependencia_id.
+function savedRowForModulo(usuario, modulo) {
+  const lista = Array.isArray(usuario?.modulos_acceso) ? usuario.modulos_acceso : []
+  return lista.find(m => m?.modulo === modulo) ?? null
+}
+function savedFlagModulo(usuario, modulo, kind) {
+  const r = savedRowForModulo(usuario, modulo)
   return kind === 'gestion' ? !!r?.puede_gestionar : !!r?.puede_administrar
 }
 
@@ -768,10 +771,11 @@ function ResumenDependenciasUsuario({
 }
 
 function PermisosPorPersona({
-  usuarios, dependencias, isLoading,
+  usuarios, dependencias, modulosGestion, isLoading,
   puedeEditarUsuario, onInvitar, onError,
 }) {
   const updateMut = useUpdatePermisosUsuario()
+  const updateModulosMut = useUpdatePermisosModulosUsuario()
   const [query, setQuery]                       = useState('')
   const [selectedId, setSelectedId]             = useState(null)
   const [okMsg, setOkMsg]                       = useState('')
@@ -781,6 +785,10 @@ function PermisosPorPersona({
   // snapshot persistido; si una flag vuelve a igualar el saved value,
   // la key se elimina (y si la fila queda vacía, también).
   const [cambiosPendientes, setCambiosPendientes] = useState({})
+  // Mismo shape que cambiosPendientes pero para modulos_acceso —
+  // { [usuarioId]: { [modulo]: { puede_gestionar?, puede_administrar? } } }.
+  // Mapa separado a propósito, no se mezcla con el de dependencias.
+  const [cambiosPendientesModulos, setCambiosPendientesModulos] = useState({})
   const [saving, setSaving]                       = useState(false)
   // Popover "+N más" — sólo uno abierto a la vez. Se cierra al
   // clickear afuera (listener registrado más abajo) o al cambiar
@@ -829,26 +837,33 @@ function PermisosPorPersona({
   const editable   = !!selectedUser && puedeEditarUsuario(selectedUser)
 
   // Total global de toggles pendientes (puede_gestionar + puede_administrar
-  // cuentan por separado). Lo mostramos junto al botón Guardar.
-  const totalCambios = useMemo(() => {
+  // cuentan por separado, sumando dependencias Y módulos). Lo mostramos
+  // junto al botón Guardar.
+  function contarPendientes(mapa) {
     let n = 0
-    for (const userMap of Object.values(cambiosPendientes)) {
-      for (const depMap of Object.values(userMap ?? {})) {
-        if ('puede_gestionar'   in (depMap ?? {})) n++
-        if ('puede_administrar' in (depMap ?? {})) n++
+    for (const userMap of Object.values(mapa)) {
+      for (const rowMap of Object.values(userMap ?? {})) {
+        if ('puede_gestionar'   in (rowMap ?? {})) n++
+        if ('puede_administrar' in (rowMap ?? {})) n++
       }
     }
     return n
-  }, [cambiosPendientes])
+  }
+  const totalCambios = useMemo(
+    () => contarPendientes(cambiosPendientes) + contarPendientes(cambiosPendientesModulos),
+    [cambiosPendientes, cambiosPendientesModulos],
+  )
 
-  // True si un usuario tiene al menos un toggle pendiente. Se usa
-  // para el indicador "punto gold" en su card del buscador.
+  // True si un usuario tiene al menos un toggle pendiente (dependencia
+  // o módulo). Se usa para el indicador "punto gold" en su card del
+  // buscador.
   function userHasPending(userId) {
-    const m = cambiosPendientes[userId]
-    if (!m) return false
-    for (const depMap of Object.values(m)) {
-      if ('puede_gestionar'   in (depMap ?? {})) return true
-      if ('puede_administrar' in (depMap ?? {})) return true
+    for (const mapa of [cambiosPendientes[userId], cambiosPendientesModulos[userId]]) {
+      if (!mapa) continue
+      for (const rowMap of Object.values(mapa)) {
+        if ('puede_gestionar'   in (rowMap ?? {})) return true
+        if ('puede_administrar' in (rowMap ?? {})) return true
+      }
     }
     return false
   }
@@ -932,19 +947,105 @@ function PermisosPorPersona({
     return Array.from(byDep.values()).filter(r => r.puede_gestionar || r.puede_administrar)
   }
 
+  // ── Equivalentes para modulos_acceso (Parte D) — mismo mecanismo
+  //    de arriba (setPendiente/effectiveFlag/isCellPending/
+  //    combinedAccesoFor), clave por `modulo` en vez de dependencia_id.
+  function setPendienteModulo(userId, modulo, kind, nextValue) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    const savedValue = savedFlagModulo(usuario, modulo, kind)
+
+    setCambiosPendientesModulos(prev => {
+      const userMap = { ...(prev[userId] ?? {}) }
+      const modMap  = { ...(userMap[modulo] ?? {}) }
+      if (nextValue === savedValue) {
+        delete modMap[flagKey]
+      } else {
+        modMap[flagKey] = nextValue
+      }
+      const tieneFlags = 'puede_gestionar' in modMap || 'puede_administrar' in modMap
+      if (tieneFlags) {
+        userMap[modulo] = modMap
+      } else {
+        delete userMap[modulo]
+      }
+      const next = { ...prev }
+      if (Object.keys(userMap).length > 0) {
+        next[userId] = userMap
+      } else {
+        delete next[userId]
+      }
+      return next
+    })
+  }
+
+  function effectiveFlagModulo(userId, modulo, kind) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return false
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    const pending = cambiosPendientesModulos[userId]?.[modulo]
+    if (pending && flagKey in pending) return !!pending[flagKey]
+    return savedFlagModulo(usuario, modulo, kind)
+  }
+
+  function isCellPendingModulo(userId, modulo, kind) {
+    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
+    return flagKey in (cambiosPendientesModulos[userId]?.[modulo] ?? {})
+  }
+
+  function combinedModulosAccesoFor(userId) {
+    const usuario = (usuarios ?? []).find(u => u.id === userId)
+    if (!usuario) return []
+    const saved = Array.isArray(usuario.modulos_acceso) ? usuario.modulos_acceso : []
+    const pending = cambiosPendientesModulos[userId] ?? {}
+    const byModulo = new Map()
+    for (const row of saved) {
+      if (!row?.modulo) continue
+      byModulo.set(row.modulo, {
+        modulo:            row.modulo,
+        puede_gestionar:   !!row.puede_gestionar,
+        puede_administrar: !!row.puede_administrar,
+      })
+    }
+    for (const [modulo, patch] of Object.entries(pending)) {
+      const current = byModulo.get(modulo) ?? {
+        modulo, puede_gestionar: false, puede_administrar: false,
+      }
+      byModulo.set(modulo, {
+        ...current,
+        ...('puede_gestionar'   in patch ? { puede_gestionar:   !!patch.puede_gestionar   } : {}),
+        ...('puede_administrar' in patch ? { puede_administrar: !!patch.puede_administrar } : {}),
+      })
+    }
+    return Array.from(byModulo.values()).filter(r => r.puede_gestionar || r.puede_administrar)
+  }
+
   async function handleGuardar() {
     onError?.('')
     setSaving(true)
     const fallos = []
     try {
-      for (const userId of Object.keys(cambiosPendientes)) {
+      const userIds = new Set([
+        ...Object.keys(cambiosPendientes),
+        ...Object.keys(cambiosPendientesModulos),
+      ])
+      for (const userId of userIds) {
+        const u = (usuarios ?? []).find(x => x.id === userId)
         try {
-          await updateMut.mutateAsync({
-            id: userId,
-            dependencias_acceso: combinedAccesoFor(userId),
-          })
+          if (cambiosPendientes[userId]) {
+            await updateMut.mutateAsync({
+              id: userId,
+              dependencias_acceso: combinedAccesoFor(userId),
+            })
+          }
+          if (cambiosPendientesModulos[userId]) {
+            await updateModulosMut.mutateAsync({
+              id: userId,
+              modulos_acceso: combinedModulosAccesoFor(userId),
+            })
+          }
         } catch (e) {
-          const u = (usuarios ?? []).find(x => x.id === userId)
           fallos.push(`${u?.nombre ?? userId}: ${e?.message ?? 'error'}`)
         }
       }
@@ -952,6 +1053,7 @@ function PermisosPorPersona({
         onError?.('No pudimos guardar algunos cambios — ' + fallos.join(' · '))
       } else {
         setCambiosPendientes({})
+        setCambiosPendientesModulos({})
         setOkMsg('✓ Permisos guardados correctamente')
       }
     } finally {
@@ -962,6 +1064,7 @@ function PermisosPorPersona({
   function handleCancelar() {
     if (totalCambios === 0) return
     setCambiosPendientes({})
+    setCambiosPendientesModulos({})
     setOkMsg('Cambios descartados')
     onError?.('')
   }
@@ -1076,6 +1179,7 @@ function PermisosPorPersona({
         <TablaPermisos
           usuario={selectedUser}
           dependencias={dependencias}
+          modulosGestion={modulosGestion}
           esDirector={esDirector}
           editable={editable}
           totalCambios={totalCambios}
@@ -1086,6 +1190,9 @@ function PermisosPorPersona({
           effectiveFlag={effectiveFlag}
           isCellPending={isCellPending}
           setPendiente={setPendiente}
+          effectiveFlagModulo={effectiveFlagModulo}
+          isCellPendingModulo={isCellPendingModulo}
+          setPendienteModulo={setPendienteModulo}
         />
       )}
 
@@ -1109,10 +1216,11 @@ function PermisosPorPersona({
 // ─────────────────────────────────────────────────────────────────
 
 function TablaPermisos({
-  usuario, dependencias, esDirector, editable,
+  usuario, dependencias, modulosGestion, esDirector, editable,
   totalCambios, saving,
   onDeseleccionar, onGuardar, onCancelar,
   effectiveFlag, isCellPending, setPendiente,
+  effectiveFlagModulo, isCellPendingModulo, setPendienteModulo,
 }) {
   // Ordeno y agrupo dependencias: CIC → Dependencias → Solo info.
   const filasPorGrupo = useMemo(() => {
@@ -1185,10 +1293,10 @@ function TablaPermisos({
         </div>
       </div>
 
-      {dependencias.length === 0 ? (
+      {dependencias.length === 0 && (modulosGestion ?? []).length === 0 ? (
         <div className="card p-8 text-center text-sm text-primary-400">
-          Este municipio no tiene dependencias activas. Cargá al menos una para
-          configurar permisos por área.
+          Este municipio no tiene dependencias ni módulos de gestión activos.
+          Cargá al menos uno para configurar permisos.
         </div>
       ) : (
         // Scroll horizontal en mobile para que la tabla no se rompa.
@@ -1269,6 +1377,54 @@ function TablaPermisos({
                 }
                 return rows
               })}
+              {/* Módulos de gestión (Parte D) — Vales/Administración/
+                  Reclamos, no son dependencias físicas. Mismo patrón
+                  de fila + PermisoCell, clave por `modulo`. Solo se
+                  muestran los módulos activos para el municipio
+                  (filtrado ya hecho en Usuarios.jsx antes de pasarlos). */}
+              {(modulosGestion ?? []).length > 0 && [
+                <tr key="sep-modulos" className="bg-[#0F1C35]/5">
+                  <td colSpan={3} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
+                    Módulos de gestión
+                  </td>
+                </tr>,
+                ...modulosGestion.map(({ modulo, label }) => {
+                  const gestion        = effectiveFlagModulo(usuario.id, modulo, 'gestion')
+                  const admin          = effectiveFlagModulo(usuario.id, modulo, 'admin')
+                  const pendingGestion = isCellPendingModulo(usuario.id, modulo, 'gestion')
+                  const pendingAdmin   = isCellPendingModulo(usuario.id, modulo, 'admin')
+                  return (
+                    <tr key={modulo} className="hover:bg-primary-50/40">
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                            (gestion || admin)
+                              ? 'bg-accent-50 text-accent-700'
+                              : 'bg-primary-50 text-primary-500'
+                          }`}>
+                            <ModuloGestionIcon modulo={modulo} className="h-4 w-4" />
+                          </span>
+                          <span className="text-sm font-medium text-primary">{label}</span>
+                        </div>
+                      </td>
+                      <PermisoCell
+                        pending={pendingGestion}
+                        checked={gestion}
+                        disabled={disabled}
+                        ariaLabel={`Gestión en ${label}`}
+                        onChange={v => setPendienteModulo(usuario.id, modulo, 'gestion', v)}
+                      />
+                      <PermisoCell
+                        pending={pendingAdmin}
+                        checked={admin}
+                        disabled={disabled}
+                        ariaLabel={`Administración en ${label}`}
+                        onChange={v => setPendienteModulo(usuario.id, modulo, 'admin', v)}
+                      />
+                    </tr>
+                  )
+                }),
+              ]}
             </tbody>
           </table>
         </div>
