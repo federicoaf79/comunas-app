@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useDependencias } from '../../hooks/useTurnos'
+import { useTieneModulo } from '../../hooks/useModulos'
 import { useUpdatePermisosUsuario } from '../../hooks/useUsuariosAdmin'
 import { createAuditLog } from '../../hooks/useAuditLog'
 
@@ -88,7 +89,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, created_at')
+    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, puede_emitir_vales, created_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
@@ -121,6 +122,26 @@ async function toggleUsuarioActivo(id, activo) {
   logAudit({
     accion: 'update', entidad: 'usuarios', entidadId: id,
     descripcion: `${activo ? 'Activación' : 'Desactivación'} de usuario — ${row?.nombre ?? row?.email ?? id}`,
+  })
+}
+
+// Permiso puntual de emisión de vales — NO es una capacidad de todo
+// staff del municipio, admin_comuna se lo otorga a un usuario en
+// particular. Columna booleana simple en `usuarios`, mismo patrón
+// que toggleUsuarioActivo() de arriba (no el mecanismo de
+// dependencias_acceso, que es específico de permisos por dependencia
+// y Vales no es una dependencia).
+async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
+  const { data: row, error } = await supabase
+    .from('usuarios')
+    .update({ puede_emitir_vales: puedeEmitir })
+    .eq('id', id)
+    .select('nombre, email')
+    .single()
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `${puedeEmitir ? 'Habilitado' : 'Revocado'} permiso de emisión de vales — ${row?.nombre ?? row?.email ?? id}`,
   })
 }
 
@@ -234,6 +255,7 @@ export default function Usuarios() {
   const canManageUsers = isSuperadmin || isAdminComuna
 
   const { municipioId } = useEffectiveMunicipioId()
+  const tieneVales = useTieneModulo(municipioId, 'vales')
 
   const rolesAsignables = useMemo(
     () => rolesAsignablesPara(perfil?.roles ?? []),
@@ -268,6 +290,14 @@ export default function Usuarios() {
     onSettled:  () => setBusyId(null),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
     onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el estado.'),
+  })
+
+  const toggleEmitirValesMut = useMutation({
+    mutationFn: ({ id, puedeEmitir }) => toggleUsuarioPuedeEmitirVales(id, puedeEmitir),
+    onMutate:   ({ id }) => setBusyId(id),
+    onSettled:  () => setBusyId(null),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
+    onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el permiso de emisión de vales.'),
   })
 
   const invitarMut = useMutation({
@@ -311,6 +341,10 @@ export default function Usuarios() {
       ? `¿Desactivar a ${u.nombre}? No podrá ingresar hasta que lo reactivés.`
       : `¿Reactivar a ${u.nombre}?`)) return
     toggleActivoMut.mutate({ id: u.id, activo: !u.activo })
+  }
+  function handleToggleEmitirVales(u) {
+    setError('')
+    toggleEmitirValesMut.mutate({ id: u.id, puedeEmitir: !u.puede_emitir_vales })
   }
   async function handleInvitar(payload) {
     setError('')
@@ -415,6 +449,7 @@ export default function Usuarios() {
               <Th>Email</Th>
               <Th>Rol</Th>
               <Th>Estado</Th>
+              {tieneVales && <Th>Emite vales</Th>}
               <Th>Último acceso</Th>
               <Th className="text-right">Acciones</Th>
             </Tr>
@@ -453,6 +488,25 @@ export default function Usuarios() {
                     )}
                   </Td>
                   <Td><EstadoBadge activo={!!u.activo} /></Td>
+                  {tieneVales && (
+                    <Td>
+                      {editable ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleEmitirVales(u)}
+                          disabled={busyId === u.id}
+                          className={u.puede_emitir_vales
+                            ? 'inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 hover:opacity-80'
+                            : 'inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500 ring-1 ring-inset ring-gray-200 hover:opacity-80'}
+                          title="Permiso puntual para emitir vales electrónicos, otorgado por admin_comuna"
+                        >
+                          {u.puede_emitir_vales ? '🎫 Sí' : 'No'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-primary-300">{u.puede_emitir_vales ? '🎫 Sí' : 'No'}</span>
+                      )}
+                    </Td>
+                  )}
                   <Td className="whitespace-nowrap text-xs text-primary-400">
                     {u.created_at ? dateOf(u.created_at) : '—'}
                   </Td>
