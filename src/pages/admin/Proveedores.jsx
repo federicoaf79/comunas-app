@@ -2,10 +2,29 @@ import { useState } from 'react'
 import {
   useProveedores, useCreateProveedor, useUpdateProveedor, useToggleProveedorActivo,
 } from '../../hooks/useProveedores'
+import { useAuth } from '../../context/AuthContext'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import ProveedorFormModal from '../../components/admin/ProveedorFormModal'
+
+// Gating de la ruta real, independiente del sidebar — defensa en
+// profundidad, mismo patrón que Reclamos.jsx/Administracion.jsx
+// (Parte D). Fuente del permiso: usuarios.modulos_acceso (fila
+// modulo:'vales', puede_gestionar) -- distinto y más laxo que
+// puede_emitir_vales, que sigue siendo un candado aparte solo para
+// la acción de emitir, sin cambios acá.
+function AccesoDenegado() {
+  return (
+    <div className="card p-10 text-center">
+      <p className="font-sora text-lg font-semibold text-primary">Acceso restringido</p>
+      <p className="mt-2 text-sm text-primary-500">
+        No tenés el permiso de gestión de Vales Electrónicos habilitado. Pedile a un
+        administrador de la comuna que te lo asigne desde Usuarios.
+      </p>
+    </div>
+  )
+}
 
 // =============================================================
 // Proveedores — comercios adheridos a Vales Electrónicos.
@@ -29,6 +48,11 @@ function EstadoBadge({ activo }) {
 }
 
 export default function Proveedores() {
+  const { perfil, hasRole } = useAuth()
+  const esDirector = hasRole(['admin_comuna', 'superadmin'])
+  const puedeGestionar = esDirector
+    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'vales')?.puede_gestionar
+
   const proveedoresQ = useProveedores()
   const createMut = useCreateProveedor()
   const updateMut = useUpdateProveedor()
@@ -39,6 +63,8 @@ export default function Proveedores() {
   const [error, setError]         = useState('')
 
   const proveedores = proveedoresQ.data ?? []
+
+  if (!puedeGestionar) return <AccesoDenegado />
 
   function handleNuevo() {
     setEditing(null)

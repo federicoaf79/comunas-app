@@ -1515,13 +1515,32 @@ function SolicitudesTab({ municipioId, dependencias, canApprove }) {
 // Página principal
 // ─────────────────────────────────────────────────────────────────
 
+// Gating de la ruta real, independiente del sidebar (mismo criterio
+// que dependencias_acceso para directores) — defensa en profundidad,
+// mismo patrón que Reclamos.jsx (Parte D). Fuente del permiso:
+// usuarios.modulos_acceso (fila modulo:'administracion').
+function AccesoDenegado() {
+  return (
+    <div className="card p-10 text-center">
+      <p className="font-sora text-lg font-semibold text-primary">Acceso restringido</p>
+      <p className="mt-2 text-sm text-primary-500">
+        No tenés el permiso de gestión de Administración habilitado. Pedile a un
+        administrador de la comuna que te lo asigne desde Usuarios.
+      </p>
+    </div>
+  )
+}
+
 export default function Administracion() {
-  const { hasRole } = useAuth()
+  const { perfil, hasRole } = useAuth()
   // useEffectiveMunicipioId resuelve el municipio destino — el del
   // perfil para admin_comuna/operador, o el primer municipio activo
   // como fallback para superadmin (perfil.municipio_id null).
   const { municipioId, loading } = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
+  const esDirector = hasRole(['admin_comuna', 'superadmin'])
+  const puedeGestionar = esDirector
+    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'administracion')?.puede_gestionar
 
   // Lectura del ?tab= desde URL. Sin escritura: la navegación
   // entre sub-secciones viene del sidebar (Gestión Municipal →
@@ -1531,6 +1550,8 @@ export default function Administracion() {
   const tabParam = searchParams.get('tab') || ''
   const seccion  = SECCION_VALORES.has(tabParam) ? tabParam : 'dashboard'
   const { data: dependencias = [] } = useDependencias()
+
+  if (!puedeGestionar) return <AccesoDenegado />
 
   return (
     <div className="space-y-5">

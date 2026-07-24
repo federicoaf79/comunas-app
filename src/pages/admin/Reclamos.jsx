@@ -175,8 +175,9 @@ function ReclamoDetalleModal({ reclamo, onClose, onUpdate, dependencias }) {
 // Gating de la ruta real, independiente del sidebar (mismo criterio
 // que dependencias_acceso para directores) — defensa en profundidad
 // para que navegar directo a /admin/reclamos no bypasee el permiso
-// puntual de puede_gestionar_reclamos que ya filtra el sidebar en
-// AdminLayout.jsx.
+// puntual que ya filtra el sidebar en AdminLayout.jsx. Fuente del
+// permiso: usuarios.modulos_acceso (fila modulo:'reclamos'), Parte D
+// — reemplaza a puede_gestionar_reclamos (columna eliminada).
 function AccesoDenegado() {
   return (
     <div className="card p-10 text-center">
@@ -193,7 +194,8 @@ export default function Reclamos() {
   const { municipioId } = useEffectiveMunicipioId()
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
-  const puedeGestionar = esDirector || !!perfil?.puede_gestionar_reclamos
+  const puedeGestionar = esDirector
+    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'reclamos')?.puede_gestionar
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const { data: reclamos = [], isLoading } = useReclamos({ estado: filtroEstado || undefined })

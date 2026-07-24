@@ -171,6 +171,12 @@ const TIPOS_INFO_ONLY = new Set([
 // TIPOS_INFO_ONLY, que además salta el chequeo de acceso.
 const TIPOS_INFO_VISUAL_EXTRA = new Set(['salud', 'sala', 'caps'])
 
+// Módulos de NAV_GESTION que exigen permiso puntual por usuario
+// (usuarios.modulos_acceso, Parte D) además de tieneModulo — Vales,
+// Administración y Reclamos. Portal Web queda afuera a propósito
+// (sigue abierto a cualquier staff con el módulo activo).
+const MODULOS_ACCESO_PUNTUAL = new Set(['vales', 'administracion', 'reclamos'])
+
 // Tipos cuyo módulo ya ES "Administración Municipal" — no tienen
 // sentido tener un sub-item "Administración" porque eso es la
 // página completa. Solo se renderiza el sub-item "Gestión".
@@ -869,19 +875,28 @@ export default function AdminLayout() {
 
   // Filtramos top + gestión por módulo (mismo patrón que antes).
   const navTopFiltrado = useMemo(() => NAV_TOP.filter(item => tieneModulo(item.modulo)), [tieneModulo])
-  // Reclamos exige además puede_gestionar_reclamos (permiso puntual
-  // por usuario, no un módulo) — director ve todo como siempre,
-  // mismo criterio que dependencias_acceso. El resto de NAV_GESTION
-  // no se ve afectado por este chequeo, solo el item de Reclamos.
-  const puedeGestionarReclamos = esDirector || !!perfil?.puede_gestionar_reclamos
+  // Vales/Administración/Reclamos exigen además un permiso puntual
+  // por usuario (usuarios.modulos_acceso, Parte D) — director ve
+  // todo como siempre, mismo criterio que dependencias_acceso. Portal
+  // Web (el otro item de NAV_GESTION) no se ve afectado, solo estos 3.
+  const modulosAccesoByModulo = useMemo(() => {
+    const map = new Map()
+    for (const r of (perfil?.modulos_acceso ?? [])) {
+      if (r?.modulo) map.set(r.modulo, r)
+    }
+    return map
+  }, [perfil])
+  function puedeGestionarModulo(modulo) {
+    return esDirector || !!modulosAccesoByModulo.get(modulo)?.puede_gestionar
+  }
   const navGestionFiltrado = useMemo(() => NAV_GESTION.map(item => {
     if (!tieneModulo(item.modulo)) return null
-    if (item.to === '/admin/reclamos' && !puedeGestionarReclamos) return null
+    if (MODULOS_ACCESO_PUNTUAL.has(item.modulo) && !puedeGestionarModulo(item.modulo)) return null
     if (!item.subitems) return item
     const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
     if (subs.length === 0) return null
     return { ...item, subitems: subs }
-  }).filter(Boolean), [tieneModulo, puedeGestionarReclamos])
+  }).filter(Boolean), [tieneModulo, modulosAccesoByModulo, esDirector])
   const navTuComunaFiltrado = useMemo(
     () => NAV_TU_COMUNA.filter(item => tieneModulo(item.modulo)),
     [tieneModulo],
