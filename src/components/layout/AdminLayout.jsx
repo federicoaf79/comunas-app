@@ -295,6 +295,21 @@ const NAV_GESTION = [
     ],
   },
   {
+    label: 'Vales Electrónicos',
+    modulo: 'vales',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <path strokeLinecap="round" strokeDasharray="2 2" d="M9 6v12" />
+        <circle cx="5.5" cy="12" r="0.8" fill="currentColor" stroke="none" />
+        <circle cx="18.5" cy="12" r="0.8" fill="currentColor" stroke="none" />
+      </svg>
+    ),
+    subitems: [
+      { to: '/admin/vales/proveedores', label: 'Proveedores' },
+    ],
+  },
+  {
     label: 'Administración',
     modulo: 'administracion',
     icon: (
