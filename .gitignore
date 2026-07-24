@@ -23,6 +23,11 @@ supabase/.temp/
 
 # Claude Code local memory
 .claude/
+# Session lock files — cambian de contenido en cada sesión de Claude
+# Code; ya quedaban cubiertos por la regla de arriba para archivos
+# nuevos, pero scheduled_tasks.lock se había commiteado antes de esa
+# regla y por eso seguía apareciendo modificado en cada sesión.
+.claude/*.lock
 
 # Editor directories and files
 .vscode/*
