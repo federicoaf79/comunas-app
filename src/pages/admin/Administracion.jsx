@@ -1539,8 +1539,11 @@ export default function Administracion() {
   const { municipioId, loading } = useEffectiveMunicipioId()
   const canApprove  = hasRole(['admin_comuna', 'superadmin'])
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
-  const puedeGestionar = esDirector
-    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'administracion')?.puede_gestionar
+  // Cualquiera de los dos flags alcanza para entrar a la página —
+  // canApprove (arriba) sigue siendo el chequeo real que distingue
+  // aprobar/rechazar, esto solo gatea el acceso general.
+  const accesoAdministracion = (perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'administracion')
+  const puedeGestionar = esDirector || !!accesoAdministracion?.puede_gestionar || !!accesoAdministracion?.puede_administrar
 
   // Lectura del ?tab= desde URL. Sin escritura: la navegación
   // entre sub-secciones viene del sidebar (Gestión Municipal →

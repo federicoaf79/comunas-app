@@ -886,12 +886,18 @@ export default function AdminLayout() {
     }
     return map
   }, [perfil])
-  function puedeGestionarModulo(modulo) {
-    return esDirector || !!modulosAccesoByModulo.get(modulo)?.puede_gestionar
+  // Igual que entryParaDep() con dependencias: CUALQUIERA de los dos
+  // flags alcanza para ver la entrada (Reclamos no tiene hoy una
+  // distinción real entre "gestionar" y "administrar" — ver el
+  // hallazgo de la investigación de Parte D — así que Administración
+  // sola también debe dar acceso, no solo Gestión).
+  function puedeAccederModulo(modulo) {
+    const r = modulosAccesoByModulo.get(modulo)
+    return esDirector || !!r?.puede_gestionar || !!r?.puede_administrar
   }
   const navGestionFiltrado = useMemo(() => NAV_GESTION.map(item => {
     if (!tieneModulo(item.modulo)) return null
-    if (MODULOS_ACCESO_PUNTUAL.has(item.modulo) && !puedeGestionarModulo(item.modulo)) return null
+    if (MODULOS_ACCESO_PUNTUAL.has(item.modulo) && !puedeAccederModulo(item.modulo)) return null
     if (!item.subitems) return item
     const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
     if (subs.length === 0) return null

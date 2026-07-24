@@ -50,8 +50,11 @@ function EstadoBadge({ activo }) {
 export default function Proveedores() {
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
-  const puedeGestionar = esDirector
-    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'vales')?.puede_gestionar
+  // Cualquiera de los dos flags alcanza para entrar — puede_emitir_vales
+  // sigue siendo el candado aparte y más exclusivo para la acción de
+  // emitir, sin cambios acá.
+  const accesoVales = (perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'vales')
+  const puedeGestionar = esDirector || !!accesoVales?.puede_gestionar || !!accesoVales?.puede_administrar
 
   const proveedoresQ = useProveedores()
   const createMut = useCreateProveedor()

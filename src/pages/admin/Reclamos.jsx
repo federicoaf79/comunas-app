@@ -194,8 +194,11 @@ export default function Reclamos() {
   const { municipioId } = useEffectiveMunicipioId()
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
-  const puedeGestionar = esDirector
-    || !!(perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'reclamos')?.puede_gestionar
+  // Cualquiera de los dos flags alcanza — Reclamos no tiene hoy una
+  // distinción real entre gestionar y administrar (mismo criterio
+  // que el sidebar en AdminLayout.jsx).
+  const accesoReclamos = (perfil?.modulos_acceso ?? []).find(m => m?.modulo === 'reclamos')
+  const puedeGestionar = esDirector || !!accesoReclamos?.puede_gestionar || !!accesoReclamos?.puede_administrar
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const { data: reclamos = [], isLoading } = useReclamos({ estado: filtroEstado || undefined })
