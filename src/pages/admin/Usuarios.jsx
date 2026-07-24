@@ -89,7 +89,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, puede_emitir_vales, created_at')
+    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, puede_emitir_vales, puede_gestionar_reclamos, created_at')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
@@ -142,6 +142,25 @@ async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
   logAudit({
     accion: 'update', entidad: 'usuarios', entidadId: id,
     descripcion: `${puedeEmitir ? 'Habilitado' : 'Revocado'} permiso de emisión de vales — ${row?.nombre ?? row?.email ?? id}`,
+  })
+}
+
+// Permiso puntual de gestión de Reclamos — mismo patrón exacto que
+// toggleUsuarioPuedeEmitirVales() de arriba (columna boolean simple
+// en `usuarios`, no el mecanismo de dependencias_acceso: Reclamos
+// no es una dependencia). Gatea el sidebar + la ruta /admin/reclamos
+// en AdminLayout.jsx / Reclamos.jsx — no toca RLS de la tabla reclamos.
+async function toggleUsuarioPuedeGestionarReclamos(id, puedeGestionar) {
+  const { data: row, error } = await supabase
+    .from('usuarios')
+    .update({ puede_gestionar_reclamos: puedeGestionar })
+    .eq('id', id)
+    .select('nombre, email')
+    .single()
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `${puedeGestionar ? 'Habilitado' : 'Revocado'} permiso de gestión de reclamos — ${row?.nombre ?? row?.email ?? id}`,
   })
 }
 
@@ -256,6 +275,7 @@ export default function Usuarios() {
 
   const { municipioId } = useEffectiveMunicipioId()
   const tieneVales = useTieneModulo(municipioId, 'vales')
+  const tieneReclamos = useTieneModulo(municipioId, 'reclamos')
 
   const rolesAsignables = useMemo(
     () => rolesAsignablesPara(perfil?.roles ?? []),
@@ -298,6 +318,14 @@ export default function Usuarios() {
     onSettled:  () => setBusyId(null),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
     onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el permiso de emisión de vales.'),
+  })
+
+  const toggleGestionarReclamosMut = useMutation({
+    mutationFn: ({ id, puedeGestionar }) => toggleUsuarioPuedeGestionarReclamos(id, puedeGestionar),
+    onMutate:   ({ id }) => setBusyId(id),
+    onSettled:  () => setBusyId(null),
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
+    onError:    (e) => setError(e?.message ?? 'No pudimos cambiar el permiso de gestión de reclamos.'),
   })
 
   const invitarMut = useMutation({
@@ -345,6 +373,10 @@ export default function Usuarios() {
   function handleToggleEmitirVales(u) {
     setError('')
     toggleEmitirValesMut.mutate({ id: u.id, puedeEmitir: !u.puede_emitir_vales })
+  }
+  function handleToggleGestionarReclamos(u) {
+    setError('')
+    toggleGestionarReclamosMut.mutate({ id: u.id, puedeGestionar: !u.puede_gestionar_reclamos })
   }
   async function handleInvitar(payload) {
     setError('')
@@ -450,6 +482,7 @@ export default function Usuarios() {
               <Th>Rol</Th>
               <Th>Estado</Th>
               {tieneVales && <Th>Emite vales</Th>}
+              {tieneReclamos && <Th>Gestiona reclamos</Th>}
               <Th>Último acceso</Th>
               <Th className="text-right">Acciones</Th>
             </Tr>
@@ -504,6 +537,25 @@ export default function Usuarios() {
                         </button>
                       ) : (
                         <span className="text-xs text-primary-300">{u.puede_emitir_vales ? '🎫 Sí' : 'No'}</span>
+                      )}
+                    </Td>
+                  )}
+                  {tieneReclamos && (
+                    <Td>
+                      {editable ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleGestionarReclamos(u)}
+                          disabled={busyId === u.id}
+                          className={u.puede_gestionar_reclamos
+                            ? 'inline-flex items-center gap-1 rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 hover:opacity-80'
+                            : 'inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-500 ring-1 ring-inset ring-gray-200 hover:opacity-80'}
+                          title="Permiso puntual para gestionar reclamos, otorgado por admin_comuna"
+                        >
+                          {u.puede_gestionar_reclamos ? '📋 Sí' : 'No'}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-primary-300">{u.puede_gestionar_reclamos ? '📋 Sí' : 'No'}</span>
                       )}
                     </Td>
                   )}

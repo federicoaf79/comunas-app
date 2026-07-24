@@ -869,13 +869,19 @@ export default function AdminLayout() {
 
   // Filtramos top + gestión por módulo (mismo patrón que antes).
   const navTopFiltrado = useMemo(() => NAV_TOP.filter(item => tieneModulo(item.modulo)), [tieneModulo])
+  // Reclamos exige además puede_gestionar_reclamos (permiso puntual
+  // por usuario, no un módulo) — director ve todo como siempre,
+  // mismo criterio que dependencias_acceso. El resto de NAV_GESTION
+  // no se ve afectado por este chequeo, solo el item de Reclamos.
+  const puedeGestionarReclamos = esDirector || !!perfil?.puede_gestionar_reclamos
   const navGestionFiltrado = useMemo(() => NAV_GESTION.map(item => {
     if (!tieneModulo(item.modulo)) return null
+    if (item.to === '/admin/reclamos' && !puedeGestionarReclamos) return null
     if (!item.subitems) return item
     const subs = item.subitems.filter(s => !s.modulo || tieneModulo(s.modulo))
     if (subs.length === 0) return null
     return { ...item, subitems: subs }
-  }).filter(Boolean), [tieneModulo])
+  }).filter(Boolean), [tieneModulo, puedeGestionarReclamos])
   const navTuComunaFiltrado = useMemo(
     () => NAV_TU_COMUNA.filter(item => tieneModulo(item.modulo)),
     [tieneModulo],

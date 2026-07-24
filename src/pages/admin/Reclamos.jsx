@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useReclamos, useUpdateReclamoAdmin } from '../../hooks/useReclamos'
 import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useAuth } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
 
 const ESTADO_BADGES = {
@@ -171,8 +172,28 @@ function ReclamoDetalleModal({ reclamo, onClose, onUpdate, dependencias }) {
   )
 }
 
+// Gating de la ruta real, independiente del sidebar (mismo criterio
+// que dependencias_acceso para directores) — defensa en profundidad
+// para que navegar directo a /admin/reclamos no bypasee el permiso
+// puntual de puede_gestionar_reclamos que ya filtra el sidebar en
+// AdminLayout.jsx.
+function AccesoDenegado() {
+  return (
+    <div className="card p-10 text-center">
+      <p className="font-sora text-lg font-semibold text-primary">Acceso restringido</p>
+      <p className="mt-2 text-sm text-primary-500">
+        No tenés el permiso de gestión de reclamos habilitado. Pedile a un
+        administrador de la comuna que te lo asigne desde Usuarios.
+      </p>
+    </div>
+  )
+}
+
 export default function Reclamos() {
   const { municipioId } = useEffectiveMunicipioId()
+  const { perfil, hasRole } = useAuth()
+  const esDirector = hasRole(['admin_comuna', 'superadmin'])
+  const puedeGestionar = esDirector || !!perfil?.puede_gestionar_reclamos
   const [filtroEstado, setFiltroEstado] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const { data: reclamos = [], isLoading } = useReclamos({ estado: filtroEstado || undefined })
@@ -185,6 +206,7 @@ export default function Reclamos() {
     return result
   }, [reclamos, filtroTipo])
 
+  if (!puedeGestionar) return <AccesoDenegado />
   if (isLoading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
 
   return (
