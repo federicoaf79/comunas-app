@@ -83,6 +83,7 @@ export const MODULOS_DISPONIBLES = [
   { id: 'flota',          label: 'Flota vehicular',               icono: '🚗', categoria: 'RECURSOS' },
   { id: 'patrimonio',     label: 'Patrimonio municipal',          icono: '🏢', categoria: 'RECURSOS' },
   { id: 'usuarios',       label: 'Usuarios y roles',              icono: '👤', categoria: 'ADMIN' },
+  { id: 'vales',          label: 'Vales Electrónicos',            icono: '🎫', categoria: 'SERVICIOS' },
 ]
 
 // Descripción corta opcional por módulo — la usa el wizard como
@@ -104,6 +105,7 @@ export const MODULOS_DESC = {
   flota:          'Vehículos, combustible, service y alertas de vencimientos.',
   patrimonio:     'Inmuebles, muebles de capital, seguros y valuación para Tribunal de Cuentas.',
   usuarios:       'Alta y permisos de operadores municipales.',
+  vales:          'Vales electrónicos canjeables en comercios adheridos, con QR y ventana de canje.',
 }
 
 // Mapa categoría → label en español, para el header de cada grupo
@@ -121,9 +123,11 @@ export const CATEGORIA_LABEL = {
 export const CATEGORIA_ORDEN = ['VECINO', 'SALUD', 'COMUNICACION', 'SERVICIOS', 'ADMIN', 'RECURSOS']
 
 // Módulos pre-seleccionados al abrir el paso del wizard. Todos
-// excepto Mensajería (requiere proveedor) y Flota (opcional).
+// excepto Mensajería (requiere proveedor), Flota (opcional) y Vales
+// (en desarrollo — Fase 0, se activa a mano por municipio mientras
+// se prueba en vivo, no se ofrece todavía para altas nuevas).
 export const MODULOS_DEFAULT_ON = new Set(
   MODULOS_DISPONIBLES
-    .filter(m => m.id !== 'mensajeria' && m.id !== 'flota')
+    .filter(m => m.id !== 'mensajeria' && m.id !== 'flota' && m.id !== 'vales')
     .map(m => m.id)
 )
