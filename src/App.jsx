@@ -47,6 +47,7 @@ import ConfigPortal        from './pages/admin/ConfigPortal'
 import ConfigGeneral       from './pages/admin/ConfigGeneral'
 import GestionDependencias from './pages/admin/GestionDependencias'
 import ImportadorVecinos   from './pages/admin/ImportadorVecinos'
+import ReportesInformes    from './pages/admin/ReportesInformes'
 import Reclamos            from './pages/admin/Reclamos'
 import PortalPublico       from './pages/portal/PortalPublico'
 import AgendaPublica       from './pages/portal/AgendaPublica'
@@ -229,6 +230,7 @@ const router = createBrowserRouter([
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
                   { path: '/admin/dependencias',   element: <GestionDependencias /> },
                   { path: '/admin/importador',     element: <ImportadorVecinos /> },
+                  { path: '/admin/reportes',       element: <ReportesInformes /> },
                 ],
               },
             ],

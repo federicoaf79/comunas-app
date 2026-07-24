@@ -47,9 +47,10 @@ const LABEL_BY_TIPO = {
   odontologia:          'Consultorio Odontológico',
 }
 
-// NAV_TOP — links planos del header del sidebar. Dashboard +
-// herramientas cross-municipales que no son específicas de una
-// dependencia. Sala / Juez / SUM ahora viven en CIC con NavGroups.
+// NAV_TOP — links planos de base del sidebar, siempre visibles para
+// cualquier staff (sin rótulo de sección). Usuarios y Reclamos se
+// mudaron de acá a "Tu Comuna" / "Gestión de la Comuna" (reorg
+// 2026-07-24) — sus iconos se reusan tal cual en esas listas.
 const NAV_TOP = [
   {
     to: '/admin',
@@ -58,18 +59,6 @@ const NAV_TOP = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13l9-9 9 9M5 11v9h14v-9" />
-      </svg>
-    ),
-  },
-  {
-    to: '/admin/usuarios',
-    label: 'Usuarios',
-    modulo: 'usuarios',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <circle cx="12" cy="8" r="3.5" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 21a7 7 0 0 1 14 0" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 5l2 2 3-3" />
       </svg>
     ),
   },
@@ -98,12 +87,15 @@ const NAV_TOP = [
     ),
   },
   {
-    to: '/admin/reclamos',
-    label: 'Reclamos',
-    modulo: 'reclamos',
+    to: '/admin/agenda-publica',
+    label: 'Agenda pública',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <path strokeLinecap="round" d="M3 9h18M8 2v4M16 2v4"/>
+        <circle cx="8" cy="14" r="1" fill="currentColor"/>
+        <circle cx="12" cy="14" r="1" fill="currentColor"/>
+        <circle cx="16" cy="14" r="1" fill="currentColor"/>
       </svg>
     ),
   },
@@ -114,19 +106,6 @@ const NAV_TOP = [
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
         <path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9z" />
-      </svg>
-    ),
-  },
-  {
-    to: '/admin/agenda-publica',
-    label: 'Agenda pública',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <rect x="3" y="4" width="18" height="18" rx="2"/>
-        <path strokeLinecap="round" d="M3 9h18M8 2v4M16 2v4"/>
-        <circle cx="8" cy="14" r="1" fill="currentColor"/>
-        <circle cx="12" cy="14" r="1" fill="currentColor"/>
-        <circle cx="16" cy="14" r="1" fill="currentColor"/>
       </svg>
     ),
   },
@@ -182,6 +161,15 @@ const TIPOS_INFO_ONLY = new Set([
   'jardin', 'jardin_infantes',
   'primaria', 'secundaria',
 ])
+
+// Reclasificación puramente VISUAL (reorg de sidebar 2026-07-24):
+// Sala Primeros Auxilios ya se comporta como solo_informativo a
+// nivel de gating (entryParaDep resuelve eso solo, permiso incluido
+// — ver fix del bypass de sidebar del mismo día). Este set NO toca
+// esa lógica, solo decide en qué lista visual (depsPrincipales vs
+// depsInfo) cae el entry ya resuelto — a diferencia de
+// TIPOS_INFO_ONLY, que además salta el chequeo de acceso.
+const TIPOS_INFO_VISUAL_EXTRA = new Set(['salud', 'sala', 'caps'])
 
 // Tipos cuyo módulo ya ES "Administración Municipal" — no tienen
 // sentido tener un sub-item "Administración" porque eso es la
@@ -271,10 +259,11 @@ function subitemsParaTipo(tipo, basePath) {
   ]
 }
 
-// NAV_GESTION — sección "Gestión Municipal" al pie del sidebar.
-// Portal Web + Administración con su nueva estructura ampliada
-// (Inventario y Flota viven adentro de Administración ahora) +
-// Config General como link plano.
+// NAV_GESTION — sección "Gestión de la Comuna" (renombrada desde
+// "Gestión Municipal", reorg 2026-07-24). Portal Web, Vales
+// Electrónicos, Administración (Inventario/Flota viven adentro) y
+// Reclamos (movido acá desde NAV_TOP). Auditoría/Config General/
+// Dependencias/Importador se mudaron a NAV_TU_COMUNA, más abajo.
 const NAV_GESTION = [
   {
     label: 'Portal Web',
@@ -332,6 +321,51 @@ const NAV_GESTION = [
     ],
   },
   {
+    // Movido acá desde NAV_TOP (reorg 2026-07-24) — sigue accesible
+    // para cualquier staff mientras el módulo esté activo (is_staff()
+    // general). El permiso puntual de "quién gestiona reclamos" es
+    // un paso aparte, todavía no implementado.
+    to: '/admin/reclamos',
+    label: 'Reclamos',
+    modulo: 'reclamos',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+    ),
+  },
+]
+
+// NAV_TU_COMUNA — sección final del sidebar (reorg 2026-07-24):
+// herramientas de configuración/administración interna de la comuna
+// como cliente de la plataforma, separadas de "Gestión de la Comuna"
+// (que es más operativo/día a día). Auditoría, Config. General,
+// Dependencias e Importador se mudaron acá desde NAV_GESTION; Usuarios
+// se mudó desde NAV_TOP. Ninguno cambia su gating, solo su ubicación.
+const NAV_TU_COMUNA = [
+  {
+    to: '/admin/config-general',
+    label: 'Config. General',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+      </svg>
+    ),
+  },
+  {
+    to: '/admin/usuarios',
+    label: 'Usuarios',
+    modulo: 'usuarios',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+        <circle cx="12" cy="8" r="3.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 21a7 7 0 0 1 14 0" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16 5l2 2 3-3" />
+      </svg>
+    ),
+  },
+  {
     // Sin `modulo`: Auditoría siempre disponible para admin_comuna /
     // superadmin. La página interna ya muestra AccessDenied a otros
     // roles, así que no hace falta gating extra desde modulos_config.
@@ -344,12 +378,11 @@ const NAV_GESTION = [
     ),
   },
   {
-    to: '/admin/config-general',
-    label: 'Config. General',
+    to: '/admin/importador',
+    label: 'Importador',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
       </svg>
     ),
   },
@@ -366,11 +399,13 @@ const NAV_GESTION = [
     ),
   },
   {
-    to: '/admin/importador',
-    label: 'Importador',
+    // Placeholder — sin funcionalidad real todavía (pantalla
+    // "Próximamente"). Ver ReportesInformes.jsx.
+    to: '/admin/reportes',
+    label: 'Reportes e informes',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V9M13 17v-4M17 17V7M4 21h16a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1z" />
       </svg>
     ),
   },
@@ -762,15 +797,29 @@ export default function AdminLayout() {
   // CIC: el blueprint dice qué dependencias hardcodear; cada una
   // se matchea contra el dep real (por tipo) del municipio para
   // resolver el dep.id que necesitan los checks de permisos.
-  const cicEntries = useMemo(() => {
+  const cicEntriesConTipo = useMemo(() => {
     return CIC_BLUEPRINT
       .map(blue => {
         const dep = deps.find(d => (d?.tipo ?? '').toLowerCase() === blue.tipo && d.activa !== false)
-        return entryParaDep({ ...blue, dep })
+        const entry = entryParaDep({ ...blue, dep })
+        return entry ? { ...entry, _tipo: blue.tipo } : null
       })
       .filter(Boolean)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deps, accesoByDepId, esDirector, tieneModulo, configByModulo])
+
+  // Juez de Paz se muestra en "Solo información" (reorg de sidebar
+  // 2026-07-24, puramente visual) en vez del grupo CIC — su ruta
+  // real sigue siendo /admin/juez y su gating no cambia, solo se
+  // saca del cicEntries y se suma a depsInfoFinal más abajo.
+  const cicEntries = useMemo(
+    () => cicEntriesConTipo.filter(e => e._tipo !== 'juzgado'),
+    [cicEntriesConTipo],
+  )
+  const juezDePazEntry = useMemo(
+    () => cicEntriesConTipo.find(e => e._tipo === 'juzgado') ?? null,
+    [cicEntriesConTipo],
+  )
 
   // DEPENDENCIAS dinámicas: el resto de filas de la tabla que NO
   // están en CIC. Dedupe por tipo (un tipo = una entrada aunque
@@ -799,14 +848,24 @@ export default function AdminLayout() {
       const basePath = `/admin/dependencia-gestion/${d.id}`
       const entry = entryParaDep({ tipo: t, label, basePath, dep: d })
       if (!entry) continue
-      if (TIPOS_INFO_ONLY.has(t)) info.push(entry)
-      else                         principales.push(entry)
+      if (TIPOS_INFO_ONLY.has(t) || TIPOS_INFO_VISUAL_EXTRA.has(t)) info.push(entry)
+      else                                                          principales.push(entry)
     }
     principales.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
     info.sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
     return { depsPrincipales: principales, depsInfo: info }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deps, accesoByDepId, esDirector, tieneModulo, configByModulo])
+
+  // Merge visual de "Solo información": depsInfo (policial/educación,
+  // ya venían acá) + Juez de Paz (extraído de cicEntriesConTipo arriba,
+  // reorg 2026-07-24). Sala PA ya llega adentro de depsInfo por
+  // TIPOS_INFO_VISUAL_EXTRA. Re-ordena alfabético para no dejar a
+  // Juez de Paz siempre al final.
+  const depsInfoFinal = useMemo(() => {
+    const list = juezDePazEntry ? [...depsInfo, juezDePazEntry] : depsInfo
+    return [...list].sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))
+  }, [depsInfo, juezDePazEntry])
 
   // Filtramos top + gestión por módulo (mismo patrón que antes).
   const navTopFiltrado = useMemo(() => NAV_TOP.filter(item => tieneModulo(item.modulo)), [tieneModulo])
@@ -817,6 +876,10 @@ export default function AdminLayout() {
     if (subs.length === 0) return null
     return { ...item, subitems: subs }
   }).filter(Boolean), [tieneModulo])
+  const navTuComunaFiltrado = useMemo(
+    () => NAV_TU_COMUNA.filter(item => tieneModulo(item.modulo)),
+    [tieneModulo],
+  )
 
   return (
     <>
@@ -844,35 +907,40 @@ export default function AdminLayout() {
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
 
-          {(depsPrincipales.length > 0 || depsInfo.length > 0) && <Rotulo>Dependencias</Rotulo>}
+          {(depsPrincipales.length > 0 || depsInfoFinal.length > 0) && <Rotulo>Dependencias</Rotulo>}
           {depsPrincipales.map(item => (
             item.kind === 'link'
               ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
 
-          {/* Sub-rótulo "Solo información" — separa las dependencias
-              informativas (policial, educativas) de las operativas.
-              Usa gris suave para señalar que son enlaces secundarios.
-              Hidden en mobile (mismo patrón que los demás rótulos). */}
-          {depsInfo.length > 0 && (
+          {/* Sub-rótulo "Solo información" — dependencias informativas
+              (policial, educativas, Sala PA, Juez de Paz) separadas de
+              las operativas. Gris suave para señalar enlaces
+              secundarios. Hidden en mobile (mismo patrón que el resto). */}
+          {depsInfoFinal.length > 0 && (
             <div className="hidden px-3 pb-1 pt-3 lg:block">
               <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 opacity-70">
                 Solo información
               </span>
             </div>
           )}
-          {depsInfo.map(item => (
+          {depsInfoFinal.map(item => (
             item.kind === 'link'
               ? <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
               : <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
           ))}
 
-          {navGestionFiltrado.length > 0 && <Rotulo>Gestión municipal</Rotulo>}
+          {navGestionFiltrado.length > 0 && <Rotulo>Gestión de la Comuna</Rotulo>}
           {navGestionFiltrado.map(item => (
             item.subitems
               ? <NavGroup key={item.label} label={item.label} icon={item.icon} subitems={item.subitems} />
               : <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
+          ))}
+
+          {navTuComunaFiltrado.length > 0 && <Rotulo>Tu Comuna</Rotulo>}
+          {navTuComunaFiltrado.map(item => (
+            <FlatNavLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
           ))}
         </nav>
       </aside>
