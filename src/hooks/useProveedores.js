@@ -73,8 +73,14 @@ async function updateProveedor({ id, ...patch }) {
 
 export function useCreateProveedor() {
   const qc = useQueryClient()
+  const { municipioId } = useEffectiveMunicipioId()
   return useMutation({
-    mutationFn: createProveedor,
+    // Inyecta el municipio del operador — la RLS (proveedores_staff_all)
+    // exige municipio_id = current_usuario_municipio() en el WITH CHECK,
+    // así que sin esto el INSERT siempre fallaba con "new row violates
+    // row-level security policy" (bug real, encontrado en la
+    // verificación en vivo de Fase 0). Mismo patrón que useVecinos.js.
+    mutationFn: (data) => createProveedor({ ...data, municipio_id: municipioId }),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['proveedores'] }),
   })
 }
