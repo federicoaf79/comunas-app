@@ -301,6 +301,7 @@ const NAV_GESTION = [
       </svg>
     ),
     subitems: [
+      { to: '/admin/vales', label: 'Vales emitidos' },
       { to: '/admin/vales/proveedores', label: 'Proveedores' },
     ],
   },
