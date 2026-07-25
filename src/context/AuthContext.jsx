@@ -79,7 +79,7 @@ export function AuthProvider({ children }) {
     // Supabase maneja sus propios reintentos sobre el fetch global.
     const { data: perfilData, error: perfilError } = await supabase
       .from('usuarios')
-      .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, modulos_acceso')
+      .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, nombre, email, activo, modulos_acceso, puede_emitir_vales')
       .eq('id', userId)
       .single()
 
