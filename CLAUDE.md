@@ -59,6 +59,53 @@ fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}
 **RESUELTO — 404/400 en consola al cargar cualquier pantalla del panel admin (no solo Autoridades):** `useOnboardingProgress.js` (el hook detrás del widget flotante de Onboarding, montado en `AdminLayout.jsx` y por lo tanto presente en **toda** `/admin/*`) consultaba una tabla inexistente `noticias_municipio` (404 — la real es `noticias`) y filtraba `usuarios` por `.eq('rol', 'operador')` (400 — la columna real es `roles`, un array, no `rol` singular). Fix 2026-07-23: `noticias_municipio` → `noticias`; `.eq('rol', 'operador')` → `.contains('roles', ['operador'])`. Verificado en vivo (con evidencia adicional vía `curl` directo confirmando que la query corregida devuelve 200 con datos reales) que ya no aparecen ni el 404 ni el 400.
 **RESUELTO — regresión de cuenta dual (staff + vecino) en `AuthContext.jsx`, introducida el 2026-07-23 al arreglar un 406 cosmético:** `isVecinoAuthSession(userId)` cortaba la consulta a `usuarios` ANTES de correrla si detectaba una sesión de vecino cacheada en `localStorage` para ese `user_id` — asumiendo que vecino y staff son excluyentes. El diseño del producto es lo contrario: una cuenta que es staff Y vecino registrado a la vez es el caso normal, no la excepción (ej. la cuenta de Enrique). El atajo dejaba `perfil` en `null` para esas cuentas, y `RoleGuard` las mandaba a `/portal` aunque tuvieran rol de staff real — bloqueo total del panel admin para cualquier cuenta dual. Fix 2026-07-23: se sacó `isVecinoAuthSession()` por completo; la query a `usuarios` corre siempre, y `noPerfilCache` (ya existente) sigue cacheando el resultado negativo, pero solo **después** de una consulta real que confirmó "no rows" (`PGRST116`) — nunca adivinando de antemano. Verificado en vivo con sesión 100% limpia: la cuenta dual de Enrique entra a `/admin` directo (sin redirect a `/portal`) y también a `/portal/mi-cuenta` como vecino, sin que una bloquee a la otra; el vecino demo puro (sin fila en `usuarios`) sigue entrando a `/portal/mi-cuenta` normalmente, con un único 406 real por carga de página (cacheado, no repetido).
 
+**ALTO — policies `ALL` con `is_staff()` dan escritura a los 5 roles que se sumaron
+el 2026-07-24:** unas 15 policies (`atenciones`, `inventario`, `movimientos_inventario`,
+`presupuesto_partidas`, `vehiculos`, `combustible_log`, `service_vehiculos`,
+`ayuda_social_entregas`, `entregas_ayuda_social`, `beneficiarios`,
+`patrimonio_mantenimiento`, `autoridades`, `espacios_deportivos`, `proveedores`,
+`hc_documentos`) piden solo `is_staff() + municipio`. Escritas cuando `is_staff()`
+significaba en la práctica "admin". Hoy un rol `reporting` puede insertar y borrar
+historia clínica y partidas presupuestarias de su comuna; `usuario_sub` igual, sin
+quedar acotado a su dependencia. No es un parche de una línea — requiere definir qué
+puede hacer cada uno de los 8 roles. **Sprint propio, pendiente.**
+
+**MEDIO — tres policies sin filtro de municipio (cross-tenant):** `espacios_deportivos`
+(`espacios_staff_all`, `USING is_staff()` a secas), `autoridades`
+(`autoridades staff escribe`, `is_staff() OR is_superadmin()`) y `hc_consultas`
+(INSERT `is_superadmin() OR is_staff()`, SELECT `is_superadmin() OR is_staff() OR vecino`).
+La de `hc_consultas` es la peor: **se llama "hc consultas staff lee municipio" y no
+filtra por municipio** — el nombre miente, por eso sobrevivió varias revisiones.
+Misma clase de bug que el `USING(true)` de `atenciones` ya cerrado. Latente mientras
+haya un solo tenant vivo, explotable apenas entre el segundo. Pendiente además
+confirmar si `hc_consultas` quedó muerta tras unificar la HC en `atenciones`
+(si tiene 0 filas → dropear; si tiene filas → arreglar la policy).
+
+**RESUELTO — `vales_proveedor_select_ventana` filtraba el padrón de beneficiarios:**
+la policy original aceptaba `estado IN ('emitido','abierto')` con
+`vence_apertura_en IS NULL OR now() <= vence_apertura_en`. Los vales en `emitido`
+tienen `vence_apertura_en` en null, así que pasaban siempre: el comerciante podía
+listar todos los vales emitidos a su nombre que nadie había abierto todavía — con
+`vecino_id`, `monto` y `descripcion`. Es decir, ver quién recibe ayuda municipal y
+por cuánto antes de que esa persona pise el local. El mismo filtro fallaba al revés:
+al pasar a `canjeado` el vale dejaba de matchear, así que el proveedor no podía ver
+lo que él mismo había canjeado (sin eso no hay conciliación posible para cobrarle a
+la comuna). Reescrita 2026-07-26: ve el vale solo mientras está `abierto` y dentro
+de ventana, o ya `canjeado`.
+
+**BAJO — índices redundantes en `vales`:** `idx_vales_estado` (btree sobre `estado`)
+y `vales_estado_activos_idx` (parcial sobre `estado` where `emitido`/`abierto`) se
+pisan. El parcial alcanza. Para el sprint de limpieza.
+
+**BAJO — las RPCs de vales no chequean `modulo_vales_activo()`:** todas las policies
+del módulo sí lo hacen, pero `abrir_vale`/`canjear_vale` no. Apagar el módulo para un
+tenant no frena canjes de vales ya emitidos. Discutible si importa.
+
+**TRAMPA para Fase 4 — vistas y RLS:** cuando haga falta filtrar por estado efectivo
+en SQL (no en JS), una vista sobre `vales` corre con los permisos del owner y
+**saltea la RLS de la tabla de abajo**. Necesita `with (security_invoker = true)` o
+expone todos los vales de todos los tenants.
+
 ---
 
 ## Auditoría — Log de operaciones (`audit_log`)
@@ -315,3 +362,238 @@ CRÍTICO: regex normalización días → `/[\u0300-\u036f]/g` (NO corromper este
 - 7 turnos del día 23/6/2026 con vecinos variados (González, Herrera, Dib Campiteli, Aban, Abendaño, López, Paz)
 - 10 eventos agenda pública junio 2026
 - 3 profesionales: Dra. Ramírez, Dr. Soria, Lic. Flores
+
+## Vales Electrónicos (módulo completo)
+
+Módulo activable por tenant vía `modulos_config` (`activo` bool + `config` jsonb),
+mismo patrón que `sala_pa`/`juez_paz`. La función SQL `modulo_vales_activo(municipio_id)`
+gatea todas las policies del módulo.
+
+### Mecánica del producto
+
+El staff emite un vale a un vecino beneficiario. El beneficiario puede ser un vecino
+común o un empleado municipal — el staff también son vecinos, cuenta dual es el caso
+normal, no la excepción.
+
+El vale referencia un proveedor del catálogo (categoría libre: Ferretería, Combustible,
+Almacén, etc.). Lleva descripción libre y **monto($) O cantidad+unidad, nunca ambos**
+(constraint `chk_vales_monto_o_cantidad`), código único, y vigencia de 24/48/72hs
+desde la emisión (constraint `vales_vigencia_horas_check`, default 48).
+
+**El VECINO** presiona "Ver QR" en su portal. Ahí arranca un countdown de 30 minutos
+fijo desde la primera apertura. Reabrir dentro de la ventana NO reinicia el reloj.
+Antes de abrir hay un popup de advertencia que el vecino tiene que confirmar.
+
+**El PROVEEDOR** canjea desde su propia cuenta de vecino, con acceso habilitado vía
+`proveedor_accesos`. No hay portal público sin login.
+
+**Si pasan los 30 minutos sin canjear, el vale SE QUEMA.** No se reabre. El vecino
+tiene que ir a pedir uno nuevo a la comuna. Decisión de producto confirmada por
+Federico el 2026-07-25 — no "corregir" esto a un comportamiento más permisivo.
+
+### Máquina de estados
+
+```
+emitido ──abrir_vale()──> abierto ──canjear_vale()──> canjeado
+   │                          │
+   │ vigencia (24/48/72h)     │ 30 min sin canje
+   ▼                          ▼
+vencido                    quemado
+```
+
+`cancelado` existe en el CHECK pero todavía no tiene RPC ni UI (ver pendientes).
+
+CHECK real (ampliado 2026-07-26 para sumar `quemado`):
+`estado = any(array['emitido','abierto','canjeado','vencido','quemado','cancelado'])`
+
+### Tablas
+
+- `proveedores` — catálogo por municipio, categoría libre, `activo` bool
+- `proveedor_accesos` — qué vecinos pueden canjear en nombre de qué proveedor
+  (responsable + secundarios), `activo` bool
+- `vales` — columnas reales: `id, municipio_id, vecino_id, proveedor_id, descripcion,
+  monto, cantidad, unidad, codigo, estado, vigencia_horas, emitido_en, emitido_por,
+  abierto_en, vence_apertura_en, canjeado_en, canjeado_por`
+
+`codigo` tiene índice **único global** (`vales_codigo_key`, sobre `codigo` solo, sin
+municipio). Por eso las RPCs pueden buscar por código sin filtrar por tenant.
+No cambiar a `unique(municipio_id, codigo)` sin arreglar las RPCs primero.
+
+### REGLA CRÍTICA — nunca UPDATE directo sobre `vales`
+
+`UPDATE` y `DELETE` sobre `public.vales` están **revocados** a `authenticated` y `anon`
+(2026-07-26). Todo cambio de estado pasa obligatoriamente por las RPCs.
+
+Si un hook nuevo intenta `supabase.from('vales').update(...)` va a fallar con
+`42501 permission denied for table vales`. **Eso es intencional — no revertir el
+revoke.** Si hace falta una transición nueva, se escribe una RPC nueva.
+
+Motivo: RLS filtra filas, no columnas. Un UPDATE directo podía marcar
+`estado='canjeado'` salteándose la ventana de 30 min, la validación de
+`proveedor_accesos` y el registro de `canjeado_por`.
+
+### RPCs (las dos `SECURITY DEFINER`, `search_path` fijado)
+
+`abrir_vale(p_codigo text) RETURNS vales`
+- Identidad interna vía `current_vecino_id()`, **nunca por parámetro**
+- `FOR UPDATE` sobre la fila
+- Valida que el vale sea del que lo abre (`vecino_id <> v_exec_id` → excepción)
+- **Idempotente**: si ya está `abierto` y dentro de ventana, devuelve la misma fila
+  sin tocar `abierto_en`/`vence_apertura_en`. No reinicia el reloj.
+- `vence_apertura_en = least(now() + 30 min, emitido_en + vigencia_horas)` — la
+  ventana nunca puede exceder la vigencia general del vale
+
+`canjear_vale(p_codigo text) RETURNS vales`
+- Identidad interna vía `current_vecino_id()`
+- `FOR UPDATE` para evitar doble canje en carrera entre dos terminales
+- Valida `proveedor_accesos` activo para el ejecutor
+- Exige `estado='abierto'` y `now() <= vence_apertura_en`
+
+**Ojo al consumir la respuesta:** ambas devuelven la fila CRUDA de `vales`, sin el
+embed `proveedor:proveedor_id(...)` que sí trae el SELECT del hook. Para mostrar el
+nombre del comercio en la UI hay que tomarlo del vale del listado y mezclar de la RPC
+solo `codigo`, `estado`, `abierto_en`, `vence_apertura_en`.
+
+### Barrido automático — pg_cron
+
+Extensión `pg_cron` habilitada 2026-07-26. Job `expirar-vales`, cada 5 minutos:
+
+```sql
+select cron.schedule('expirar-vales', '*/5 * * * *', $$select public.expirar_vales();$$);
+```
+
+`expirar_vales()` marca `quemado` (si estaba `abierto` y venció la ventana) o
+`vencido` (si estaba `emitido` y venció la vigencia). `SECURITY DEFINER` con
+`revoke execute` a `anon`/`authenticated` — solo el cron lo dispara.
+
+No se usa Vercel Cron: el plan es Hobby, 1 ejecución/día, inútil para una ventana
+de 30 minutos. Además la única corrida diaria ya la usan los recordatorios de turnos.
+
+Verificar con `select * from cron.job` y `cron.job_run_details`. Nunca dar por
+funcionando un cron solo porque `cron.schedule` devolvió un id.
+
+**No se loguea en `audit_log`:** son eventos del sistema sin autor. Miles de filas
+de "pasó el tiempo" diluyen el rastro de acciones humanas, que es lo que un director
+va a querer mirar. La fila del vale ya guarda `abierto_en`/`vence_apertura_en`/`estado`.
+
+### Dos candados de permiso INDEPENDIENTES
+
+1. Matriz general de "Permisos por persona" (Gestión/Administración) → controla ver
+   la sección y gestionar proveedores
+2. `usuarios.puede_emitir_vales` → candado aparte y más exclusivo, **solo para la
+   acción de EMITIR** (mueve plata o mercadería real)
+
+**Nunca mezclar los dos.** `puede_emitir_vales` aplica solo al INSERT en la policy
+`vales_staff_insert`, deliberadamente no a UPDATE/DELETE.
+
+### Archivos
+
+- `src/hooks/useVales.js` — admin: listado + emisión (Fase 1)
+- `src/hooks/useValesVecino.js` — portal: listado propio + `abrir_vale` (Fase 2)
+- `src/lib/valeEstado.js` — `estadoEfectivo()`, `msRestantes()`,
+  `formatearCountdown()`, `VALE_UI`
+- `src/pages/portal/MisVales.jsx` — listado + modal QR con countdown
+- Ruta `/portal/mis-vales`, tab "Mis vales" en `VecinoDashboard.jsx`
+- QR: `qrcode.react@4.2.0` (`<QRCodeSVG>`), peer deps declaran React 19 explícito
+
+`estadoEfectivo()` deriva el estado en lectura y **sigue haciendo falta** aunque
+exista el cron: cubre la ventana de hasta 5 minutos entre que el vale se quema y
+que el barrido lo persiste. No es la fuente de verdad — la autoridad es el server.
+
+El QR contiene **solo el string del código** (ej. `HJZG-DMNE`), nunca una URL.
+
+Label para el vecino: `quemado` se muestra como **"Perdido"** (palabra que entiende).
+En el panel del staff conviene "Quemado", para distinguirlo de "Vencido" de un vistazo.
+
+El código se genera en el cliente (`generarCodigoVale()`, charset sin caracteres
+ambiguos, `crypto.getRandomValues`) con reintento ante `23505`. Funciona, pero lo
+natural sería moverlo a un default/trigger del server en algún momento.
+
+### Estado del módulo
+
+- **Fase 0** (schema, RLS, módulo activable, CRUD proveedores) — CERRADA
+- **Fase 1** (emisión desde el admin) — CERRADA
+- **Fase 2** (portal del vecino, "Mis vales", QR + countdown) — CERRADA y verificada
+  en vivo 2026-07-26 con vale real `HJZG-DMNE`
+- **Fase 3** (sección Proveedor para canjear) — PENDIENTE
+- **Fase 4** (auditoría/reportes para el staff) — PENDIENTE
+- **Fase 5** (`logAudit()` en emisión/canje) — emisión ya loguea en `useVales.js`;
+  falta el canje
+
+## Actualizaciones sesión 25-26 julio 2026
+
+### `is_staff()` — CORREGIDO, releer si tocás RLS
+
+Definida en mayo 2026 y usada en 17+ migraciones, solo reconocía `superadmin`,
+`admin_comuna` y `operador`. **Ignoraba 5 de los 8 roles reales de staff**
+(`admin_portal`, `usuario_admin`, `subadmin`, `usuario_sub`, `reporting`).
+
+Como un SELECT bloqueado por RLS devuelve `[]` en silencio (no error), esto pasó
+desapercibido en varias verificaciones "en vivo" del mismo día hasta que un INSERT
+lo expuso con error real. Redefinida 2026-07-24 para incluir los 8 roles de staff
+(`vecino` queda afuera a propósito).
+
+**LECCIÓN:** un SELECT vacío por RLS es indistinguible de una lista genuinamente
+vacía. Verificar permisos nuevos con datos que se SEPA que existen (contar filas),
+no solo confirmar que "la pantalla cargó sin error".
+
+**CONSECUENCIA a tener presente:** `is_staff()` se AMPLIÓ, no se corrigió puntualmente.
+Toda policy que la use hoy le da acceso a los 5 roles que antes negaba en silencio.
+Ver la entrada de Riesgos abiertos sobre policies `ALL`.
+
+### Sistema de permisos unificado
+
+La matriz "Permisos por persona" (antes solo `dependencias_acceso`, para dependencias
+físicas) se extendió con `usuarios.modulos_acceso` — mismo shape jsonb, clave por
+`'modulo'` en vez de `dependencia_id` — para cubrir Vales, Administración y Reclamos.
+
+Un solo lugar para asignar Gestión/Administración, sea dependencia física o módulo
+de gestión. Cuando no hay distinción operativa real, "cualquiera de los dos flags
+alcanza" (igual que dependencias).
+
+Vales no es una dependencia, opera a nivel municipio completo — por eso no se forzó
+dentro de `dependencias_acceso`.
+
+### Sidebar reorganizado
+
+- "Gestión Municipal" → renombrada **"Gestión de la Comuna"** (Portal Web, Vales,
+  Administración, Reclamos — accesible a staff con permiso puntual)
+- Nueva sección **"Tu Comuna"** al final de todo (Config. General, Usuarios,
+  Auditoría, Importador, Dependencias, Reportes e informes) — lo más sensible
+
+### Timezone en Vales — por qué no aplica el patrón de bugs anterior
+
+Todas las columnas de tiempo de `vales` son `timestamptz` y se comparan contra
+`now()`, que también es absoluto. No hay conversión de zona en el medio que pueda
+salir mal.
+
+Los 14 bugs de timezone de julio eran de columnas `date`, donde
+`toISOString().split('T')[0]` devolvía el día anterior. **Es una clase de problema
+distinta — no aplicar el patrón `ARG_OFFSET` acá.**
+
+El SQL Editor de Supabase muestra en UTC. Argentina es UTC-3. Para ver en hora local:
+`set timezone = 'America/Argentina/Buenos_Aires';`
+
+### Verificación en vivo de Fase 2 (2026-07-26)
+
+Vale real `HJZG-DMNE`, $5.000, vigencia 24hs, emitido por Luis Nicolás Álvarez al
+vecino demo (DNI 99888777). Ciclo completo verificado contra la base, no solo en
+pantalla: `emitido` → `abierto` (ventana exacta de 30 min) → `quemado` por el cron.
+
+Confirmado además que el cron corrió dos veces con el vale abierto **sin tocarlo**
+— valida la rama negativa de `expirar_vales()`.
+
+Colores medidos en `rgb()`, no "se ve azul": `rgb(29,78,216)` = `#1D4ED8` para
+Disponible, `rgb(201,168,76)` = `#C9A84C` para En uso. Cero verde.
+
+### Nota de proceso — sesiones de navegador
+
+Volvió a aparecer el síntoma de sesión arrastrada: entrar a `/login` (puerta de
+STAFF) con una sesión de vecino viva en `localStorage` produce el mensaje
+"Tu cuenta aún no fue habilitada en el sistema", que es la respuesta correcta a la
+pregunta equivocada — la app buscó el `user_id` del vecino en `usuarios` y no lo
+encontró.
+
+Antes de diagnosticar cualquier problema de login: limpiar las claves `sb-*` del
+Local Storage + hard refresh, y confirmar por qué puerta se está entrando
+(`/login` = staff, portal = vecino).
