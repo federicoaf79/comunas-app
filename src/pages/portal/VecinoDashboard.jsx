@@ -46,6 +46,7 @@ export const TABS = [
   { key: 'salud',      label: 'Mi salud',                short: 'Salud' },
   { key: 'datos',      label: 'Mis datos',               short: 'Datos' },
   { key: 'reclamos',   label: 'Mis reclamos',            short: 'Reclamos' },
+  { key: 'vales',      label: 'Mis vales',               short: 'Vales' },
   { key: 'reservas',   label: 'Poli',                    short: 'Poli' },
   { key: 'familia',    label: 'Mi familia',              short: 'Familia' },
   { key: 'desarrollo', label: 'Agencia de Desarrollo',   short: 'Agencia' },
@@ -658,6 +659,37 @@ function truncate(text, max = 60) {
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
 }
 
+// Entrada simple hacia /portal/mis-vales (Vales Electrónicos, Fase 2)
+// -- mismo criterio que "+ Nuevo reclamo" dentro de ReclamosTab: el
+// listado real y la lógica de apertura/QR viven en su propia página,
+// acá solo hay un punto de entrada consistente con el resto del tab bar.
+function ValesTab() {
+  const navigate = useNavigate()
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mis vales</h2>
+        <p className="text-sm text-primary-500">
+          Vales electrónicos que te emitió la Comisión Municipal.
+        </p>
+      </div>
+      <div className="card flex flex-col items-center gap-3 p-8 text-center sm:p-10">
+        <div className="text-4xl">🎫</div>
+        <p className="text-sm text-primary-500">
+          Vas a poder ver el estado de cada vale y generar el código para
+          canjearlo en el comercio.
+        </p>
+        <button
+          onClick={() => navigate('/portal/mis-vales')}
+          className="btn-accent"
+        >
+          Ver mis vales →
+        </button>
+      </div>
+    </section>
+  )
+}
+
 function ReclamosTab({ vecino, reclamos, isLoading, error }) {
   const navigate = useNavigate()
 
@@ -1207,6 +1239,7 @@ export default function VecinoDashboard() {
             error={reclamosQ.error}
           />
         )}
+        {tab === 'vales' && <ValesTab />}
         {tab === 'reservas' && (
           <ReservasTab
             vecino={vecinoSession}
