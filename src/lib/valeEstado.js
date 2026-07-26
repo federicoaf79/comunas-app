@@ -6,6 +6,11 @@
 // todavía dice 'emitido'/'abierto' pero el reloj ya pasó. No es la
 // fuente de verdad: la autoridad es el server (RPCs + cron).
 
+// Lista canónica -- ÚNICA fuente de qué estados existen. Cualquier
+// mapa de presentación (acá o en otra pantalla) se valida contra esta
+// lista, nunca se mantiene una segunda lista de estados en paralelo.
+export const VALE_ESTADOS = ['emitido', 'abierto', 'canjeado', 'vencido', 'quemado', 'cancelado']
+
 const TERMINALES = ['canjeado', 'vencido', 'quemado', 'cancelado']
 
 export function estadoEfectivo(vale, ahora = Date.now()) {
@@ -54,4 +59,11 @@ export const VALE_UI = {
   vencido:   { label: 'Vencido',     color: '#64748B', bg: '#F1F5F9' },
   quemado:   { label: 'Perdido',     color: '#64748B', bg: '#F1F5F9' },
   cancelado: { label: 'Cancelado',   color: '#64748B', bg: '#F1F5F9' },
+}
+
+if (import.meta.env.DEV) {
+  const faltantes = VALE_ESTADOS.filter(e => !(e in VALE_UI))
+  if (faltantes.length) {
+    console.warn(`VALE_UI no cubre estos estados de VALE_ESTADOS: ${faltantes.join(', ')}`)
+  }
 }

@@ -26,6 +26,8 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ## ⚠️ Riesgos abiertos
 
+**MEDIO — Datos de prueba de Vales Electrónicos en prod, pendientes de borrar antes de la entrega a Real Sayana:** generados durante la verificación en vivo de Fase 1-3 (julio 2026), viven mezclados con datos reales del tenant. Incluye: los proveedores `"TEST Vales — Almacén Don Ramón"` (`9a269153-d689-4122-8ba6-f099379f35a7`) y `"TEST Vales — Panadería La Esquina"` (`2fe8b40b-e4d3-4641-bf3f-90bc9d7c982b`); sus filas en `proveedor_accesos` y `proveedor_dispositivos`; el vecino `"Comerciante, Demo"` (DNI 88777666, `comerciante.demo@realsayana.gob.ar`) creado para separar los roles dueño/beneficiario en la verificación final de Fase 3; y los vales de prueba emitidos al vecino demo (DNI 99888777) — `DUS4-ANUG`, `QSSR-GDUU`, `4DF2-WUWU`, `NF7H-N3S9`, más `HJZG-DMNE` de Fase 2. Borrar los 2 proveedores hace caer solos los `proveedor_accesos` por `ON DELETE CASCADE` — pero **decirlo explícito acá para que nadie borre a medias**: `proveedor_dispositivos` no está confirmado que cascadee igual, hay que revisarlo/borrarlo aparte antes de dar la limpieza por completa. Todo esto es un paso manual antes de que el cliente vea el módulo — no se hizo automáticamente porque implica deletes reales en prod y quedó fuera del alcance de la verificación funcional. Pendiente: confirmar con el cliente el momento de la limpieza (antes de la demo/entrega) y correr los deletes a mano.
+
 **MEDIO — Toggles fantasma en `dependencias`: `modulo_erp` y `modulo_bot` no controlan nada:** confirmado 2026-07-24 (auditoría en vivo de los 2 sistemas de permisos/configuración, antes de construir nada nuevo encima) vía grep de todo el repo + agente Explore independiente: ambos campos solo se leen/escriben dentro de `GestionDependencias.jsx` (1 `select` + el toggle de cada uno) — ningún otro componente los consulta. `AdministracionTab.jsx` no chequea `modulo_erp` y `DepBotIATab.jsx` no chequea `modulo_bot`. Los tooltips de la UI mienten: "Habilita el módulo de administración: gastos, ingresos, solicitudes de compra" (ERP) y "El bot de WhatsApp responderá preguntas sobre esta dependencia con su información específica" (Bot IA) — ninguna de las dos cosas pasa, tildar o destildar estos toggles no tiene ningún efecto real hoy. **No corregido a propósito** (pendiente decidir con el cliente): la opción más simple sería sacar directamente esos 2 controles de la UI de `GestionDependencias.jsx` ya que hoy solo confunden al staff haciéndoles creer que controlan algo. `activa` y `modulo_turnos` (los otros 2 toggles de la misma pantalla) sí están confirmados conectados — no es un problema de la pantalla en general, solo de estos 2 campos puntuales.
 **RESUELTO — sidebar bypaseaba `dependencias_acceso` por completo para dependencias con `solo_informativo:true` (Sala Primeros Auxilios, Juez de Paz):** confirmado en vivo 2026-07-24 durante la misma auditoría, probando con un empleado real (Luis Nicolás Álvarez, `ADMIN_PORTAL`, 0 accesos asignados) logueado de verdad. `entryParaDep()` en `AdminLayout.jsx` resolvía `soloInformativo` (leído de `modulos_config.config`, confirmado `true` para `sala_pa` y `juez_paz` en Real Sayana — **intencional**, decisión del cliente del 2026-07-23, no tocar ese valor) y devolvía el link plano a `?tab=landing` ANTES de llegar al chequeo de `accesoByDepId`/`esDirector` — así que cualquier staff, sin importar su `dependencias_acceso`, veía igual "Sala de Primeros Auxilios" y "Juez de Paz" en el sidebar. No era una brecha real de datos (la página destino, ej. `JuezDePaz.jsx` línea ~641-653, revalida `puede_gestionar`/`puede_administrar` por su cuenta y bloquea igual la sección no autorizada), pero el sidebar mentía sobre qué tenía asignado cada empleado. Fix 2026-07-24: se movió el chequeo de `puedeGestionar`/`puedeAdministrar` (misma lógica de `accesoByDepId` que ya usaba el resto de la función, reusada sin duplicar) ANTES del branch de `soloInformativo` — si no tiene ninguno de los dos, devuelve `null` (ni el link plano) igual que el resto de dependencias. Verificado en vivo con Luis: sin acceso a Sala PA → ya no aparece en el sidebar; con acceso de prueba asignado → vuelve a aparecer.
 
@@ -443,16 +445,107 @@ Motivo: RLS filtra filas, no columnas. Un UPDATE directo podía marcar
 - `vence_apertura_en = least(now() + 30 min, emitido_en + vigencia_horas)` — la
   ventana nunca puede exceder la vigencia general del vale
 
-`canjear_vale(p_codigo text) RETURNS vales`
+`canjear_vale(p_codigo text, p_device_id text) RETURNS vales` — **firma cambiada en
+Fase 3 (2026-07-26)**, la vieja de un solo parámetro fue DROPEADA en prod. Si algún
+código viejo la llama con un solo argumento, va a fallar con "function does not
+exist" (Postgres resuelve por firma completa, no hay fallback).
 - Identidad interna vía `current_vecino_id()`
 - `FOR UPDATE` para evitar doble canje en carrera entre dos terminales
-- Valida `proveedor_accesos` activo para el ejecutor
+- Valida `proveedor_accesos` activo para el ejecutor **Y** que `p_device_id` esté
+  vinculado (`proveedor_dispositivos`, activo) al MISMO comercio del vale — dos
+  candados independientes, no alcanza con uno solo
 - Exige `estado='abierto'` y `now() <= vence_apertura_en`
 
 **Ojo al consumir la respuesta:** ambas devuelven la fila CRUDA de `vales`, sin el
 embed `proveedor:proveedor_id(...)` que sí trae el SELECT del hook. Para mostrar el
 nombre del comercio en la UI hay que tomarlo del vale del listado y mezclar de la RPC
 solo `codigo`, `estado`, `abierto_en`, `vence_apertura_en`.
+
+### Fase 3 — sección Proveedor (canjear vales)
+
+Un vale se canjea SOLO en el comercio para el que fue emitido. Un teléfono
+(`device_id`, `crypto.randomUUID()` persistido en `localStorage`) opera en UN SOLO
+comercio a la vez — el dueño de varios comercios puede VER todos, pero canjear solo
+en el que su teléfono actual tiene vinculado. Sin esto se pierde trazabilidad de
+qué empleado/teléfono canjeó qué.
+
+- `proveedor_dispositivos` — `device_id` único global, `proveedor_id`, `municipio_id`,
+  `alias`, `activo`, `vinculado_por`, `ultimo_uso_en`. INSERT/UPDATE/DELETE
+  revocados al cliente — todo pasa por RPC.
+- `vincular_dispositivo(p_device_id, p_proveedor_id, p_alias)` — valida
+  `proveedor_accesos` y **rechaza** si el teléfono ya está vinculado a otro comercio
+  activo (no lo reemplaza — para eso hay que desvincular primero).
+- `desvincular_dispositivo(p_device_id) RETURNS boolean` — marca `activo=false`, no
+  borra la fila (el rastro de qué teléfono operó en qué comercio se conserva). Solo
+  puede ejecutarlo quien vinculó ese teléfono, o staff de la comuna — un empleado
+  cualquiera con acceso al comercio NO puede, si no el candado del dispositivo sería
+  decorativo. `vincular_dispositivo` reactiva con `on conflict do update`, así que
+  revincular después de desvincular funciona sin nada extra.
+
+Flujo del canje: escanear (`@yudiel/react-qr-scanner`, peer deps declaran React 19
+explícito) o tipear el código al mismo nivel visual (el navegador embebido de
+WhatsApp puede negar `getUserMedia`, el tipeo es el único camino ahí) → **preview**
+del vale (comercio, descripción, monto/cantidad, vecino, minutos restantes) → recién
+con "Confirmar canje" se llama la RPC. Nunca canjear automáticamente al leer el
+código.
+
+- `src/lib/deviceId.js` — `getDeviceId()`
+- `src/hooks/useProveedorVecino.js` — accesos, dispositivo vinculado,
+  vincular/desvincular, preview por código (`fetchValePorCodigo`, vía RPC
+  `preview_vale`), `canjear_vale`, vales canjeados de un comercio (solo lectura)
+- `src/pages/portal/Proveedor.jsx` — ruta `/portal/proveedor`, entrada condicional
+  en el tab "Mis vales" de `VecinoDashboard.jsx` (solo si el vecino tiene al menos
+  un `proveedor_accesos` activo — `TABS`/`DashboardHeader` de ese archivo son
+  compartidos con otras páginas del portal, así que la entrada NO se agregó ahí para
+  no tener que tocar esos otros usos)
+
+#### `preview_vale` — por qué es una RPC y no un SELECT directo
+
+Primera versión de `fetchValePorCodigo()` hacía un `SELECT` directo sobre `vales`
+con embed `vecino:vecino_id(id, nombre_completo)`. Funcionaba en toda la verificación
+en vivo porque el vecino de prueba era dueño Y beneficiario a la vez (veía su propia
+fila de `vecinos` vía `vales_vecino_select_propios`, sin pasar por el permiso de
+proveedor). Al separar los roles en dos cuentas reales (`comerciante.demo@...` sin
+ninguna fila propia entre los vales probados) el embed volvió `null` — el comerciante
+no tiene, ni debe tener, permiso de `SELECT` sobre la fila de OTRO vecino. El síntoma
+en pantalla era "Vecino: —" en el preview de canje.
+
+**No se resolvió con una policy nueva en `vecinos`.** Esa tabla concentra la PII
+del sistema (nombre, DNI, contacto, alergias, historia clínica) — abrirla a
+comerciantes, aunque sea acotada a un campo, es desproporcionado para el problema
+real: un comerciante solo necesita saber a quién le entrega un vale puntual, nunca
+tuvo motivo para tener acceso de lectura a `vecinos` en general.
+
+Se resolvió con `preview_vale(p_codigo text, p_device_id text) RETURNS jsonb`,
+`SECURITY DEFINER` — arma el jsonb del lado del server (sí tiene permiso ahí) y
+devuelve solo lo estrictamente necesario para cada caso:
+
+- **Normal** (vale del comercio vinculado en este dispositivo): `es_otro_comercio:
+  false` + `codigo, estado, descripcion, monto, cantidad, unidad, vence_apertura_en,
+  canjeado_en, proveedor_nombre, vecino_nombre, vecino_dni`
+- **Vale de OTRO comercio del MISMO dueño** (el dueño tiene `proveedor_accesos` a
+  varios comercios, pero este dispositivo opera en uno solo): `es_otro_comercio:
+  true` + `proveedor_nombre` únicamente — **sin** descripción, monto, ni datos del
+  vecino. El dueño puede saber que el código es de su otro local, no puede espiar
+  el detalle de una operación ajena a este dispositivo.
+- **Vale de un comercio ajeno**, código mal escrito, o vale que el beneficiario
+  todavía no abrió (`estado='emitido'`, no visible por RLS): la RPC tira `'Vale no
+  encontrado'` en los tres casos por igual — no confirma ni que el código exista.
+  Mensaje al comerciante: *"Puede que el vecino todavía no lo haya abierto en su
+  celular, que el código esté mal escrito, o que se haya vencido el plazo."* (las
+  tres causas son indistinguibles desde acá a propósito, no hay forma honesta de
+  decir más sin filtrar de más).
+- El chequeo de estado (`quemado`, `vencido`, `canjeado`) corre en el server desde
+  el preview mismo, no solo al confirmar — un vale muerto nunca llega a mostrar el
+  botón "Confirmar canje" habilitado, tira directo `'Vale no canjeable (estado
+  actual: X)'` (mismo fallback de `traducirErrorCanje()` sin match → se muestra el
+  mensaje del server tal cual).
+
+`fetchValePorCodigo(codigo, deviceId)` en `useProveedorVecino.js` ahora requiere
+`deviceId` — antes solo tomaba `codigo`. `Proveedor.jsx` ya no compara
+`vale.proveedor_id !== dispositivo.proveedor_id` en cliente (código muerto,
+eliminado): `esOtroComercio` lee directo `vale.es_otro_comercio` del jsonb, el
+server es la única fuente de verdad para esa comparación.
 
 ### Barrido automático — pg_cron
 
@@ -491,7 +584,8 @@ va a querer mirar. La fila del vale ya guarda `abierto_en`/`vence_apertura_en`/`
 - `src/hooks/useVales.js` — admin: listado + emisión (Fase 1)
 - `src/hooks/useValesVecino.js` — portal: listado propio + `abrir_vale` (Fase 2)
 - `src/lib/valeEstado.js` — `estadoEfectivo()`, `msRestantes()`,
-  `formatearCountdown()`, `VALE_UI`
+  `formatearCountdown()`, `VALE_ESTADOS` (lista canónica de estados), `VALE_UI`
+  (estilo pill del portal del vecino)
 - `src/pages/portal/MisVales.jsx` — listado + modal QR con countdown
 - Ruta `/portal/mis-vales`, tab "Mis vales" en `VecinoDashboard.jsx`
 - QR: `qrcode.react@4.2.0` (`<QRCodeSVG>`), peer deps declaran React 19 explícito
@@ -509,13 +603,38 @@ El código se genera en el cliente (`generarCodigoVale()`, charset sin caractere
 ambiguos, `crypto.getRandomValues`) con reintento ante `23505`. Funciona, pero lo
 natural sería moverlo a un default/trigger del server en algún momento.
 
+`ESTADO_BADGES` (`ValesEmitidos.jsx`, listado admin) tenía un fallback silencioso a
+`emitido` para cualquier estado sin mapear en el badge — así fue como `quemado`
+(agregado al CHECK después de escribir Fase 1) se mostró como "Emitido" durante
+semanas sin que nadie lo notara (confirmado en vivo 2026-07-26 con `HJZG-DMNE`,
+`quemado` real en DB, "Emitido" en pantalla). Fix 2026-07-26: `ESTADO_BADGES` ya
+tiene las 6 entradas de `VALE_ESTADOS` (sumó `quemado`, mismo estilo sólido gris que
+`vencido`); el fallback pasó a mostrar el estado crudo en gris neutro si algún día
+aparece uno sin mapear — tiene que verse raro, no disfrazarse del más inocuo. Ambos
+mapas de presentación (`ESTADO_BADGES` acá, `VALE_UI` en `valeEstado.js`) corren una
+validación en dev (`console.warn`) contra `VALE_ESTADOS` si falta algún estado. La
+lista de estados es una sola (`VALE_ESTADOS`); los estilos son dos a propósito
+(badge sólido en el admin, pill suave en el portal del vecino — contextos distintos,
+`cancelado` incluso difiere en color entre ambos porque el admin ya lo tenía en rojo
+antes de esta lista y no había motivo para tocarlo).
+
 ### Estado del módulo
 
 - **Fase 0** (schema, RLS, módulo activable, CRUD proveedores) — CERRADA
 - **Fase 1** (emisión desde el admin) — CERRADA
 - **Fase 2** (portal del vecino, "Mis vales", QR + countdown) — CERRADA y verificada
   en vivo 2026-07-26 con vale real `HJZG-DMNE`
-- **Fase 3** (sección Proveedor para canjear) — PENDIENTE
+- **Fase 3** (sección Proveedor para canjear) — CERRADA. Verificada en vivo
+  2026-07-26 en dos rondas: la primera con el vecino demo como dueño Y beneficiario
+  a la vez (ocultaba el camino real de un comerciante externo); la segunda —
+  la que cuenta — con dos cuentas separadas (`comerciante.demo@realsayana.gob.ar`
+  dueño de los 2 comercios de prueba, vecino demo solo beneficiario, todos los
+  `proveedor_dispositivos` reseteados a desvinculado). Cubrió los dos caminos que
+  la primera ronda no pudo probar: código de un vale ajeno todavía `emitido` (cae en
+  "no encontrado", sin fuga de datos) y el preview con un vecino real que el
+  comerciante no tiene permiso de ver directo en `vecinos` (resuelto con la RPC
+  `preview_vale`, ver arriba). Vales de prueba usados: `4DF2-WUWU`, `NF7H-N3S9`,
+  más los de la ronda anterior.
 - **Fase 4** (auditoría/reportes para el staff) — PENDIENTE
 - **Fase 5** (`logAudit()` en emisión/canje) — emisión ya loguea en `useVales.js`;
   falta el canje
