@@ -90,7 +90,18 @@ function AbrirValeModal({ vale, onClose }) {
     abrirMut.mutate(vale.codigo, {
       onSuccess: (data) => {
         if (cancel) return
-        setValeAbierto(data)
+        // abrir_vale() devuelve la fila cruda de `vales` -- sin el
+        // embed de proveedor (eso solo lo trae el SELECT del listado,
+        // vía useValesVecino). Mezclamos: proveedor/descripción del
+        // `vale` de la lista + los 4 campos que sí son autoridad del
+        // server en la respuesta del RPC.
+        setValeAbierto({
+          ...vale,
+          codigo: data.codigo,
+          estado: data.estado,
+          abierto_en: data.abierto_en,
+          vence_apertura_en: data.vence_apertura_en,
+        })
         setStep('qr')
       },
       onError: (e) => {
