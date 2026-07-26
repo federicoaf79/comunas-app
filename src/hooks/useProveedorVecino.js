@@ -110,14 +110,22 @@ export function useDesvincularDispositivo() {
   })
 }
 
-// Preview de un vale por código -- ANTES de canjear. RLS
-// (vales_proveedor_select_ventana) solo deja ver vales 'abierto'
-// (dentro de ventana) o ya 'canjeado' de un comercio al que el
-// vecino tenga proveedor_accesos activo -- cualquier otro código
-// (inexistente, todavía no abierto por el beneficiario, vencido,
-// quemado, o de un comercio ajeno) devuelve 0 filas, indistinguible
-// de "no existe" desde acá. Eso es intencional: no hay forma honesta
-// de decir más sin filtrar información que no es nuestra.
+// Preview de un vale por código -- ANTES de canjear. Vía RPC
+// (preview_vale), no un SELECT directo: un SELECT con embed a
+// vecino_id devuelve null para un comerciante real, que no tiene
+// permiso de SELECT sobre la fila de OTRO vecino -- por eso la RPC
+// es SECURITY DEFINER y arma el jsonb del lado del server, sin abrir
+// la tabla `vecinos` (PII) a comerciantes.
+//
+// Formas del jsonb devuelto:
+//   - normal (mismo comercio vinculado): es_otro_comercio=false +
+//     codigo/estado/descripcion/monto/cantidad/unidad/
+//     vence_apertura_en/canjeado_en/proveedor_nombre/vecino_nombre/
+//     vecino_dni
+//   - vale de OTRO comercio del MISMO dueño: es_otro_comercio=true +
+//     proveedor_nombre -- sin datos del vale ni del vecino
+//   - vale de un comercio ajeno: la RPC tira 'Vale no encontrado',
+//     igual que un código inexistente -- no confirma que exista
 const VALE_PREVIEW_COLS = `
   id, codigo, descripcion, monto, cantidad, unidad, estado,
   emitido_en, vigencia_horas, abierto_en, vence_apertura_en, canjeado_en,
@@ -126,13 +134,12 @@ const VALE_PREVIEW_COLS = `
   proveedor:proveedor_id(id, nombre)
 `
 
-export async function fetchValePorCodigo(codigo) {
+export async function fetchValePorCodigo(codigo, deviceId) {
   if (!codigo) return null
-  const { data, error } = await supabase
-    .from('vales')
-    .select(VALE_PREVIEW_COLS)
-    .eq('codigo', codigo)
-    .maybeSingle()
+  const { data, error } = await supabase.rpc('preview_vale', {
+    p_codigo: codigo,
+    p_device_id: deviceId,
+  })
   if (error) throw error
   return data
 }

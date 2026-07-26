@@ -43,7 +43,7 @@ function traducirErrorCanje(mensaje, nombreComercioActual) {
     return `Este vale no es de ${nombreComercioActual ?? 'este comercio'}`
   }
   if (m.includes('vale no encontrado')) {
-    return 'Código incorrecto'
+    return 'Puede que el vecino todavía no lo haya abierto en su celular, que el código esté mal escrito, o que se haya vencido el plazo.'
   }
   if (m.includes('venció la ventana de canje') || m.includes('vencio la ventana de canje')) {
     return 'El vale venció. El vecino tiene que pedir uno nuevo'
@@ -149,14 +149,10 @@ function CanjearView({ dispositivo, deviceId }) {
     setResultadoOk(null)
     setBuscando(true)
     try {
-      const v = await fetchValePorCodigo(codigo)
-      if (!v) {
-        setError('Código incorrecto')
-      } else {
-        setVale(v)
-      }
+      const v = await fetchValePorCodigo(codigo, deviceId)
+      setVale(v)
     } catch (e) {
-      setError(e?.message ?? 'No pudimos buscar el vale.')
+      setError(traducirErrorCanje(e?.message, dispositivo.proveedor?.nombre))
     } finally {
       setBuscando(false)
     }
@@ -177,7 +173,7 @@ function CanjearView({ dispositivo, deviceId }) {
     setScanning(false)
   }
 
-  const esOtroComercio = vale && vale.proveedor_id !== dispositivo.proveedor_id
+  const esOtroComercio = !!vale?.es_otro_comercio
   const yaCanjeado = vale && vale.estado === 'canjeado'
   const puedeConfirmar = vale && !esOtroComercio && !yaCanjeado
 
@@ -251,33 +247,41 @@ function CanjearView({ dispositivo, deviceId }) {
       {vale && (
         <div className="rounded-lg border border-[#DDE0EC] bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-primary-400">Vale encontrado</p>
-          <p className="mt-1 font-sora text-lg font-bold text-primary">{vale.proveedor?.nombre}</p>
-          <p className="text-sm text-primary-600">{vale.descripcion}</p>
-          <div className="mt-2 flex items-center justify-between text-sm">
-            <span className="font-semibold text-primary">{detalleVale(vale)}</span>
-            <span className="text-primary-500">Vecino: {vale.vecino?.nombre_completo ?? '—'}</span>
-          </div>
-          {vale.estado === 'abierto' && (
-            <p className="mt-2 text-sm font-semibold" style={{ color: '#C9A84C' }}>
-              {formatearCountdown(msRestantes(vale))} restantes para canjear
-            </p>
-          )}
+          <p className="mt-1 font-sora text-lg font-bold text-primary">{vale.proveedor_nombre}</p>
 
-          {yaCanjeado ? (
-            <p className="mt-3 rounded-md bg-primary-50 p-2 text-sm font-medium text-primary-700">
-              Este vale ya fue canjeado.
-            </p>
-          ) : esOtroComercio ? (
+          {esOtroComercio ? (
             <p className="mt-3 rounded-md border border-red-100 bg-red-50 p-2 text-sm text-danger">
               Este vale no es de {dispositivo.proveedor?.nombre}.
             </p>
           ) : (
-            <div className="mt-3 flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setVale(null)}>Cancelar</Button>
-              <Button variant="accent" onClick={confirmarCanje} loading={canjearMut.isPending}>
-                Confirmar canje
-              </Button>
-            </div>
+            <>
+              <p className="text-sm text-primary-600">{vale.descripcion}</p>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="font-semibold text-primary">{detalleVale(vale)}</span>
+                <span className="text-primary-500">
+                  Vecino: {vale.vecino_nombre ?? '—'}
+                  {vale.vecino_dni ? ` · DNI ${vale.vecino_dni}` : ''}
+                </span>
+              </div>
+              {vale.estado === 'abierto' && (
+                <p className="mt-2 text-sm font-semibold" style={{ color: '#C9A84C' }}>
+                  {formatearCountdown(msRestantes(vale))} restantes para canjear
+                </p>
+              )}
+
+              {yaCanjeado ? (
+                <p className="mt-3 rounded-md bg-primary-50 p-2 text-sm font-medium text-primary-700">
+                  Este vale ya fue canjeado.
+                </p>
+              ) : (
+                <div className="mt-3 flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setVale(null)}>Cancelar</Button>
+                  <Button variant="accent" onClick={confirmarCanje} loading={canjearMut.isPending}>
+                    Confirmar canje
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
