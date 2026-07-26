@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino, useOrdenesDerivacionVecino } from '../../hooks/useVecinoData'
+import { useAccesosProveedorVecino } from '../../hooks/useProveedorVecino'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
 import { supabase } from '../../lib/supabase'
@@ -663,8 +664,13 @@ function truncate(text, max = 60) {
 // -- mismo criterio que "+ Nuevo reclamo" dentro de ReclamosTab: el
 // listado real y la lógica de apertura/QR viven en su propia página,
 // acá solo hay un punto de entrada consistente con el resto del tab bar.
-function ValesTab() {
+function ValesTab({ vecino }) {
   const navigate = useNavigate()
+  // Entrada a "Proveedor" (Fase 3) SOLO si el vecino tiene al menos
+  // un acceso activo a un comercio -- un vecino común no debe verla.
+  const accesosQ = useAccesosProveedorVecino(vecino?.id)
+  const tieneComercio = (accesosQ.data ?? []).length > 0
+
   return (
     <section className="space-y-4">
       <div>
@@ -686,6 +692,22 @@ function ValesTab() {
           Ver mis vales →
         </button>
       </div>
+
+      {tieneComercio && (
+        <div className="card flex flex-col items-center gap-3 p-8 text-center sm:p-10">
+          <div className="text-4xl">🏪</div>
+          <h3 className="font-sora text-base font-bold text-primary">¿Tenés un comercio adherido?</h3>
+          <p className="text-sm text-primary-500">
+            Entrá para canjear los vales que te presenten los vecinos.
+          </p>
+          <button
+            onClick={() => navigate('/portal/proveedor')}
+            className="btn-accent"
+          >
+            Ir a Proveedor →
+          </button>
+        </div>
+      )}
     </section>
   )
 }
@@ -1239,7 +1261,7 @@ export default function VecinoDashboard() {
             error={reclamosQ.error}
           />
         )}
-        {tab === 'vales' && <ValesTab />}
+        {tab === 'vales' && <ValesTab vecino={vecinoSession} />}
         {tab === 'reservas' && (
           <ReservasTab
             vecino={vecinoSession}
