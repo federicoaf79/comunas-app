@@ -679,8 +679,11 @@ antes de esta lista y no había motivo para tocarlo).
   más los de la ronda anterior.
 - **Fase 4 parte 1** (reporte de conciliación + anulación desde el admin) —
   CERRADA y verificada en vivo 2026-07-27 (ver detalle en
-  "Actualizaciones sesión 27 julio 2026" más abajo). Resto de Fase 4
-  (auditoría/reportes adicionales para el staff) sigue pendiente.
+  "Actualizaciones sesión 27 julio 2026" más abajo).
+- **Fase 4 parte 2** (gestión de proveedores para el staff — alta/baja/rol de
+  `proveedor_accesos`, listado y desvinculación de `proveedor_dispositivos`) —
+  CERRADA y verificada en vivo 2026-07-27 (ver detalle abajo). Resto de Fase 4
+  (auditoría/reportes adicionales) sigue pendiente.
 - **Fase 5** (`logAudit()` en emisión/canje) — emisión ya loguea en `useVales.js`;
   la anulación también loguea (`accion:'update'`, ver Fase 4 parte 1); falta el canje
 
@@ -846,3 +849,82 @@ nombres reales ("Vecino, Demo", "Comerciante, Demo") en las 5 filas, cero blanco
 listado y que el detalle muestra motivo + fecha + anulador real ("Luis Nicolás
 Álvarez"). Los 3 vales de prueba quedaron en prod — sumados a la entrada de
 limpieza pendiente en "Riesgos abiertos".
+
+### Vales Electrónicos — Fase 4 parte 2: gestión de proveedores para el staff (CERRADA)
+
+Hasta esta fase, `proveedor_accesos` (quién puede canjear/vincular en nombre de
+un comercio) y `proveedor_dispositivos` se administraban por SQL a mano — un
+comercio nuevo no podía operar hasta que alguien corriera un insert. Nueva
+pantalla en `/admin/vales/proveedores/:id` (`ProveedorDetalle.jsx`, botón
+"Gestionar" en el listado de `Proveedores.jsx`), dos secciones:
+
+- **Personas autorizadas** — CRUD directo con el cliente (`proveedor_accesos_staff_all`
+  es `FOR ALL`, sin RPC): alta reusando el mismo buscador de vecino de
+  `EmitirValeModal` (extraído a `VecinoBuscador.jsx`, componente compartido),
+  cambio de rol inline, activar/desactivar. Si el comercio queda con cero
+  `responsable` activos, banner visible (no bloqueante): "Este comercio no
+  tiene ningún responsable. Nadie va a poder vincular un teléfono, así que no
+  va a poder canjear vales."
+- **Teléfonos** — solo lectura + desvincular (`rpc('desvincular_dispositivo')`,
+  tiene bypass de staff). Sin botón de vincular a propósito: la RPC exige
+  `proveedor_accesos` de quien llama (un staff nunca tiene uno) y el
+  `device_id` vive en el localStorage del celular del comerciante — vincular
+  es siempre acción del responsable desde su propio teléfono.
+
+**Constraint no documentado hasta ahora, encontrado en la verificación en
+vivo:** `uq_proveedor_accesos_proveedor_vecino` — una persona tiene **un solo**
+acceso por comercio. "Agregar de nuevo" a alguien que ya tiene un acceso
+(activo o inactivo) es la misma fila: hay que reactivarla/cambiarle el rol
+desde el listado, no crear una nueva. El primer intento de agregar dos veces
+al mismo vecino mostraba el error crudo de Postgres
+(`duplicate key value violates unique constraint...`) directo en la pantalla
+del empleado — `createProveedorAcceso()` (`useProveedores.js`) ahora atrapa
+`error.code === '23505'` y muestra: "Esta persona ya tiene un acceso a este
+comercio. Buscala en la lista de abajo para reactivarla o cambiarle el rol."
+De paso se encontró que `handleCambiarRol`/reactivar en `ProveedorDetalle.jsx`
+no tenían `onError` — una falla ahí no mostraba nada (ni crudo ni amigable,
+directamente nada) — se agregó un banner de error de página con el mismo
+patrón que el resto del admin.
+
+**Desactivar acceso usa modal propio (`DesactivarAccesoModal.jsx`), no
+`confirm()` nativo**, con dos textos distintos según el caso:
+- Secundario (o responsable que no es el último activo): "{nombre} no va a
+  poder canjear más vales de {comercio}."
+- Último responsable activo: "{nombre} es el único responsable de {comercio}.
+  Si lo desactivás, nadie va a poder vincular teléfonos y el comercio no va a
+  poder canjear vales." — el caso que importa, porque es el estado inválido
+  que el banner de la ficha ya avisa DESPUÉS; conviene avisarlo ANTES de
+  crearlo. El cálculo excluye el propio acceso a desactivar del conteo de
+  "otros responsables activos" (si no, siempre daría "no sos el último").
+
+Desvincular un teléfono también tiene modal propio
+(`DesvincularDispositivoModal.jsx`) con `logAudit()` — es sensible, corta la
+operatoria de canje de un comercio desde la comuna.
+
+**Verificado en vivo 2026-07-27**, sesión real de Luis (staff), con los 2
+proveedores de prueba (Almacén Don Ramón, Panadería La Esquina). El estado de
+partida no coincidió con lo que se esperaba en varios puntos del checklist
+(Comerciante Demo ya estaba activo/responsable en Almacén en vez de inactivo,
+el acceso en `secundario` de una prueba anterior era el de Vecino Demo y no el
+de Comerciante Demo) — se readaptó el orden de la prueba en vivo con el
+cliente en vez de asumir el checklist original:
+- Desactivar al único responsable activo (Comerciante Demo en Almacén) mostró
+  el texto de "único responsable" correcto, y el banner de "sin responsables"
+  apareció después de confirmar.
+- Reactivar a Vecino Demo (secundario) no hizo desaparecer el banner;
+  cambiarle el rol a responsable sí.
+- El embed `vinculado_por` en Teléfonos mostró "Comerciante, Demo" con sesión
+  real de staff (no service role) — mismo tipo de bug que ya mordió dos veces
+  antes (embed que vuelve `null` en silencio bajo RLS).
+- El buscador de `VecinoBuscador` encuentra por DNI exacto y por una sola
+  palabra del nombre («Demo» encontró a los dos Demo); no encuentra por
+  nombre completo con espacio («Vecino Demo» → sin resultados) — comportamiento
+  heredado tal cual de `EmitirValeModal`, no una regresión de esta fase.
+- El toggle "Ver también los desvinculados" en Teléfonos funciona (confirmado
+  por network: sin tildar manda `...&activo=eq.true`, tildado lo saca) — no
+  había ningún dispositivo desvinculado real para verificar visualmente
+  porque ninguna prueba anterior en esta sesión llegó a completar un
+  `desvincular_dispositivo` real contra ese proveedor.
+- El estado final de prueba en Almacén Don Ramón quedó con Vecino Demo Y
+  Comerciante Demo activos como `responsable` (cambio deliberado de la
+  verificación en vivo, no accidental).
