@@ -474,13 +474,55 @@ qué empleado/teléfono canjeó qué.
   revocados al cliente — todo pasa por RPC.
 - `vincular_dispositivo(p_device_id, p_proveedor_id, p_alias)` — valida
   `proveedor_accesos` y **rechaza** si el teléfono ya está vinculado a otro comercio
-  activo (no lo reemplaza — para eso hay que desvincular primero).
+  activo (no lo reemplaza — para eso hay que desvincular primero). **Desde
+  2026-07-28, exige además rol `'responsable'`** — un secundario recibe
+  `'Solo el responsable del comercio puede vincular teléfonos'`.
 - `desvincular_dispositivo(p_device_id) RETURNS boolean` — marca `activo=false`, no
-  borra la fila (el rastro de qué teléfono operó en qué comercio se conserva). Solo
-  puede ejecutarlo quien vinculó ese teléfono, o staff de la comuna — un empleado
-  cualquiera con acceso al comercio NO puede, si no el candado del dispositivo sería
-  decorativo. `vincular_dispositivo` reactiva con `on conflict do update`, así que
-  revincular después de desvincular funciona sin nada extra.
+  borra la fila (el rastro de qué teléfono operó en qué comercio se conserva).
+  **Desde 2026-07-28, exige `'responsable'` o staff de la comuna** — reemplaza la
+  regla anterior ("quien vinculó ese teléfono, o staff"), que dejaba a un
+  secundario dar de baja su propio teléfono sin que el dueño se enterara.
+  `vincular_dispositivo` reactiva con `on conflict do update`, así que revincular
+  después de desvincular funciona sin nada extra.
+
+  **Por qué el cambio — el agujero real era vincular, no desvincular:**
+  cualquier secundario con acceso a un comercio podía sumar su celular
+  *personal* a `proveedor_dispositivos` y canjear vales sin que el responsable
+  se enterara nunca de que ese teléfono existía. Restringir solo desvincular
+  (como estaba antes) no cerraba nada — el problema era el alta, no la baja.
+  Con `vincular_dispositivo` exigiendo `'responsable'`, el alta de cualquier
+  teléfono pasa siempre por el dueño del comercio; un secundario puede operar
+  (canjear) en un teléfono ya vinculado por el responsable, pero nunca decide
+  qué teléfonos entran o salen del circuito.
+
+  **UI (`Proveedor.jsx`, `/portal/proveedor`) — la restricción del server se
+  refleja en qué se OFRECE, nunca al revés:**
+  - `VincularView` filtra `accesos` a `rol === 'responsable'` antes de mostrar
+    el selector de comercios. Si el vecino no es responsable de ninguno, no
+    hay selector — solo el mensaje "Este teléfono todavía no está habilitado
+    para canjear vales. Pedile al responsable del comercio que lo vincule
+    desde acá con su cuenta." (antes, un secundario en un teléfono sin
+    vincular veía el selector igual, elegía comercio, confirmaba, y chocaba
+    con el error crudo del server — parecía la app rota).
+  - `DispositivoView` (tab "Este dispositivo") oculta el botón "Desvincular"
+    para quien no es responsable del comercio activo, con el texto "Solo el
+    responsable del comercio o el personal de la comuna puede desvincular
+    este teléfono."
+  - Para decidir esto, `PROVEEDOR_ACCESO_COLS` (`useProveedorVecino.js`)
+    volvió a traer `rol` — se había sacado en la limpieza de Fase 4 parte 2
+    por no tener uso, con buen criterio en ese momento; acá sí hace falta,
+    pero **solo para elegir qué mostrar**, nunca como control de acceso real:
+    el server sigue rechazando a un secundario aunque el cliente mienta.
+  - Verificado en vivo 2026-07-28: secundario en teléfono nuevo (sin
+    vincular) → mensaje correcto, sin selector. Secundario en teléfono ya
+    vinculado → puede canjear, sin botón de desvincular. Responsable → botón
+    de desvincular visible. **No se pudo ejercitar el rechazo end-to-end de
+    `desvincular_dispositivo` con sesión de secundario** (bloqueo de
+    entorno: el token de sesión persistido en localStorage aparecía vencido
+    y el refresh_token ya rotado, sin cliente Supabase expuesto en `window`
+    para operar con la sesión real) — el chequeo de rol en el cuerpo de la
+    función SÍ está confirmado desplegado en prod (`pg_get_functiondef`),
+    pero falta la prueba en vivo del rechazo real vía RPC.
 
 Flujo del canje: escanear (`@yudiel/react-qr-scanner`, peer deps declaran React 19
 explícito) o tipear el código al mismo nivel visual (el navegador embebido de
