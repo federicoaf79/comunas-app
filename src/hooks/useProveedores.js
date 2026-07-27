@@ -166,7 +166,17 @@ async function createProveedorAcceso({ proveedorId, proveedorNombre, proveedorMu
     .insert({ proveedor_id: proveedorId, vecino_id: vecino.id, rol, activo: true })
     .select(PROVEEDOR_ACCESO_ADMIN_COLS)
     .single()
-  if (error) throw error
+  if (error) {
+    // uq_proveedor_accesos_proveedor_vecino: una persona tiene un solo
+    // acceso por comercio -- "agregar de nuevo" es reactivar/cambiar rol
+    // en la fila existente, no un alta nueva. Sin esto el postgres crudo
+    // ("duplicate key value violates unique constraint...") llegaba tal
+    // cual a la pantalla del empleado.
+    if (error.code === '23505') {
+      throw new Error('Esta persona ya tiene un acceso a este comercio. Buscala en la lista de abajo para reactivarla o cambiarle el rol.')
+    }
+    throw error
+  }
   logAudit({
     accion: 'create', entidad: 'proveedor_accesos', entidadId: row.id,
     descripcion: `Acceso otorgado — ${vecino.nombre_completo ?? vecino.id} como ${rol} de ${proveedorNombre}`,

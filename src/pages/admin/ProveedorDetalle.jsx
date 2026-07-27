@@ -80,6 +80,7 @@ export default function ProveedorDetalle() {
   const [modalAgregarOpen, setModalAgregarOpen] = useState(false)
   const [accesoADesactivar, setAccesoADesactivar] = useState(null)
   const [dispositivoADesvincular, setDispositivoADesvincular] = useState(null)
+  const [error, setError] = useState('')
 
   if (!puedeGestionar) return <AccesoDenegado />
 
@@ -119,9 +120,12 @@ export default function ProveedorDetalle() {
 
   function handleCambiarRol(acceso, nuevoRol) {
     if (nuevoRol === acceso.rol) return
+    setError('')
     cambiarRolMut.mutate({
       id: acceso.id, proveedorId: id, rol: nuevoRol,
       vecinoNombre: acceso.vecino?.nombre_completo, proveedorNombre: proveedor.nombre,
+    }, {
+      onError: e => setError(e?.message ?? 'No pudimos cambiar el rol.'),
     })
   }
 
@@ -131,9 +135,12 @@ export default function ProveedorDetalle() {
   // después pero conviene evitar antes de crearlo.
   function handleToggleAcceso(acceso) {
     if (!acceso.activo) {
+      setError('')
       toggleAccesoMut.mutate({
         id: acceso.id, proveedorId: id, activo: true,
         vecinoNombre: acceso.vecino?.nombre_completo, proveedorNombre: proveedor.nombre,
+      }, {
+        onError: e => setError(e?.message ?? 'No pudimos reactivar el acceso.'),
       })
       return
     }
@@ -175,6 +182,12 @@ export default function ProveedorDetalle() {
           {proveedor.categoria || 'Sin categoría'} · Personas autorizadas y teléfonos vinculados.
         </p>
       </header>
+
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          {error}
+        </div>
+      )}
 
       {sinResponsables && (
         <div className="rounded-md border border-accent-200 bg-accent-50 p-3 text-sm text-accent-700">
