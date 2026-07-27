@@ -26,7 +26,7 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ## ⚠️ Riesgos abiertos
 
-**MEDIO — Datos de prueba de Vales Electrónicos en prod, pendientes de borrar antes de la entrega a Real Sayana:** generados durante la verificación en vivo de Fase 1-3 (julio 2026), viven mezclados con datos reales del tenant. Incluye: los proveedores `"TEST Vales — Almacén Don Ramón"` (`9a269153-d689-4122-8ba6-f099379f35a7`) y `"TEST Vales — Panadería La Esquina"` (`2fe8b40b-e4d3-4641-bf3f-90bc9d7c982b`); sus filas en `proveedor_accesos` y `proveedor_dispositivos`; el vecino `"Comerciante, Demo"` (DNI 88777666, `comerciante.demo@realsayana.gob.ar`) creado para separar los roles dueño/beneficiario en la verificación final de Fase 3; y los vales de prueba emitidos al vecino demo (DNI 99888777) — `DUS4-ANUG`, `QSSR-GDUU`, `4DF2-WUWU`, `NF7H-N3S9`, más `HJZG-DMNE` de Fase 2. Borrar los 2 proveedores hace caer solos los `proveedor_accesos` por `ON DELETE CASCADE` — pero **decirlo explícito acá para que nadie borre a medias**: `proveedor_dispositivos` no está confirmado que cascadee igual, hay que revisarlo/borrarlo aparte antes de dar la limpieza por completa. Todo esto es un paso manual antes de que el cliente vea el módulo — no se hizo automáticamente porque implica deletes reales en prod y quedó fuera del alcance de la verificación funcional. Pendiente: confirmar con el cliente el momento de la limpieza (antes de la demo/entrega) y correr los deletes a mano.
+**MEDIO — Datos de prueba de Vales Electrónicos en prod, pendientes de borrar antes de la entrega a Real Sayana:** generados durante la verificación en vivo de Fase 1-3 (julio 2026), viven mezclados con datos reales del tenant. Incluye: los proveedores `"TEST Vales — Almacén Don Ramón"` (`9a269153-d689-4122-8ba6-f099379f35a7`) y `"TEST Vales — Panadería La Esquina"` (`2fe8b40b-e4d3-4641-bf3f-90bc9d7c982b`); sus filas en `proveedor_accesos` y `proveedor_dispositivos`; el vecino `"Comerciante, Demo"` (DNI 88777666, `comerciante.demo@realsayana.gob.ar`) creado para separar los roles dueño/beneficiario en la verificación final de Fase 3; y los vales de prueba emitidos al vecino demo (DNI 99888777) — `DUS4-ANUG`, `QSSR-GDUU`, `4DF2-WUWU`, `NF7H-N3S9`, más `HJZG-DMNE` de Fase 2 y, de la verificación en vivo de Fase 4 parte 1 (2026-07-27), `SK9N-W5BP` (cancelado, para probar la anulación), `X5GQ-MDX7` y `4ZSE-6WKC` (cantidad+unidad, canjeados para probar el agrupamiento por unidad en Conciliación). Borrar los 2 proveedores hace caer solos los `proveedor_accesos` por `ON DELETE CASCADE` — pero **decirlo explícito acá para que nadie borre a medias**: `proveedor_dispositivos` no está confirmado que cascadee igual, hay que revisarlo/borrarlo aparte antes de dar la limpieza por completa. Todo esto es un paso manual antes de que el cliente vea el módulo — no se hizo automáticamente porque implica deletes reales en prod y quedó fuera del alcance de la verificación funcional. Pendiente: confirmar con el cliente el momento de la limpieza (antes de la demo/entrega) y correr los deletes a mano.
 
 **MEDIO — Toggles fantasma en `dependencias`: `modulo_erp` y `modulo_bot` no controlan nada:** confirmado 2026-07-24 (auditoría en vivo de los 2 sistemas de permisos/configuración, antes de construir nada nuevo encima) vía grep de todo el repo + agente Explore independiente: ambos campos solo se leen/escriben dentro de `GestionDependencias.jsx` (1 `select` + el toggle de cada uno) — ningún otro componente los consulta. `AdministracionTab.jsx` no chequea `modulo_erp` y `DepBotIATab.jsx` no chequea `modulo_bot`. Los tooltips de la UI mienten: "Habilita el módulo de administración: gastos, ingresos, solicitudes de compra" (ERP) y "El bot de WhatsApp responderá preguntas sobre esta dependencia con su información específica" (Bot IA) — ninguna de las dos cosas pasa, tildar o destildar estos toggles no tiene ningún efecto real hoy. **No corregido a propósito** (pendiente decidir con el cliente): la opción más simple sería sacar directamente esos 2 controles de la UI de `GestionDependencias.jsx` ya que hoy solo confunden al staff haciéndoles creer que controlan algo. `activa` y `modulo_turnos` (los otros 2 toggles de la misma pantalla) sí están confirmados conectados — no es un problema de la pantalla en general, solo de estos 2 campos puntuales.
 **RESUELTO — sidebar bypaseaba `dependencias_acceso` por completo para dependencias con `solo_informativo:true` (Sala Primeros Auxilios, Juez de Paz):** confirmado en vivo 2026-07-24 durante la misma auditoría, probando con un empleado real (Luis Nicolás Álvarez, `ADMIN_PORTAL`, 0 accesos asignados) logueado de verdad. `entryParaDep()` en `AdminLayout.jsx` resolvía `soloInformativo` (leído de `modulos_config.config`, confirmado `true` para `sala_pa` y `juez_paz` en Real Sayana — **intencional**, decisión del cliente del 2026-07-23, no tocar ese valor) y devolvía el link plano a `?tab=landing` ANTES de llegar al chequeo de `accesoByDepId`/`esDirector` — así que cualquier staff, sin importar su `dependencias_acceso`, veía igual "Sala de Primeros Auxilios" y "Juez de Paz" en el sidebar. No era una brecha real de datos (la página destino, ej. `JuezDePaz.jsx` línea ~641-653, revalida `puede_gestionar`/`puede_administrar` por su cuenta y bloquea igual la sección no autorizada), pero el sidebar mentía sobre qué tenía asignado cada empleado. Fix 2026-07-24: se movió el chequeo de `puedeGestionar`/`puedeAdministrar` (misma lógica de `accesoByDepId` que ya usaba el resto de la función, reusada sin duplicar) ANTES del branch de `soloInformativo` — si no tiene ninguno de los dos, devuelve `null` (ni el link plano) igual que el resto de dependencias. Verificado en vivo con Luis: sin acceso a Sala PA → ya no aparece en el sidebar; con acceso de prueba asignado → vuelve a aparecer.
@@ -635,9 +635,12 @@ antes de esta lista y no había motivo para tocarlo).
   comerciante no tiene permiso de ver directo en `vecinos` (resuelto con la RPC
   `preview_vale`, ver arriba). Vales de prueba usados: `4DF2-WUWU`, `NF7H-N3S9`,
   más los de la ronda anterior.
-- **Fase 4** (auditoría/reportes para el staff) — PENDIENTE
+- **Fase 4 parte 1** (reporte de conciliación + anulación desde el admin) —
+  CERRADA y verificada en vivo 2026-07-27 (ver detalle en
+  "Actualizaciones sesión 27 julio 2026" más abajo). Resto de Fase 4
+  (auditoría/reportes adicionales para el staff) sigue pendiente.
 - **Fase 5** (`logAudit()` en emisión/canje) — emisión ya loguea en `useVales.js`;
-  falta el canje
+  la anulación también loguea (`accion:'update'`, ver Fase 4 parte 1); falta el canje
 
 ## Actualizaciones sesión 25-26 julio 2026
 
@@ -693,6 +696,22 @@ distinta — no aplicar el patrón `ARG_OFFSET` acá.**
 El SQL Editor de Supabase muestra en UTC. Argentina es UTC-3. Para ver en hora local:
 `set timezone = 'America/Argentina/Buenos_Aires';`
 
+**Excepción confirmada en Fase 4 parte 1 — el filtro de fechas del reporte de
+conciliación SÍ necesita `ARG_OFFSET`.** Lo de arriba aplica a comparaciones
+*internas* del sistema (RPC vs. `now()`, ambos timestamptz/instantes absolutos,
+sin días de calendario de por medio). El reporte de conciliación es distinto: el
+staff elige un rango de **días** ("Desde"/"Hasta", inputs `type="date"`,
+`YYYY-MM-DD`) pensando en días de Argentina, no en instantes. Convertir esos días
+a límites de comparación contra `canjeado_en` (timestamptz) sin el offset explícito
+— tal como venía advertido en la sección "RANGO DE FECHAS — la trampa" del ticket
+original — correría los canjes de las últimas horas de cada día al día siguiente
+para Postgres, igual que los 14 bugs de columnas `date`, aunque acá la columna
+subyacente sea timestamptz. `useValesConciliacion()` (`useVales.js`) arma
+`${fechaDesde}T00:00:00${ARG_OFFSET}` / `${fechaHasta}T23:59:59.999${ARG_OFFSET}`
+— mismo patrón que `useAuditLog.js`. Verificado en vivo 2026-07-27 con vales
+canjeados dentro del mes actual (Desde `01/07/2026`, Hasta `31/07/2026`,
+default calculado con `todayArgYMD()`).
+
 ### Verificación en vivo de Fase 2 (2026-07-26)
 
 Vale real `HJZG-DMNE`, $5.000, vigencia 24hs, emitido por Luis Nicolás Álvarez al
@@ -716,3 +735,72 @@ encontró.
 Antes de diagnosticar cualquier problema de login: limpiar las claves `sb-*` del
 Local Storage + hard refresh, y confirmar por qué puerta se está entrando
 (`/login` = staff, portal = vecino).
+
+## Actualizaciones sesión 27 julio 2026
+
+### Vales Electrónicos — Fase 4 parte 1: reporte de conciliación + anulación (CERRADA)
+
+Reporte de conciliación (`ValesConciliacionTab.jsx`, tab "Conciliación" dentro de
+`/admin/vales`) y anulación desde el admin (`AnularValeModal.jsx` +
+`ValeDetalleModal.jsx`). Verificado en vivo 2026-07-27 con sesión real de Luis
+(staff), no service role — importante porque un embed que vuelve `null` bajo RLS
+es indistinguible de un embed vacío hasta que se prueba con la sesión real (mismo
+tipo de bug que el "Vecino: —" de `preview_vale` en Fase 3).
+
+**RPC `anular_vale(p_codigo text, p_motivo text) RETURNS vales`** (ya vivía en
+prod, no escrita en esta sesión) — contrato:
+- Solo staff/superadmin puede ejecutarla (chequeo de permiso corre ANTES que la
+  búsqueda del vale — confirmado en vivo: un código inexistente devuelve "Sin
+  permiso para anular vales", no "vale no encontrado", si quien llama no es staff).
+- `p_motivo` obligatorio, rechaza vacío.
+- **Solo transiciona `emitido` → `cancelado`.** Un vale ya `abierto` NO se puede
+  anular — el vecino puede estar parado en el mostrador con el QR abierto en ese
+  momento; permitir la anulación ahí le pisaría el canje a mitad de operación. Por
+  eso el botón "Anular" en `ValesEmitidos.jsx` se muestra únicamente cuando
+  `estado === 'emitido'` (además del chequeo real que hace la RPC del lado del
+  server — la UI no es la única defensa).
+- Si la RPC rechaza (ej. el vale pasó a `abierto` entre que se cargó la lista y se
+  apretó "Confirmar anulación"), el mensaje se propaga tal cual — a diferencia de
+  `canjear_vale`/`Proveedor.jsx`, acá no hay `traducirErrorCanje()` que traduzca
+  errores conocidos.
+- Deja `estado='cancelado'` + `anulado_en`, `anulado_por` (FK a `usuarios`),
+  `motivo_anulacion`. `ValeDetalleModal.jsx` muestra los 3 solo cuando
+  `estado === 'cancelado'`.
+
+**Decisión de diseño — el CSV es detalle transaccional, sin filas de subtotal.**
+Los totales (un total en $ + una línea por cada unidad distinta, nunca fusionados
+porque `monto` y `cantidad`+`unidad` son mutuamente excluyentes por
+`chk_vales_monto_o_cantidad`) se calculan y muestran **solo en pantalla**
+(`totalesComercio()` en `ValesConciliacionTab.jsx`). El CSV exportado es una fila
+por vale canjeado, sin agregados. Motivo: si el total viviera calculado en dos
+lugares (pantalla + archivo exportado), un cambio futuro en la lógica de un solo
+lado los haría divergir sin que nadie lo note hasta que alguien concilie mal un
+pago — mismo criterio que ya rige `VALE_ESTADOS` como lista única de estados
+(nunca mantener la misma matemática/enumeración en dos sitios que puedan
+desincronizarse). Separado de esto, pero relacionado: `monto`, `cantidad` y
+`unidad` son **3 columnas separadas** en el CSV (nunca una columna "Importe"
+fusionada) — así nadie puede seleccionar una sola columna en Excel, hacer
+autosuma, y sumar pesos con kilos sin darse cuenta. Confirmado con archivo real
+exportado en vivo: fila con `Monto=""` y `Cantidad`/`Unidad` pobladas
+(`"","5","lt"` para `X5GQ-MDX7`), BOM UTF-8 presente (`ef bb bf`, confirmado con
+`xxd`) para que Excel muestre bien los acentos ("Código", "Descripción").
+Decidido explícitamente con el cliente 2026-07-27 — no agregar filas de subtotal
+al CSV sin volver a discutirlo.
+
+**`useValesConciliacion()` y `ARG_OFFSET`** — ver el nuevo apartado en
+"Timezone en Vales" más arriba: el filtro de fechas del reporte SÍ necesita el
+offset explícito de Argentina, a diferencia del resto del módulo Vales (que son
+todas comparaciones timestamptz-contra-timestamptz sin días de calendario
+involucrados).
+
+**Verificado en vivo 2026-07-27** (sesión de Luis + vecino demo + Comerciante
+Demo, producción): emitidos 3 vales de prueba nuevos — `4ZSE-6WKC` (12 kg),
+`X5GQ-MDX7` (5 lt), `SK9N-W5BP` ($999, para anular). El caso que más importaba
+probar — dos unidades distintas canjeadas en el mismo comercio — dio bien:
+Almacén Don Ramón mostró `Total: $7.000` / `Total: 12 kg` / `Total: 5 lt` en
+tres líneas separadas, nunca "17" ni kg+lt fusionados. `canjeado_por` resolvió a
+nombres reales ("Vecino, Demo", "Comerciante, Demo") en las 5 filas, cero blancos.
+`SK9N-W5BP` anulado con motivo real, verificado que "Anular" desaparece del
+listado y que el detalle muestra motivo + fecha + anulador real ("Luis Nicolás
+Álvarez"). Los 3 vales de prueba quedaron en prod — sumados a la entrada de
+limpieza pendiente en "Riesgos abiertos".
