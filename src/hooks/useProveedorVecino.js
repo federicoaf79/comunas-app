@@ -15,15 +15,23 @@ import { supabase } from '../lib/supabase'
 //   - INSERT/UPDATE/DELETE sobre proveedor_dispositivos están
 //     revocados al cliente -- vincular/desvincular van SIEMPRE por
 //     RPC (vincular_dispositivo / desvincular_dispositivo).
+//   - Desde 2026-07-28: vincular y desvincular un teléfono son
+//     acciones EXCLUSIVAS del responsable del comercio (desvincular
+//     también staff). Un secundario nunca da de alta ni de baja
+//     teléfonos -- puede canjear, pero el circuito de "qué celular
+//     puede operar acá" lo controla siempre el dueño.
 // =============================================================
 
-// `rol` no se selecciona -- no se usa en ningún lado de la pantalla
-// (confirmado por grep antes de tocar Fase 4 parte 2) y el criterio de
-// producto es justamente que el cliente nunca decida por rol: qué ve
-// cada quien lo decide el server, por presencia de campos en la
-// respuesta (ver historial_canjes_proveedor más abajo).
+// `rol` vuelve a seleccionarse -- hace falta para decidir qué OFRECER
+// en la UI de vincular/desvincular (solo el responsable puede hacer
+// las dos cosas desde 2026-07-28). Sigue sin ser control de acceso:
+// el server (vincular_dispositivo/desvincular_dispositivo) es la
+// autoridad real y rechaza igual a un secundario aunque el cliente
+// mienta. Lo que SÍ sigue sin usar `rol` es historial_canjes_proveedor
+// -- ahí qué columnas vienen lo decide el server por su cuenta, nunca
+// se lo preguntamos (ver esa función más abajo).
 const PROVEEDOR_ACCESO_COLS = `
-  id, activo,
+  id, rol, activo,
   proveedor:proveedor_id(id, nombre, categoria)
 `
 
@@ -95,10 +103,13 @@ export function useVincularDispositivo() {
 }
 
 // Desvincular NO borra la fila (activo=false, historial de qué
-// teléfono operó en qué comercio se conserva) -- y solo lo puede
-// ejecutar quien vinculó ese teléfono, o staff de la comuna. Un
-// empleado cualquiera con acceso al comercio no puede: ese chequeo
-// vive en el server (desvincular_dispositivo), no se duplica acá.
+// teléfono operó en qué comercio se conserva). Regla vigente desde
+// 2026-07-28: solo el responsable del comercio o staff de la comuna
+// puede desvincular -- ya NO alcanza con ser quien lo vinculó (eso
+// dejaba a un secundario dar de baja su propio teléfono sin que el
+// dueño se enterara). Un secundario no puede, aunque haya sido él
+// quien lo vinculó: ese chequeo vive en el server
+// (desvincular_dispositivo), no se duplica acá.
 async function desvincularDispositivo(deviceId) {
   const { data, error } = await supabase.rpc('desvincular_dispositivo', {
     p_device_id: deviceId,

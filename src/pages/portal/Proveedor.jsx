@@ -69,7 +69,18 @@ function TabButton({ active, onClick, children }) {
 }
 
 // ── Paso 1 (primera vez con este teléfono) ──────────────────────
+//
+// Desde 2026-07-28 vincular es exclusivo del responsable -- ofrecer
+// el flujo a un secundario solo termina en el error del server
+// ("Solo el responsable del comercio puede vincular teléfonos"),
+// después de elegir comercio y confirmar. Se filtra ANTES de mostrar
+// nada: si este vecino no es responsable de ningún comercio, no hay
+// flujo de vinculación que ofrecerle, solo la explicación de a quién
+// pedirle el alta. El server sigue siendo la autoridad real (esto es
+// nada más qué UI mostrar); si el rol de este vecino cambiara entre
+// que carga la lista y confirma, el server igual lo rechaza.
 function VincularView({ accesos, deviceId, onVinculado }) {
+  const accesosResponsable = accesos.filter(a => a.rol === 'responsable')
   const [seleccionado, setSeleccionado] = useState(null)
   const [error, setError] = useState('')
   const vincularMut = useVincularDispositivo()
@@ -85,6 +96,17 @@ function VincularView({ accesos, deviceId, onVinculado }) {
     }
   }
 
+  if (accesosResponsable.length === 0) {
+    return (
+      <div className="rounded-xl border border-[#DDE0EC] bg-white p-6 text-center">
+        <p className="text-sm text-primary-700">
+          Este teléfono todavía no está habilitado para canjear vales. Pedile al
+          responsable del comercio que lo vincule desde acá con su cuenta.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -97,7 +119,7 @@ function VincularView({ accesos, deviceId, onVinculado }) {
       </div>
 
       <div className="space-y-2">
-        {accesos.map(a => (
+        {accesosResponsable.map(a => (
           <button
             key={a.proveedor.id}
             type="button"
@@ -373,7 +395,14 @@ function OtrosComerciosView({ accesos, comercioActualId }) {
 }
 
 // ── Este dispositivo (desvincular) ──────────────────────────────
-function DispositivoView({ dispositivo, deviceId, onDesvinculado }) {
+//
+// Desde 2026-07-28, desvincular es del responsable del comercio (o
+// staff) -- ya no alcanza con ser quien lo vinculó. `esResponsable` lo
+// calcula Proveedor() cruzando dispositivo.proveedor.id contra el
+// rol real de este vecino en `accesos`; acá solo decide qué OFRECER,
+// el server (desvincular_dispositivo) sigue siendo quien rechaza de
+// verdad a un secundario.
+function DispositivoView({ dispositivo, deviceId, esResponsable, onDesvinculado }) {
   const desvincularMut = useDesvincularDispositivo()
   const [confirmando, setConfirmando] = useState(false)
   const [error, setError] = useState('')
@@ -388,7 +417,7 @@ function DispositivoView({ dispositivo, deviceId, onDesvinculado }) {
       const msg = (e?.message ?? '').toLowerCase()
       setError(
         msg.includes('permiso')
-          ? 'Solo quien vinculó este teléfono o el personal de la comuna puede desvincularlo'
+          ? 'Solo el responsable del comercio o el personal de la comuna puede desvincularlo'
           : (e?.message ?? 'No pudimos desvincular el dispositivo.'),
       )
       setConfirmando(false)
@@ -407,7 +436,12 @@ function DispositivoView({ dispositivo, deviceId, onDesvinculado }) {
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>
       )}
 
-      {!confirmando ? (
+      {!esResponsable ? (
+        <p className="text-sm text-primary-500">
+          Solo el responsable del comercio o el personal de la comuna puede desvincular
+          este teléfono.
+        </p>
+      ) : !confirmando ? (
         <button
           type="button"
           onClick={() => setConfirmando(true)}
@@ -503,6 +537,8 @@ export default function Proveedor() {
   }
 
   const dispositivo = dispositivoQ.data
+  const accesoActivo = accesos.find(a => a.proveedor?.id === dispositivo?.proveedor?.id)
+  const esResponsableActivo = accesoActivo?.rol === 'responsable'
 
   return (
     <div className="min-h-screen bg-background px-4 py-8">
@@ -546,6 +582,7 @@ export default function Proveedor() {
               <DispositivoView
                 dispositivo={dispositivo}
                 deviceId={deviceId}
+                esResponsable={esResponsableActivo}
                 onDesvinculado={() => { dispositivoQ.refetch(); setTab('canjear') }}
               />
             )}
