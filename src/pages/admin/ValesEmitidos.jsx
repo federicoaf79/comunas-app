@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { useVales, useCreateVale } from '../../hooks/useVales'
+import { useVales, useCreateVale, useAnularVale } from '../../hooks/useVales'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
+import Tabs from '../../components/ui/Tabs'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import EmitirValeModal from '../../components/admin/EmitirValeModal'
+import AnularValeModal from '../../components/admin/AnularValeModal'
+import ValeDetalleModal from '../../components/admin/ValeDetalleModal'
+import ValesConciliacionTab from '../../components/admin/ValesConciliacionTab'
+import { EstadoBadge } from '../../components/admin/EstadoBadgeVale'
 import { dateOf } from '../../lib/datetime'
-import { VALE_ESTADOS } from '../../lib/valeEstado'
 
 // =============================================================
-// ValesEmitidos — Vales Electrónicos, Fase 1.
+// ValesEmitidos — Vales Electrónicos.
 //
 // "+ Emitir vale" solo aparece para quien tiene puede_emitir_vales
 // (el candado exclusivo, Fase 0) -- distinto del acceso general de
@@ -22,40 +26,21 @@ import { VALE_ESTADOS } from '../../lib/valeEstado'
 //
 // El listado (quién, cuándo, a quién, estado) SÍ es visible para
 // cualquier staff con acceso al módulo -- no requiere el candado,
-// coincide con vales_staff_select.
+// coincide con vales_staff_select. "Anular" tampoco requiere el
+// candado de emisión: el RPC anular_vale() ya exige staff/superadmin
+// del lado del server (defensa en profundidad, no confiar solo en
+// ocultar el botón acá) -- por eso se ofrece a cualquiera que vea
+// esta pantalla, igual que el resto del listado.
+//
+// Fase 4 parte 1 sumó una segunda tab ("Conciliación", ver
+// ValesConciliacionTab.jsx) y la acción de anular vales 'emitido'
+// (ValesEmitidos ya no es solo el listado de Fase 1).
 // =============================================================
 
-// Estilo propio (badge sólido) -- distinto del pill suave que usa el
-// portal del vecino (VALE_UI en lib/valeEstado.js), a propósito: son
-// contextos distintos. Lo que NO puede duplicarse es la LISTA de
-// estados, por eso se valida contra VALE_ESTADOS más abajo.
-const ESTADO_BADGES = {
-  emitido:  { bg: 'bg-[#0F1C35]',  text: 'text-white',   label: 'Emitido' },
-  abierto:  { bg: 'bg-[#1D4ED8]',  text: 'text-white',   label: 'Abierto' },
-  canjeado: { bg: 'bg-ok',         text: 'text-white',   label: 'Canjeado' },
-  vencido:  { bg: 'bg-slate-400',  text: 'text-white',   label: 'Vencido' },
-  quemado:  { bg: 'bg-slate-400',  text: 'text-white',   label: 'Quemado' },
-  cancelado:{ bg: 'bg-red-100',    text: 'text-red-700', label: 'Cancelado' },
-}
-
-if (import.meta.env.DEV) {
-  const faltantes = VALE_ESTADOS.filter(e => !(e in ESTADO_BADGES))
-  if (faltantes.length) {
-    console.warn(`ESTADO_BADGES no cubre estos estados de VALE_ESTADOS: ${faltantes.join(', ')}`)
-  }
-}
-
-// Un estado sin mapear se muestra crudo y en gris neutro -- tiene que
-// verse raro, no disfrazarse del más inocuo (ya pasó con 'quemado'
-// antes de existir en este mapa: se mostraba como "Emitido").
-function EstadoBadge({ estado }) {
-  const b = ESTADO_BADGES[estado] ?? { bg: 'bg-slate-200', text: 'text-slate-600', label: estado }
-  return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${b.bg} ${b.text}`}>
-      {b.label}
-    </span>
-  )
-}
+const TABS = [
+  { value: 'emitidos',     label: 'Emitidos' },
+  { value: 'conciliacion', label: 'Conciliación' },
+]
 
 function detalleVale(v) {
   if (v.monto != null) return `$${Number(v.monto).toLocaleString('es-AR')}`
@@ -63,18 +48,14 @@ function detalleVale(v) {
   return '—'
 }
 
-export default function ValesEmitidos() {
-  const { perfil, hasRole } = useAuth()
-  const isSuperadmin = hasRole('superadmin')
-  // Candado exclusivo -- calca vales_staff_insert de la RLS, que NO
-  // le da bypass a admin_comuna, solo a superadmin.
-  const puedeEmitir = isSuperadmin || !!perfil?.puede_emitir_vales
-
-  const { municipioId } = useEffectiveMunicipioId()
+function TabEmitidos({ perfil, municipioId, puedeEmitir }) {
   const valesQ = useVales()
   const createMut = useCreateVale()
+  const anularMut = useAnularVale()
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [valeParaAnular, setValeParaAnular] = useState(null)
+  const [valeDetalle, setValeDetalle] = useState(null)
 
   const vales = valesQ.data ?? []
 
@@ -84,6 +65,13 @@ export default function ValesEmitidos() {
   async function handleCrear(payload) {
     await createMut.mutateAsync({ ...payload, municipio_id: municipioId, emitido_por: perfil?.id })
     return true
+  }
+
+  // AnularValeModal también se queda abierto en error (muestra el
+  // mensaje del server tal cual) -- por eso acá se propaga la
+  // excepción en vez de absorberla.
+  async function handleAnular(motivo) {
+    await anularMut.mutateAsync({ codigo: valeParaAnular.codigo, motivo })
   }
 
   return (
@@ -130,6 +118,7 @@ export default function ValesEmitidos() {
               <Th>Estado</Th>
               <Th>Emitido por</Th>
               <Th>Emitido el</Th>
+              <Th>Acciones</Th>
             </Tr>
           </THead>
           <tbody>
@@ -147,6 +136,28 @@ export default function ValesEmitidos() {
                 <Td className="whitespace-nowrap text-xs text-primary-400">
                   {v.emitido_en ? dateOf(v.emitido_en) : '—'}
                 </Td>
+                <Td>
+                  <div className="flex items-center gap-3 whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => setValeDetalle(v)}
+                      className="text-xs font-semibold text-primary-500 hover:text-primary"
+                    >
+                      Ver
+                    </button>
+                    {/* Solo 'emitido' -- un vale ya abierto no se puede
+                        anular, el vecino puede estar en el mostrador. */}
+                    {v.estado === 'emitido' && (
+                      <button
+                        type="button"
+                        onClick={() => setValeParaAnular(v)}
+                        className="text-xs font-semibold text-danger hover:underline"
+                      >
+                        Anular
+                      </button>
+                    )}
+                  </div>
+                </Td>
               </Tr>
             ))}
           </tbody>
@@ -159,6 +170,41 @@ export default function ValesEmitidos() {
         onCreated={handleCrear}
         municipioId={municipioId}
       />
+
+      <AnularValeModal
+        open={!!valeParaAnular}
+        onClose={() => setValeParaAnular(null)}
+        vale={valeParaAnular}
+        onAnular={handleAnular}
+      />
+
+      <ValeDetalleModal
+        open={!!valeDetalle}
+        onClose={() => setValeDetalle(null)}
+        vale={valeDetalle}
+      />
+    </div>
+  )
+}
+
+export default function ValesEmitidos() {
+  const { perfil, hasRole } = useAuth()
+  const isSuperadmin = hasRole('superadmin')
+  // Candado exclusivo -- calca vales_staff_insert de la RLS, que NO
+  // le da bypass a admin_comuna, solo a superadmin.
+  const puedeEmitir = isSuperadmin || !!perfil?.puede_emitir_vales
+
+  const { municipioId } = useEffectiveMunicipioId()
+  const [tab, setTab] = useState('emitidos')
+
+  return (
+    <div className="space-y-5">
+      <Tabs tabs={TABS} value={tab} onChange={setTab} />
+
+      {tab === 'emitidos' && (
+        <TabEmitidos perfil={perfil} municipioId={municipioId} puedeEmitir={puedeEmitir} />
+      )}
+      {tab === 'conciliacion' && <ValesConciliacionTab />}
     </div>
   )
 }

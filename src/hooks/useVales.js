@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useEffectiveMunicipioId } from './useEffectiveMunicipioId'
 import { createAuditLog } from './useAuditLog'
+import { ARG_OFFSET } from '../lib/datetime'
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
 function logAudit(args) {
@@ -20,12 +21,20 @@ function logAudit(args) {
 // (defensa en profundidad, no confiar solo en ocultar el botón acá).
 // =============================================================
 
+// canjeado_por y anulado_por son dos FKs distintos que apuntan a
+// tablas distintas (vecinos / usuarios) -- se embeben especificando
+// el nombre de columna FK como target, mismo patrón ya probado acá
+// mismo con vecino_id/proveedor_id/emitido_por (PostgREST resuelve
+// sin ambigüedad por columna, no por tabla).
 const VALE_COLS = `
   id, municipio_id, descripcion, monto, cantidad, unidad, codigo,
   estado, vigencia_horas, emitido_en, canjeado_en,
+  anulado_en, motivo_anulacion,
   vecino:vecino_id(id, nombre_completo, dni),
   proveedor:proveedor_id(id, nombre),
-  emisor:emitido_por(id, nombre)
+  emisor:emitido_por(id, nombre),
+  canjeador:canjeado_por(id, nombre_completo, dni),
+  anulador:anulado_por(id, nombre)
 `
 
 async function fetchVales(municipioId) {
@@ -100,5 +109,97 @@ export function useCreateVale() {
   return useMutation({
     mutationFn: createVale,
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['vales'] }),
+  })
+}
+
+// =============================================================
+// Anulación — Fase 4 parte 1.
+//
+// anular_vale(p_codigo, p_motivo) ya vive en prod (SECURITY DEFINER):
+// solo staff/superadmin, motivo obligatorio, y solo transiciona
+// 'emitido' -> 'cancelado' (un vale ya 'abierto' se rechaza -- el
+// vecino puede estar en el mostrador, hay que esperar a que se queme).
+// Devuelve la fila cruda de `vales`, sin los embeds de vecino/
+// proveedor/anulador (mismo patrón ya documentado para abrir_vale/
+// canjear_vale) -- por eso invalidamos la query en vez de usar la
+// respuesta para actualizar la lista.
+//
+// Si el RPC rechaza, el mensaje se propaga tal cual (error.message)
+// -- no se traduce acá, a diferencia de canjear_vale/Proveedor.jsx.
+// =============================================================
+
+async function anularVale({ codigo, motivo }) {
+  const { data, error } = await supabase.rpc('anular_vale', {
+    p_codigo: codigo,
+    p_motivo: motivo,
+  })
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'vales', entidadId: data?.id ?? codigo,
+    descripcion: `Vale anulado — ${codigo}: ${motivo}`,
+  })
+  return data
+}
+
+export function useAnularVale() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: anularVale,
+    onSuccess:  () => qc.invalidateQueries({ queryKey: ['vales'] }),
+  })
+}
+
+// =============================================================
+// Reporte de conciliación — Fase 4 parte 1.
+//
+// Solo vales 'canjeado' (lo que un comercio efectivamente cobra).
+// canjeado_en es timestamptz -- el rango que elige el staff es en
+// días de Argentina (UTC-3), así que los límites se arman con
+// ARG_OFFSET explícito antes de mandarlos a Supabase (mismo patrón
+// ya probado en useAuditLog.js). Sin esto, un canje de las últimas
+// horas de un día cae en el día siguiente para Postgres (que compara
+// en UTC) y el corte mensual queda mal.
+// =============================================================
+
+const CONCILIACION_COLS = `
+  id, proveedor_id, descripcion, monto, cantidad, unidad, codigo,
+  canjeado_en,
+  vecino:vecino_id(id, nombre_completo, dni),
+  proveedor:proveedor_id(id, nombre),
+  canjeador:canjeado_por(id, nombre_completo, dni)
+`
+
+async function fetchValesConciliacion({ municipioId, proveedorId, desde, hasta }) {
+  if (!municipioId || !desde || !hasta) return []
+  let q = supabase
+    .from('vales')
+    .select(CONCILIACION_COLS)
+    .eq('municipio_id', municipioId)
+    .eq('estado', 'canjeado')
+    .gte('canjeado_en', desde)
+    .lte('canjeado_en', hasta)
+    .order('canjeado_en', { ascending: true })
+  if (proveedorId) q = q.eq('proveedor_id', proveedorId)
+  const { data, error } = await q
+  if (error) throw error
+  return data ?? []
+}
+
+// fechaDesde/fechaHasta: strings "YYYY-MM-DD" (día elegido por el
+// staff, en días de Argentina). proveedorId vacío/undefined = todos.
+export function useValesConciliacion({ proveedorId, fechaDesde, fechaHasta } = {}) {
+  const { perfil } = useAuth()
+  const { municipioId } = useEffectiveMunicipioId()
+  const desde = fechaDesde ? `${fechaDesde}T00:00:00${ARG_OFFSET}` : null
+  const hasta = fechaHasta ? `${fechaHasta}T23:59:59.999${ARG_OFFSET}` : null
+  return useQuery({
+    queryKey: [
+      'vales-conciliacion',
+      municipioId ?? '__NONE__',
+      proveedorId || '__TODOS__',
+      desde ?? '', hasta ?? '',
+    ],
+    queryFn:  () => fetchValesConciliacion({ municipioId, proveedorId, desde, hasta }),
+    enabled:  !!perfil && !!municipioId && !!desde && !!hasta,
   })
 }
