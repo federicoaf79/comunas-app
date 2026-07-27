@@ -70,7 +70,7 @@ function TabButton({ active, onClick, children }) {
 
 // ── Paso 1 (primera vez con este teléfono) ──────────────────────
 //
-// Desde 2026-07-28 vincular es exclusivo del responsable -- ofrecer
+// Desde 2026-07-27 vincular es exclusivo del responsable -- ofrecer
 // el flujo a un secundario solo termina en el error del server
 // ("Solo el responsable del comercio puede vincular teléfonos"),
 // después de elegir comercio y confirmar. Se filtra ANTES de mostrar
@@ -396,7 +396,7 @@ function OtrosComerciosView({ accesos, comercioActualId }) {
 
 // ── Este dispositivo (desvincular) ──────────────────────────────
 //
-// Desde 2026-07-28, desvincular es del responsable del comercio (o
+// Desde 2026-07-27, desvincular es del responsable del comercio (o
 // staff) -- ya no alcanza con ser quien lo vinculó. `esResponsable` lo
 // calcula Proveedor() cruzando dispositivo.proveedor.id contra el
 // rol real de este vecino en `accesos`; acá solo decide qué OFRECER,

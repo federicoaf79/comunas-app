@@ -475,11 +475,11 @@ qué empleado/teléfono canjeó qué.
 - `vincular_dispositivo(p_device_id, p_proveedor_id, p_alias)` — valida
   `proveedor_accesos` y **rechaza** si el teléfono ya está vinculado a otro comercio
   activo (no lo reemplaza — para eso hay que desvincular primero). **Desde
-  2026-07-28, exige además rol `'responsable'`** — un secundario recibe
+  2026-07-27, exige además rol `'responsable'`** — un secundario recibe
   `'Solo el responsable del comercio puede vincular teléfonos'`.
 - `desvincular_dispositivo(p_device_id) RETURNS boolean` — marca `activo=false`, no
   borra la fila (el rastro de qué teléfono operó en qué comercio se conserva).
-  **Desde 2026-07-28, exige `'responsable'` o staff de la comuna** — reemplaza la
+  **Desde 2026-07-27, exige `'responsable'` o staff de la comuna** — reemplaza la
   regla anterior ("quien vinculó ese teléfono, o staff"), que dejaba a un
   secundario dar de baja su propio teléfono sin que el dueño se enterara.
   `vincular_dispositivo` reactiva con `on conflict do update`, así que revincular
@@ -513,7 +513,7 @@ qué empleado/teléfono canjeó qué.
     por no tener uso, con buen criterio en ese momento; acá sí hace falta,
     pero **solo para elegir qué mostrar**, nunca como control de acceso real:
     el server sigue rechazando a un secundario aunque el cliente mienta.
-  - Verificado en vivo 2026-07-28: secundario en teléfono nuevo (sin
+  - Verificado en vivo 2026-07-27: secundario en teléfono nuevo (sin
     vincular) → mensaje correcto, sin selector. Secundario en teléfono ya
     vinculado → puede canjear, sin botón de desvincular. Responsable → botón
     de desvincular visible. **No se pudo ejercitar el rechazo end-to-end de
@@ -871,6 +871,20 @@ pantalla en `/admin/vales/proveedores/:id` (`ProveedorDetalle.jsx`, botón
   `device_id` vive en el localStorage del celular del comerciante — vincular
   es siempre acción del responsable desde su propio teléfono.
 
+**`VecinoBuscador.jsx`** (`src/components/admin/`) — buscador de vecino por
+DNI/nombre con debounce (250ms), extraído tal cual de `EmitirValeModal.jsx`
+(Fase 1) porque Fase 4 parte 2 necesitaba el mismo buscador en "Agregar
+persona autorizada". Controlado desde afuera solo por `vecino` (el
+seleccionado) + `onSeleccionar` — la búsqueda en sí es estado interno.
+`TurnoPresencialModal.jsx`/`SumReservaFormModal.jsx` tienen su propia copia
+del mismo patrón y **no se tocaron** — no hay pedido de unificar esos dos,
+este componente es el único punto de verdad para los dos lugares que sí lo
+comparten (emitir vale, agregar acceso). Busca con `.or()` — un `ilike` por
+columna (`dni`, `apellido`, `nombre`, `nombre_completo`), nunca una
+concatenación de las dos palabras — por eso encuentra por DNI exacto o por
+una sola palabra del nombre, pero no por "Apellido Nombre" con espacio
+(comportamiento heredado, no una regresión de esta fase).
+
 **Constraint no documentado hasta ahora, encontrado en la verificación en
 vivo:** `uq_proveedor_accesos_proveedor_vecino` — una persona tiene **un solo**
 acceso por comercio. "Agregar de nuevo" a alguien que ya tiene un acceso
@@ -928,3 +942,47 @@ cliente en vez de asumir el checklist original:
 - El estado final de prueba en Almacén Don Ramón quedó con Vecino Demo Y
   Comerciante Demo activos como `responsable` (cambio deliberado de la
   verificación en vivo, no accidental).
+
+### Vales Electrónicos — historial diferenciado por rol (Fase 4 parte 2)
+
+Un secundario opera con su propio celular en el mostrador — sin filtrar esto,
+ese teléfono terminaría acumulando un padrón de quién recibe ayuda social en
+el pueblo y por cuánto. El dato tiene que pasarle por las manos para operar
+el canje, pero no puede quedársele después.
+
+**RPC `historial_canjes_proveedor(p_proveedor_id)`** (`SECURITY DEFINER`) —
+decide QUÉ COLUMNAS devolver según el rol real de quien llama para ESE
+comercio, nunca preguntado al cliente:
+- **Responsable** ve el detalle completo: `codigo, canjeado_en, estado,
+  descripcion, monto, cantidad, unidad, vecino_nombre, vecino_dni,
+  canjeado_por`.
+- **Secundario** ve solo `codigo, canjeado_en, estado` — filtrado además por
+  `canjeado_por = quien llama` (sus propios canjes, no los del comercio
+  entero).
+
+**Por qué RPC y no un SELECT directo:** la policy `vales_proveedor_select_ventana`
+ya no deja a un secundario ver vales `canjeado` por consulta directa (RLS
+filtra filas, no columnas) — un SELECT acá le devolvería `[]` en silencio a
+cualquier secundario, sin error (mismo modo de falla ya visto con el
+"Vecino: —" de `preview_vale` en Fase 3).
+
+**Cliente nunca pregunta ni infiere el rol** — `ComercioCanjeadosCard`
+(`Proveedor.jsx`) detecta la vista reducida mirando si la fila trae
+`vecino_nombre` (si vino, es un dato real de un canje real, no algo que se
+pueda simular con la ausencia de otro campo). Si es la vista reducida,
+muestra: "Ves los vales que canjeaste vos. El detalle completo está en la
+cuenta del responsable del comercio." Sin filas no hay forma de saber qué
+vería este vecino si hubiera canjes — no se muestra la nota en ese caso, no
+hace falta explicar una restricción sobre una lista vacía.
+
+Se agregó también el historial para el comercio **activo** (el que el
+dispositivo tiene vinculado ahora) — antes de esta fase `ComercioCanjeadosCard`
+solo se montaba para "otros comercios" del mismo dueño, así que el caso más
+común (un solo comercio) nunca mostraba ningún historial.
+
+Encontrado y corregido en la verificación en vivo: `canjeado_por` ya venía en
+la respuesta de la RPC pero `ComercioCanjeadosCard` nunca lo renderizaba —
+agregado (`{'canjeado_por' in v && <p>Canjeado por: {v.canjeado_por}</p>}`).
+
+Archivo: `useProveedorVecino.js` → `fetchHistorialCanjesProveedor()` /
+`useHistorialCanjesProveedor(proveedorId)`.

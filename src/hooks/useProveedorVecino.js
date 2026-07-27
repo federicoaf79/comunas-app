@@ -15,7 +15,7 @@ import { supabase } from '../lib/supabase'
 //   - INSERT/UPDATE/DELETE sobre proveedor_dispositivos están
 //     revocados al cliente -- vincular/desvincular van SIEMPRE por
 //     RPC (vincular_dispositivo / desvincular_dispositivo).
-//   - Desde 2026-07-28: vincular y desvincular un teléfono son
+//   - Desde 2026-07-27: vincular y desvincular un teléfono son
 //     acciones EXCLUSIVAS del responsable del comercio (desvincular
 //     también staff). Un secundario nunca da de alta ni de baja
 //     teléfonos -- puede canjear, pero el circuito de "qué celular
@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabase'
 
 // `rol` vuelve a seleccionarse -- hace falta para decidir qué OFRECER
 // en la UI de vincular/desvincular (solo el responsable puede hacer
-// las dos cosas desde 2026-07-28). Sigue sin ser control de acceso:
+// las dos cosas desde 2026-07-27). Sigue sin ser control de acceso:
 // el server (vincular_dispositivo/desvincular_dispositivo) es la
 // autoridad real y rechaza igual a un secundario aunque el cliente
 // mienta. Lo que SÍ sigue sin usar `rol` es historial_canjes_proveedor
@@ -104,7 +104,7 @@ export function useVincularDispositivo() {
 
 // Desvincular NO borra la fila (activo=false, historial de qué
 // teléfono operó en qué comercio se conserva). Regla vigente desde
-// 2026-07-28: solo el responsable del comercio o staff de la comuna
+// 2026-07-27: solo el responsable del comercio o staff de la comuna
 // puede desvincular -- ya NO alcanza con ser quien lo vinculó (eso
 // dejaba a un secundario dar de baja su propio teléfono sin que el
 // dueño se enterara). Un secundario no puede, aunque haya sido él
