@@ -349,6 +349,9 @@ function ComercioCanjeadosCard({ proveedor, esComercioActivo = false }) {
               {'descripcion' in v && v.descripcion && (
                 <p className="mt-0.5 text-xs text-primary-400">{v.descripcion}</p>
               )}
+              {'canjeado_por' in v && (
+                <p className="mt-0.5 text-xs text-primary-400">Canjeado por: {v.canjeado_por}</p>
+              )}
             </li>
           ))}
         </ul>
