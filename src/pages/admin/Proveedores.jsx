@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   useProveedores, useCreateProveedor, useUpdateProveedor, useToggleProveedorActivo,
 } from '../../hooks/useProveedores'
@@ -48,6 +49,7 @@ function EstadoBadge({ activo }) {
 }
 
 export default function Proveedores() {
+  const navigate = useNavigate()
   const { perfil, hasRole } = useAuth()
   const esDirector = hasRole(['admin_comuna', 'superadmin'])
   // Cualquiera de los dos flags alcanza para entrar — puede_emitir_vales
@@ -137,13 +139,28 @@ export default function Proveedores() {
           <tbody>
             {proveedores.map(p => (
               <Tr key={p.id}>
-                <Td className="font-medium text-primary">{p.nombre}</Td>
+                <Td className="font-medium text-primary">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/admin/vales/proveedores/${p.id}`)}
+                    className="text-left hover:underline"
+                  >
+                    {p.nombre}
+                  </button>
+                </Td>
                 <Td className="text-primary-500">{p.categoria || '—'}</Td>
                 <Td className="text-primary-500">{p.telefono || '—'}</Td>
                 <Td className="text-primary-500">{p.direccion || '—'}</Td>
                 <Td><EstadoBadge activo={!!p.activo} /></Td>
                 <Td className="whitespace-nowrap text-right text-xs font-medium">
                   <div className="flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/admin/vales/proveedores/${p.id}`)}
+                      className="text-primary hover:underline"
+                    >
+                      Gestionar
+                    </button>
                     <button type="button" onClick={() => handleEditar(p)} className="text-primary hover:underline">
                       Editar
                     </button>

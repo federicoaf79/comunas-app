@@ -115,3 +115,182 @@ export function useToggleProveedorActivo() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['proveedores'] }),
   })
 }
+
+// =============================================================
+// Personas autorizadas (proveedor_accesos) — Fase 4 parte 2.
+//
+// La policy proveedor_accesos_staff_all es FOR ALL -- CRUD directo
+// con el cliente, sin RPC (a diferencia de proveedor_dispositivos,
+// más abajo, donde INSERT/UPDATE/DELETE sí están revocados).
+// `rol` solo acepta 'responsable'/'secundario'
+// (proveedor_accesos_rol_check); no hay columna municipio_id en esta
+// tabla, así que "mismo municipio" se valida contra vecinos.municipio_id
+// del lado del cliente antes de insertar (ver createProveedorAcceso).
+// =============================================================
+
+const PROVEEDOR_ACCESO_ADMIN_COLS = `
+  id, proveedor_id, vecino_id, rol, activo, created_at,
+  vecino:vecino_id(id, nombre_completo, dni)
+`
+
+async function fetchProveedorAccesosAdmin(proveedorId) {
+  if (!proveedorId) return []
+  const { data, error } = await supabase
+    .from('proveedor_accesos')
+    .select(PROVEEDOR_ACCESO_ADMIN_COLS)
+    .eq('proveedor_id', proveedorId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data ?? []
+}
+
+export function useProveedorAccesos(proveedorId) {
+  const { perfil } = useAuth()
+  return useQuery({
+    queryKey: ['proveedor-accesos', proveedorId ?? '__none__'],
+    queryFn:  () => fetchProveedorAccesosAdmin(proveedorId),
+    enabled:  !!perfil && !!proveedorId,
+  })
+}
+
+// `proveedorMunicipioId` viene de la fila de `proveedores` ya cargada
+// en pantalla -- no hay columna municipio_id en proveedor_accesos para
+// que la DB lo valide sola, así que el chequeo vive acá, ANTES del
+// insert. Es la única defensa real para esta regla puntual.
+async function createProveedorAcceso({ proveedorId, proveedorNombre, proveedorMunicipioId, vecino, rol }) {
+  if (vecino?.municipio_id !== proveedorMunicipioId) {
+    throw new Error('El vecino elegido no pertenece al mismo municipio que el comercio.')
+  }
+  const { data: row, error } = await supabase
+    .from('proveedor_accesos')
+    .insert({ proveedor_id: proveedorId, vecino_id: vecino.id, rol, activo: true })
+    .select(PROVEEDOR_ACCESO_ADMIN_COLS)
+    .single()
+  if (error) throw error
+  logAudit({
+    accion: 'create', entidad: 'proveedor_accesos', entidadId: row.id,
+    descripcion: `Acceso otorgado — ${vecino.nombre_completo ?? vecino.id} como ${rol} de ${proveedorNombre}`,
+  })
+  return row
+}
+
+export function useCreateProveedorAcceso() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: createProveedorAcceso,
+    onSuccess:  (_row, { proveedorId }) => qc.invalidateQueries({ queryKey: ['proveedor-accesos', proveedorId] }),
+  })
+}
+
+// Cambio de rol -- acción separada de activar/desactivar porque el
+// audit log necesita describir cada una distinto (y porque activar/
+// desactivar de un acceso ya cancelado no debería reabrir la
+// posibilidad de tocar el rol sin querer desde el mismo botón).
+async function cambiarRolAcceso({ id, proveedorId, rol, vecinoNombre, proveedorNombre }) {
+  const { error } = await supabase
+    .from('proveedor_accesos')
+    .update({ rol })
+    .eq('id', id)
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'proveedor_accesos', entidadId: id,
+    descripcion: `Cambio de rol — ${vecinoNombre ?? id} ahora es ${rol} de ${proveedorNombre}`,
+  })
+}
+
+export function useCambiarRolAcceso() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: cambiarRolAcceso,
+    onSuccess:  (_r, { proveedorId }) => qc.invalidateQueries({ queryKey: ['proveedor-accesos', proveedorId] }),
+  })
+}
+
+async function toggleAccesoActivo({ id, proveedorId, activo, vecinoNombre, proveedorNombre }) {
+  const { error } = await supabase
+    .from('proveedor_accesos')
+    .update({ activo })
+    .eq('id', id)
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'proveedor_accesos', entidadId: id,
+    descripcion: `${activo ? 'Reactivación' : 'Desactivación'} de acceso — ${vecinoNombre ?? id} en ${proveedorNombre}`,
+  })
+}
+
+export function useToggleAccesoActivo() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: toggleAccesoActivo,
+    onSuccess:  (_r, { proveedorId }) => qc.invalidateQueries({ queryKey: ['proveedor-accesos', proveedorId] }),
+  })
+}
+
+// =============================================================
+// Teléfonos (proveedor_dispositivos) — Fase 4 parte 2.
+//
+// SELECT directo permitido; INSERT/UPDATE/DELETE revocados al
+// cliente. No hay "vincular" desde acá a propósito: vincular_dispositivo
+// exige proveedor_accesos de quien llama, y un staff nunca tiene uno
+// (no es vecino); además el device_id vive en el localStorage del
+// teléfono del comerciante, no en ningún lado que el admin pueda leer.
+// Vincular es siempre una acción del responsable desde SU propio
+// teléfono -- acá solo se lista y se desvincula (con bypass de staff
+// ya resuelto del lado del server).
+// =============================================================
+
+const PROVEEDOR_DISPOSITIVO_ADMIN_COLS = `
+  id, device_id, alias, activo, vinculado_en, ultimo_uso_en,
+  vinculado:vinculado_por(id, nombre_completo)
+`
+
+async function fetchProveedorDispositivosAdmin(proveedorId, soloActivos) {
+  if (!proveedorId) return []
+  let q = supabase
+    .from('proveedor_dispositivos')
+    .select(PROVEEDOR_DISPOSITIVO_ADMIN_COLS)
+    .eq('proveedor_id', proveedorId)
+    .order('vinculado_en', { ascending: false })
+  if (soloActivos) q = q.eq('activo', true)
+  const { data, error } = await q
+  if (error) throw error
+  return data ?? []
+}
+
+export function useProveedorDispositivos(proveedorId, { soloActivos = true } = {}) {
+  const { perfil } = useAuth()
+  return useQuery({
+    queryKey: ['proveedor-dispositivos', proveedorId ?? '__none__', soloActivos],
+    queryFn:  () => fetchProveedorDispositivosAdmin(proveedorId, soloActivos),
+    enabled:  !!perfil && !!proveedorId,
+  })
+}
+
+// Mismo RPC que usa el propio comerciante (useProveedorVecino.js) --
+// desvincular_dispositivo tiene bypass de staff del lado del server,
+// así que no hace falta una RPC aparte. Lo que sí es propio de acá es
+// el audit log: es sensible que alguien del municipio corte la
+// operatoria de un comercio, y el hook del vecino no loguea (no tiene
+// motivo -- ver createAuditLogVecino solo para acciones sin sesión de
+// staff).
+async function desvincularDispositivoStaff({ deviceId, proveedorId, alias, proveedorNombre }) {
+  const { data, error } = await supabase.rpc('desvincular_dispositivo', {
+    p_device_id: deviceId,
+  })
+  if (error) throw error
+  logAudit({
+    accion: 'update', entidad: 'proveedor_dispositivos',
+    descripcion: `Teléfono desvinculado${alias ? ` (${alias})` : ''} de ${proveedorNombre}`,
+  })
+  return data
+}
+
+export function useDesvincularDispositivoStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: desvincularDispositivoStaff,
+    onSuccess:  (_r, { proveedorId }) => {
+      qc.invalidateQueries({ queryKey: ['proveedor-dispositivos', proveedorId] })
+    },
+  })
+}

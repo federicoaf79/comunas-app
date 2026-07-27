@@ -37,6 +37,7 @@ import Flota               from './pages/admin/Flota'
 import Seguros             from './pages/admin/Seguros'
 import Patrimonio          from './pages/admin/Patrimonio'
 import Proveedores         from './pages/admin/Proveedores'
+import ProveedorDetalle    from './pages/admin/ProveedorDetalle'
 import ValesEmitidos       from './pages/admin/ValesEmitidos'
 import ObrasPublicas       from './pages/admin/ObrasPublicas'
 import AyudaSocial         from './pages/admin/AyudaSocial'
@@ -224,6 +225,7 @@ const router = createBrowserRouter([
                   { path: '/admin/seguros',              element: <Seguros /> },
                   { path: '/admin/patrimonio',           element: <Patrimonio /> },
                   { path: '/admin/vales/proveedores',    element: <Proveedores /> },
+                  { path: '/admin/vales/proveedores/:id', element: <ProveedorDetalle /> },
                   { path: '/admin/vales',                element: <ValesEmitidos /> },
                   { path: '/admin/obras-publicas',       element: <ObrasPublicas /> },
                   { path: '/admin/noticias',             element: <Noticias /> },
