@@ -79,7 +79,7 @@ function TabButton({ active, onClick, children }) {
 // pedirle el alta. El server sigue siendo la autoridad real (esto es
 // nada más qué UI mostrar); si el rol de este vecino cambiara entre
 // que carga la lista y confirma, el server igual lo rechaza.
-function VincularView({ accesos, deviceId, onVinculado }) {
+function VincularView({ accesos, deviceId, vecino, onVinculado }) {
   const accesosResponsable = accesos.filter(a => a.rol === 'responsable')
   const [seleccionado, setSeleccionado] = useState(null)
   const [error, setError] = useState('')
@@ -89,7 +89,11 @@ function VincularView({ accesos, deviceId, onVinculado }) {
     if (!seleccionado) return
     setError('')
     try {
-      await vincularMut.mutateAsync({ deviceId, proveedorId: seleccionado, alias: null })
+      const proveedorNombre = accesosResponsable.find(a => a.proveedor.id === seleccionado)?.proveedor?.nombre
+      await vincularMut.mutateAsync({
+        deviceId, proveedorId: seleccionado, alias: null, proveedorNombre,
+        vecinoId: vecino?.id, municipioId: vecino?.municipio_id,
+      })
       onVinculado?.()
     } catch (e) {
       setError(e?.message ?? 'No pudimos vincular el dispositivo.')
@@ -154,7 +158,7 @@ function VincularView({ accesos, deviceId, onVinculado }) {
 }
 
 // ── Canjear ──────────────────────────────────────────────────────
-function CanjearView({ dispositivo, deviceId }) {
+function CanjearView({ dispositivo, deviceId, vecino }) {
   const [scanning, setScanning] = useState(false)
   const [codigoInput, setCodigoInput] = useState('')
   const [vale, setVale] = useState(null)
@@ -203,7 +207,11 @@ function CanjearView({ dispositivo, deviceId }) {
     if (!puedeConfirmar) return
     setError('')
     try {
-      const resultado = await canjearMut.mutateAsync({ codigo: vale.codigo, deviceId })
+      const resultado = await canjearMut.mutateAsync({
+        codigo: vale.codigo, deviceId,
+        proveedorId: dispositivo.proveedor_id, proveedorNombre: dispositivo.proveedor?.nombre,
+        vecinoId: vecino?.id, municipioId: vecino?.municipio_id,
+      })
       setResultadoOk(resultado)
       setVale(null)
       setCodigoInput('')
@@ -402,7 +410,7 @@ function OtrosComerciosView({ accesos, comercioActualId }) {
 // rol real de este vecino en `accesos`; acá solo decide qué OFRECER,
 // el server (desvincular_dispositivo) sigue siendo quien rechaza de
 // verdad a un secundario.
-function DispositivoView({ dispositivo, deviceId, esResponsable, onDesvinculado }) {
+function DispositivoView({ dispositivo, deviceId, esResponsable, vecino, onDesvinculado }) {
   const desvincularMut = useDesvincularDispositivo()
   const [confirmando, setConfirmando] = useState(false)
   const [error, setError] = useState('')
@@ -410,7 +418,10 @@ function DispositivoView({ dispositivo, deviceId, esResponsable, onDesvinculado 
   async function handleDesvincular() {
     setError('')
     try {
-      await desvincularMut.mutateAsync(deviceId)
+      await desvincularMut.mutateAsync({
+        deviceId, proveedorId: dispositivo.proveedor_id, proveedorNombre: dispositivo.proveedor?.nombre,
+        vecinoId: vecino?.id, municipioId: vecino?.municipio_id,
+      })
       setConfirmando(false)
       onDesvinculado?.()
     } catch (e) {
@@ -551,7 +562,7 @@ export default function Proveedor() {
         </button>
 
         {!dispositivo ? (
-          <VincularView accesos={accesos} deviceId={deviceId} onVinculado={() => dispositivoQ.refetch()} />
+          <VincularView accesos={accesos} deviceId={deviceId} vecino={vecino} onVinculado={() => dispositivoQ.refetch()} />
         ) : (
           <>
             <header className="mb-4">
@@ -571,7 +582,7 @@ export default function Proveedor() {
 
             {tab === 'canjear' && (
               <div className="space-y-6">
-                <CanjearView dispositivo={dispositivo} deviceId={deviceId} />
+                <CanjearView dispositivo={dispositivo} deviceId={deviceId} vecino={vecino} />
                 <ComercioCanjeadosCard proveedor={dispositivo.proveedor} esComercioActivo />
               </div>
             )}
@@ -583,6 +594,7 @@ export default function Proveedor() {
                 dispositivo={dispositivo}
                 deviceId={deviceId}
                 esResponsable={esResponsableActivo}
+                vecino={vecino}
                 onDesvinculado={() => { dispositivoQ.refetch(); setTab('canjear') }}
               />
             )}

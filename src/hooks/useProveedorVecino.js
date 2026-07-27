@@ -1,5 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { createAuditLogVecino } from './useAuditLog'
+
+// Auditoría best-effort: nunca bloquea la mutación real si falla -- el
+// vale/dispositivo ya se procesó del lado del server, un error de log no
+// puede hacerle creer al vecino/comerciante que la operación falló. Mismo
+// criterio que turnos_agenda/beneficiarios/reclamos (Fase 3 del sprint de
+// auditoría): usuario_id siempre null acá, quien ejecuta es un vecino, no
+// staff (audit_log.usuario_id tiene FK a `usuarios`).
+function logAuditVecino(args) {
+  createAuditLogVecino(args).catch(e => console.warn('[useProveedorVecino] audit log:', e.message))
+}
 
 // =============================================================
 // useProveedorVecino — Vales Electrónicos, Fase 3 (sección Proveedor
@@ -84,13 +95,19 @@ export function useDispositivoVinculado(deviceId) {
   })
 }
 
-async function vincularDispositivo({ deviceId, proveedorId, alias }) {
+async function vincularDispositivo({ deviceId, proveedorId, alias, proveedorNombre, vecinoId, municipioId }) {
   const { data, error } = await supabase.rpc('vincular_dispositivo', {
     p_device_id: deviceId,
     p_proveedor_id: proveedorId,
     p_alias: alias ?? null,
   })
   if (error) throw error
+  logAuditVecino({
+    accion: 'update', entidad: 'proveedor_dispositivos', entidadId: deviceId,
+    descripcion: `Teléfono vinculado a ${proveedorNombre ?? proveedorId ?? 'comercio'}`,
+    municipioId, vecinoId,
+    metadata: { device_id: deviceId, proveedor_id: proveedorId ?? null, alias: alias ?? null },
+  })
   return data
 }
 
@@ -110,11 +127,17 @@ export function useVincularDispositivo() {
 // dueño se enterara). Un secundario no puede, aunque haya sido él
 // quien lo vinculó: ese chequeo vive en el server
 // (desvincular_dispositivo), no se duplica acá.
-async function desvincularDispositivo(deviceId) {
+async function desvincularDispositivo({ deviceId, proveedorId, proveedorNombre, vecinoId, municipioId }) {
   const { data, error } = await supabase.rpc('desvincular_dispositivo', {
     p_device_id: deviceId,
   })
   if (error) throw error
+  logAuditVecino({
+    accion: 'update', entidad: 'proveedor_dispositivos', entidadId: deviceId,
+    descripcion: `Teléfono desvinculado de ${proveedorNombre ?? proveedorId ?? 'comercio'}`,
+    municipioId, vecinoId,
+    metadata: { device_id: deviceId, proveedor_id: proveedorId ?? null },
+  })
   return data
 }
 
@@ -152,12 +175,25 @@ export async function fetchValePorCodigo(codigo, deviceId) {
   return data
 }
 
-async function canjearVale({ codigo, deviceId }) {
+async function canjearVale({ codigo, deviceId, proveedorId, proveedorNombre, vecinoId, municipioId }) {
   const { data, error } = await supabase.rpc('canjear_vale', {
     p_codigo: codigo,
     p_device_id: deviceId,
   })
   if (error) throw error
+  logAuditVecino({
+    accion: 'update', entidad: 'vales', entidadId: data?.id ?? codigo,
+    descripcion: `Vale canjeado — ${data?.codigo ?? codigo} en ${proveedorNombre ?? proveedorId ?? 'comercio'}`,
+    municipioId, vecinoId,
+    metadata: {
+      codigo: data?.codigo ?? codigo,
+      proveedor_id: data?.proveedor_id ?? proveedorId ?? null,
+      proveedor_nombre: proveedorNombre ?? null,
+      monto: data?.monto ?? null,
+      cantidad: data?.cantidad ?? null,
+      unidad: data?.unidad ?? null,
+    },
+  })
   return data
 }
 
