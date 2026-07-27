@@ -6,13 +6,13 @@ import { getDeviceId } from '../../lib/deviceId'
 import {
   useAccesosProveedorVecino, useDispositivoVinculado,
   useVincularDispositivo, useDesvincularDispositivo,
-  useCanjearVale, useValesCanjeadosProveedor, fetchValePorCodigo,
+  useCanjearVale, useHistorialCanjesProveedor, fetchValePorCodigo,
 } from '../../hooks/useProveedorVecino'
 import { msRestantes, formatearCountdown } from '../../lib/valeEstado'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
-import { dateOf } from '../../lib/datetime'
+import { dateTimeOf } from '../../lib/datetime'
 
 // =============================================================
 // Proveedor — Vales Electrónicos, Fase 3. Sección de la cuenta del
@@ -289,13 +289,40 @@ function CanjearView({ dispositivo, deviceId }) {
   )
 }
 
-// ── Mis otros comercios (solo lectura) ──────────────────────────
-function ComercioCanjeadosCard({ proveedor }) {
-  const { data: vales = [], isLoading } = useValesCanjeadosProveedor(proveedor.id)
+// ── Historial de canjes de un comercio ──────────────────────────
+//
+// Un solo componente para los dos lugares donde hace falta mostrar
+// esto: el comercio ACTIVO (pantalla principal, este dispositivo
+// opera acá) y "Mis otros comercios" (solo lectura, otro dispositivo
+// opera ahí). `esComercioActivo` solo cambia el cartel de aviso -- la
+// lógica de qué columnas mostrar es la misma en los dos casos.
+//
+// historial_canjes_proveedor() devuelve columnas distintas según el
+// rol real de quien llama para ESE comercio -- responsable ve todo,
+// secundario ve solo codigo/canjeado_en/estado (filtrado además por
+// canjeado_por = quien llama, para el secundario). Acá NUNCA se le
+// pregunta el rol al vecino ni se lo infiere de otro lado: se detecta
+// mirando si la fila trae `vecino_nombre` (si vino, es el vecino_nombre
+// real de un canje real, no un campo que se pueda simular con ausencia
+// de otro dato). Sin filas no hay forma de saber qué vería este
+// vecino si hubiera canjes -- no se muestra la nota "ves menos" en ese
+// caso, no hace falta explicar una restricción sobre una lista vacía.
+function ComercioCanjeadosCard({ proveedor, esComercioActivo = false }) {
+  const { data: vales = [], isLoading } = useHistorialCanjesProveedor(proveedor.id)
+  const vistaReducida = vales.length > 0 && !('vecino_nombre' in vales[0])
+
   return (
     <div className="rounded-lg border border-[#DDE0EC] bg-white p-4">
       <p className="font-sora text-base font-bold text-primary">{proveedor.nombre}</p>
-      <p className="text-xs text-primary-400">Solo lectura — no podés operar acá desde este teléfono.</p>
+      {!esComercioActivo && (
+        <p className="text-xs text-primary-400">Solo lectura — no podés operar acá desde este teléfono.</p>
+      )}
+      {vistaReducida && (
+        <p className="mt-2 rounded-md bg-primary-50 p-2 text-xs text-primary-600">
+          Ves los vales que canjeaste vos. El detalle completo está en la cuenta del
+          responsable del comercio.
+        </p>
+      )}
       {isLoading ? (
         <div className="flex justify-center py-3"><Spinner size="sm" /></div>
       ) : vales.length === 0 ? (
@@ -303,12 +330,25 @@ function ComercioCanjeadosCard({ proveedor }) {
       ) : (
         <ul className="mt-2 divide-y divide-border">
           {vales.map(v => (
-            <li key={v.id} className="py-2 text-sm">
-              <span className="font-medium text-primary">{detalleVale(v)}</span>
-              <span className="text-primary-500"> — {v.descripcion}</span>
-              <span className="ml-2 text-xs text-primary-400">
-                {v.canjeado_en ? dateOf(v.canjeado_en) : ''}
-              </span>
+            <li key={v.codigo} className="py-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs font-medium text-primary">{v.codigo}</span>
+                <span className="text-xs capitalize text-primary-400">
+                  {v.canjeado_en ? dateTimeOf(v.canjeado_en) : ''} · {v.estado}
+                </span>
+              </div>
+              {'vecino_nombre' in v && (
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="font-medium text-primary">{detalleVale(v)}</span>
+                  <span className="text-primary-500">
+                    {v.vecino_nombre ?? '—'}
+                    {v.vecino_dni ? ` · DNI ${v.vecino_dni}` : ''}
+                  </span>
+                </div>
+              )}
+              {'descripcion' in v && v.descripcion && (
+                <p className="mt-0.5 text-xs text-primary-400">{v.descripcion}</p>
+              )}
             </li>
           ))}
         </ul>
@@ -490,7 +530,12 @@ export default function Proveedor() {
               <TabButton active={tab === 'dispositivo'} onClick={() => setTab('dispositivo')}>Este dispositivo</TabButton>
             </div>
 
-            {tab === 'canjear' && <CanjearView dispositivo={dispositivo} deviceId={deviceId} />}
+            {tab === 'canjear' && (
+              <div className="space-y-6">
+                <CanjearView dispositivo={dispositivo} deviceId={deviceId} />
+                <ComercioCanjeadosCard proveedor={dispositivo.proveedor} esComercioActivo />
+              </div>
+            )}
             {tab === 'otros' && (
               <OtrosComerciosView accesos={accesos} comercioActualId={dispositivo.proveedor?.id} />
             )}

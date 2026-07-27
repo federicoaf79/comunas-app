@@ -17,8 +17,13 @@ import { supabase } from '../lib/supabase'
 //     RPC (vincular_dispositivo / desvincular_dispositivo).
 // =============================================================
 
+// `rol` no se selecciona -- no se usa en ningún lado de la pantalla
+// (confirmado por grep antes de tocar Fase 4 parte 2) y el criterio de
+// producto es justamente que el cliente nunca decida por rol: qué ve
+// cada quien lo decide el server, por presencia de campos en la
+// respuesta (ver historial_canjes_proveedor más abajo).
 const PROVEEDOR_ACCESO_COLS = `
-  id, rol, activo,
+  id, activo,
   proveedor:proveedor_id(id, nombre, categoria)
 `
 
@@ -126,14 +131,6 @@ export function useDesvincularDispositivo() {
 //     proveedor_nombre -- sin datos del vale ni del vecino
 //   - vale de un comercio ajeno: la RPC tira 'Vale no encontrado',
 //     igual que un código inexistente -- no confirma que exista
-const VALE_PREVIEW_COLS = `
-  id, codigo, descripcion, monto, cantidad, unidad, estado,
-  emitido_en, vigencia_horas, abierto_en, vence_apertura_en, canjeado_en,
-  proveedor_id,
-  vecino:vecino_id(id, nombre_completo),
-  proveedor:proveedor_id(id, nombre)
-`
-
 export async function fetchValePorCodigo(codigo, deviceId) {
   if (!codigo) return null
   const { data, error } = await supabase.rpc('preview_vale', {
@@ -161,26 +158,40 @@ export function useCanjearVale() {
   })
 }
 
-// Vales canjeados de UN comercio puntual -- vista de solo lectura
-// para "tus otros comercios" (el dueño ve, no opera). RLS ya scopea
-// por proveedor_accesos, el filtro por proveedor_id acá es solo para
-// no traer de más.
-async function fetchValesCanjeadosProveedor(proveedorId) {
+// Historial de canjes de UN comercio -- Fase 4 parte 2. Vía RPC
+// (historial_canjes_proveedor), no un SELECT directo: la policy
+// vales_proveedor_select_ventana ya no deja a un secundario ver vales
+// 'canjeado' por consulta directa (RLS filtra filas, no columnas) --
+// un SELECT acá le devolvería [] en silencio a cualquier secundario,
+// sin error (mismo modo de falla ya visto con el "Vecino: —" de
+// preview_vale en Fase 3).
+//
+// La RPC (SECURITY DEFINER) decide QUÉ COLUMNAS devolver según el rol
+// real de quien llama para ESE proveedor_id -- responsable ve el
+// detalle completo (codigo, canjeado_en, estado, descripcion, monto,
+// cantidad, unidad, vecino_nombre, vecino_dni, canjeado_por);
+// secundario ve solo codigo, canjeado_en, estado. Nunca se le pide el
+// rol al cliente: el componente detecta qué vino por presencia de
+// campo en la fila (ver Proveedor.jsx), no reimplementa la regla.
+//
+// Motivo de producto: que el teléfono de un empleado (secundario) no
+// termine acumulando un padrón de quién recibe ayuda social en el
+// pueblo y por cuánto -- el dato pasa por sus manos para operar el
+// canje, no se le queda después. Ya viene ordenado por canjeado_en
+// descendente; nunca devuelve null, `[]` si no hay canjes.
+async function fetchHistorialCanjesProveedor(proveedorId) {
   if (!proveedorId) return []
-  const { data, error } = await supabase
-    .from('vales')
-    .select(VALE_PREVIEW_COLS)
-    .eq('proveedor_id', proveedorId)
-    .eq('estado', 'canjeado')
-    .order('canjeado_en', { ascending: false })
+  const { data, error } = await supabase.rpc('historial_canjes_proveedor', {
+    p_proveedor_id: proveedorId,
+  })
   if (error) throw error
   return data ?? []
 }
 
-export function useValesCanjeadosProveedor(proveedorId) {
+export function useHistorialCanjesProveedor(proveedorId) {
   return useQuery({
-    queryKey: ['proveedor', 'vales-canjeados', proveedorId ?? '__none__'],
-    queryFn:  () => fetchValesCanjeadosProveedor(proveedorId),
+    queryKey: ['proveedor', 'historial-canjes', proveedorId ?? '__none__'],
+    queryFn:  () => fetchHistorialCanjesProveedor(proveedorId),
     enabled:  !!proveedorId,
   })
 }
