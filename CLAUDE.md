@@ -219,6 +219,25 @@ en SQL (no en JS), una vista sobre `vales` corre con los permisos del owner y
 **saltea la RLS de la tabla de abajo**. Necesita `with (security_invoker = true)` o
 expone todos los vales de todos los tenants.
 
+**RESUELTO — la sincronización del bot de WhatsApp con Plan-B nunca funcionó, por
+dos bugs independientes que se sumaban:** `sync-planb.js` consultaba
+`configuracion_portal` como si tuviera columnas por dato (es clave/valor), y
+ninguno de los dos callers del frontend mandaba `municipio_id` en el body, así que
+el endpoint devolvía 400 igual. **CONSECUENCIA:** todo lo que el staff cargó en
+`bot_descripcion`/`bot_faq`/`bot_restricciones` de cada dependencia nunca llegó a
+Plan-B. El bot de Real Sayana vino respondiendo con su configuración por defecto
+desde que se integró en junio.
+
+**PENDIENTE DE VERIFICAR (no se puede desde el código):** que el `x-internal-key`
+hardcodeado `'comunas-sync-2026'` siga coincidiendo con `INTERNAL_SYNC_KEY` en las
+variables de entorno de Vercel. Si divergió, la sync devuelve 401 aunque el código
+esté bien.
+
+**DEUDA — `TabBotIA` en `DependenciaGestion.jsx` es una implementación DUPLICADA
+del mismo botón "Sincronizar con bot" que ya vive en `DepBotIATab.jsx`:** las dos
+tenían el mismo bug y hubo que arreglarlas por separado. Mismo patrón de hooks
+duplicados que ya causó bugs de staleness antes. Unificar post-entrega.
+
 ---
 
 ## Auditoría — Log de operaciones (`audit_log`)
