@@ -35,7 +35,74 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 **CRÍTICO — Columna `activa` en tabla `dependencias`:** es `activa` (NO `activo`). Bug corregido en junio 2026. `useMunicipios.js:199` (alta de dependencias en el wizard de municipio) ya usa `activa: true` — resuelto, no reabrir.
 **CRÍTICO — Migraciones post-base:** 13 migraciones de mayo 2026 con estado desconocido en prod. Patrón confirmado 2026-07-23: varios archivos en `supabase/migrations/` documentan un schema (columnas, triggers) que NO coincide con el schema real en prod — el archivo se edita localmente después de correrlo una vez y nunca se vuelve a ejecutar. Antes de asumir que una columna/trigger de una migración existe en prod, confirmar con el spec de PostgREST (`GET /rest/v1/` → `definitions.<tabla>.properties`) o pedir el SQL de `information_schema`/`pg_constraint` al usuario. Otro caso confirmado 2026-07-23: `supabase/migrations/20260714_turnos_agenda_vecino_insert.sql` define la policy `turnos_agenda_vecino_insert` con `WITH CHECK (vecino_id = (SELECT id FROM vecinos WHERE auth_user_id = auth.uid() ...))` — pero la columna real es `vecinos.user_id`, no `auth_user_id` (confirmado contra la función base `current_vecino_id()` y contra una fila real de `vecinos`). Si el archivo se corrió tal cual, la policy nunca se creó (error de columna inexistente); si funciona en prod hoy es porque alguien la corrigió a mano antes de ejecutarla y el archivo local quedó desactualizado.
 **MEDIO — `beneficiarios`/`reclamos` sin columna `updated_at`:** ambas tablas confirmadas sin esa columna en prod (vía spec de PostgREST) aunque la migración base (`20260509000003_beneficiarios_reclamos.sql`) la define con trigger `set_updated_at()`. `useReclamos.js` ya no la referencia (fix `3b30d06`). `useBeneficiarios.js` tampoco la selecciona en ningún lado (solo queda en un comentario de schema desactualizado) — sin bug funcional confirmado hoy, pero si `updateBeneficiarioEstado` empieza a fallar con "column updated_at does not exist", es porque el trigger de la migración sí llegó a crearse en prod sin la columna.
-**ALTO — `hc_documentos` mismatch total de schema:** la tabla real en prod es `id, vecino_id, subido_por_rol, tipo, nombre, storage_path, fecha, created_at, atencion_id`. El código (`useHC.js`, `useAtenciones.js`, `useVecinoData.js`) asume `municipio_id, consulta_id, descripcion, mime_type, uploaded_by` — ninguna existe en prod — y nunca usa `subido_por_rol`/`nombre`/`fecha`, que sí existen. Rompe el 100% de las queries a `hc_documentos` (subir/ver adjuntos de una atención). Pendiente decidir: ¿migrar schema al que asume el código, o reescribir el código al schema real? No tocado todavía — decisión de diseño, no un fix mecánico.
+**RESUELTO — `hc_documentos` mismatch total de schema:** reescrito el código al
+schema real 2026-07-28, no el schema (la tabla tenía 0 filas en prod, nada que
+migrar). Columnas reales: `id, vecino_id, subido_por_rol, tipo, nombre,
+storage_path, fecha, created_at, atencion_id` — sin `municipio_id`, `consulta_id`,
+`descripcion`, `mime_type` ni `uploaded_by`, que el código venía asumiendo. Sin
+CHECK constraint: `tipo` es texto libre — convención de UI
+`orden_medica|estudio|receta|otro` (reemplaza al viejo `informe`), no una
+restricción de la DB. `useAtenciones.js` (flujo admin, `DocumentosAtencion.jsx`)
+reescrito completo. `useHC.js` tenía `fetchDocumentos`/`createDocumento`/
+`documentosQuery` con el mismo mismatch de schema, pero **código muerto** —
+`VecinoHC.jsx`, su único caller, nunca los usaba (confirmado con grep); se
+eliminaron en vez de arreglarlos. `useVecinoData.js` **NO estaba roto** — esta
+misma nota lo listaba como parte del mismatch, pero su `fetchDocumentosAtencion()`
+ya seleccionaba las columnas reales; la nota vieja era incorrecta. Verificado en
+vivo 2026-07-28 con sesión real de Luis (staff): subida, listado con nombre real, y
+borrado confirmados contra un reload completo de la página (no solo cache de React
+Query).
+
+**RESUELTO — bucket `documentos-hc` es PRIVADO, `getPublicUrl()` no sirve:**
+confirmado en vivo 2026-07-28 — el link que devuelve siempre da 400. Reemplazado
+por `createSignedUrl(path, 3600)` en `useAtenciones.js` (admin) y `useVecinoData.js`
+(portal), generado al hacer clic en "Ver" — nunca al listar (firmar ahí dispararía
+N requests por render y la firma vencería con la pantalla abierta). De paso se
+reescribieron las policies de storage: la de lectura era `USING (bucket_id =
+'documentos-hc')` a secas — cualquier `authenticated` leía la historia clínica de
+cualquier vecino de cualquier municipio. Reescrita para scopear por carpeta: staff
+lee la carpeta 1 (su `municipio_id`), vecino lee la carpeta 2 (su `vecino_id`). Se
+agregó también policy de DELETE para staff, que no existía (borrar la fila de
+`hc_documentos` dejaba el archivo huérfano en el bucket). **El path DEBE seguir
+siendo `municipioId/vecinoId/atencionId/archivo`** — si cambia el orden de las
+carpetas, las policies dejan de matchear y todo el mundo (staff y vecino por igual)
+pierde acceso de lectura al bucket entero.
+
+**PENDIENTE DE VERIFICACIÓN — la rama del VECINO de esta policy de storage nunca se
+ejecutó:** toda la verificación en vivo del 2026-07-28 se hizo con sesión de staff
+(Luis). Confirmado que `is_staff()` resuelve bien dentro del contexto de
+`storage.objects`, pero `current_vecino_id()` ahí **no se probó** — si no resuelve
+igual (mismo tipo de problema que ya mordió antes con RLS de tablas normales), el
+vecino ve cero documentos en silencio al entrar a su portal. Probar con sesión real
+de vecino antes de dar el módulo por cerrado del todo.
+
+**PATRÓN — `window.open()` después de un `await` lo bloquea Chrome como popup, EN
+SILENCIO:** encontrado en vivo 2026-07-28 al implementar las URLs firmadas de
+arriba — la request de firma volvía 200, cero errores en consola, y no pasaba nada.
+Causa: `window.open()` llamado después de esperar una promesa pierde el "user
+activation" del click original: Chrome lo trata como popup no solicitado y lo
+descarta sin avisar. Solución: abrir la pestaña en blanco (`window.open('',
+'_blank')`) DENTRO del handler del click, ANTES de esperar nada async, y navegarla
+(`tab.location.href = url`) recién cuando llega la URL. **Sin `noopener`** en ese
+`open` — con `noopener`, `window.open()` devuelve `null` y no queda ninguna
+referencia para navegar después. Aplica a cualquier flujo futuro que abra una
+pestaña con datos que hay que buscar async primero (URLs firmadas, exports
+generados server-side, etc.).
+
+**ALTO — `ordenes_derivacion.archivo_url` guarda una URL PÚBLICA PERMANENTE de un
+bucket PRIVADO:** mismo bug de fondo que se acaba de cerrar en `hc_documentos`
+(`getPublicUrl()` sobre `documentos-hc`, que es privado) pero en otro flujo,
+todavía sin arreglar: `useOrdenMedicaUpload.js` (upload de orden médica física) y
+`AgendaPublica.jsx` (`handleUploadOrden`, portal) arman la URL con `getPublicUrl()`
+y la guardan tal cual en `ordenes_derivacion.archivo_url` /
+`turnos_agenda.orden_medica_url`. Es **peor** que el caso de `hc_documentos`: ahí la
+URL se derivaba al renderizar (bug visible pero acotado a la sesión); acá queda
+**persistida rota en la base** — cualquier orden médica subida por un vecino desde
+que se privatizó el bucket es un link muerto para siempre, no autocorregible sin
+re-firmar o re-derivar. Real Sayana va a usar este flujo (subida de orden médica)
+desde el día uno. Pendiente: mismo tratamiento que `hc_documentos` — signed URL
+generada al mostrar el archivo (`validarOrden()` en `CicSalud.jsx`, y donde sea que
+el vecino vea su propia orden en el portal), no una URL guardada.
 **RESUELTO — `partidas_tipo` sin policy de SELECT:** tabla catálogo (sin `municipio_id`, `codigo` como PK) usada por el selector de partida en "Nueva solicitud" de Inventario. Tenía 4 filas de categoría (`02`-`05`) invisibles para staff por falta de policy de SELECT — agregada el 2026-07-23. Se sumaron 12 partidas granulares más (combustibles, insumos médicos, alimentos, etc.) vía service_role. Selector ya funcional.
 **RESUELTO — `ordenes_compra.numero` es NOT NULL pero la UI lo marcaba "opcional":** el campo "N° de orden (opcional)" en `OrdenFormModal` (`Inventario.jsx`) podía quedar vacío, pero la columna `numero` en prod no acepta null. Confirmado en vivo 2026-07-23. Fix 2026-07-23: se sacó el "(opcional)" del label y se agregó `numero` a la validación `canSubmit` — los botones "Guardar borrador"/"Enviar a aprobación" quedan deshabilitados sin número. Verificado en vivo: sin número los botones están disabled, con número se habilitan y la orden se crea con el número guardado.
 **RESUELTO — UPDATE en `vecinos` bloqueado por RLS para todo el staff:** confirmado en vivo 2026-07-23 al intentar completar la HC de un vecino desde `AtencionDrawer.jsx` (alergias, contacto de emergencia) — el guardado fallaba con `Cannot coerce the result to a single JSON object` / `200 []` (0 filas) para cualquier campo, cualquier usuario. Causa real: **cero policies de UPDATE en `vecinos`** (ni para staff ni para el propio vecino). Agregadas dos policies (staff por municipio, vecino por su propia fila) — verificado en vivo que el UPDATE ya funciona (HC de vecino de prueba completada + registrada en `audit_log` con shape correcto).
@@ -71,6 +138,21 @@ significaba en la práctica "admin". Hoy un rol `reporting` puede insertar y bor
 historia clínica y partidas presupuestarias de su comuna; `usuario_sub` igual, sin
 quedar acotado a su dependencia. No es un parche de una línea — requiere definir qué
 puede hacer cada uno de los 8 roles. **Sprint propio, pendiente.**
+
+**ALTO — la matriz "Permisos por persona" (`dependencias_acceso` /
+`modulos_acceso`) no se aplica en RLS:** verificado 2026-07-28 — ninguna
+policy la consulta. Controla el sidebar y el gating de pantallas, nada más.
+Un staff con sesión válida puede leer y escribir tablas de dependencias que
+no tiene asignadas llamando directo a la API. **Pendiente: sprint de RLS por
+dependencia, post-entrega.**
+
+**CORRECCIÓN — la matriz "Permisos por persona" NO guarda solo:** verificado en
+vivo 2026-07-28 con la sesión de Enrique (admin_comuna): tildar un permiso muestra
+"1 cambio sin guardar" con botones "Cancelar"/"Guardar cambios" — sin apretar
+"Guardar cambios" el cambio no se persiste. Una nota anterior decía que el cambio
+era inmediato (toast, sin botón) — era incorrecta, corregida acá. Sí se confirmó
+que lo que se guarda queda reflejado en la base (verificado con reload completo de
+`/admin/usuarios`, no solo re-render en cliente).
 
 **MEDIO — tres policies sin filtro de municipio (cross-tenant):** `espacios_deportivos`
 (`espacios_staff_all`, `USING is_staff()` a secas), `autoridades`
