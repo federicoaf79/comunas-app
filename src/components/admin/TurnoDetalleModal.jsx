@@ -118,7 +118,7 @@ export default function TurnoDetalleModal({ turno, isOpen, onClose, onConfirmar,
     const tab = window.open('', '_blank')
     setVerOrdenLoading(true)
     try {
-      const url = await getDocumentoSignedUrl(ordenMedicaUrl)
+      const url = await getDocumentoSignedUrl('documentos-hc', ordenMedicaUrl)
       if (url && tab) tab.location.href = url
       else tab?.close()
     } catch (e) {

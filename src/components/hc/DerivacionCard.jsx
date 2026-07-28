@@ -47,7 +47,7 @@ export default function DerivacionCard({ derivacion, children }) {
     setVerLoading(true)
     const tab = window.open('', '_blank')
     try {
-      const url = await getDocumentoSignedUrl(d.archivo_url)
+      const url = await getDocumentoSignedUrl('documentos-hc', d.archivo_url)
       if (url && tab) tab.location.href = url
       else tab?.close()
     } catch (e) {

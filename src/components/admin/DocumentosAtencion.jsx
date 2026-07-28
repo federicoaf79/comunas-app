@@ -100,7 +100,7 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
     // window.open() devuelve null y no hay pestaña que navegar después.
     const tab = window.open('', '_blank')
     try {
-      const url = await getDocumentoSignedUrl(d.storage_path)
+      const url = await getDocumentoSignedUrl('documentos-hc', d.storage_path)
       if (url && tab) tab.location.href = url
       else tab?.close()
     } catch (e) {

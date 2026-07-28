@@ -7,6 +7,7 @@ import {
   TIPOS_SEGURO, diasParaVencer,
 } from '../../hooks/useSeguros'
 import { useVehiculos } from '../../hooks/useFlota'
+import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
 import Modal from '../../components/ui/Modal'
@@ -40,7 +41,7 @@ export default function Seguros() {
 
   const filtrados = useMemo(() => {
     return seguros.filter(s => {
-      if (filtroTipo && s.tipo !== filtroTipo) return false
+      if (filtroTipo && s.tipo_seguro !== filtroTipo) return false
       return true
     })
   }, [seguros, filtroTipo])
@@ -141,7 +142,7 @@ function SeguroCard({ seguro, onView }) {
             N° {seguro.numero_poliza}
           </p>
         </div>
-        {seguro.poliza_url && (
+        {seguro.archivo_url && (
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-5 w-5 shrink-0 text-accent ml-2" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
           </svg>
@@ -149,8 +150,8 @@ function SeguroCard({ seguro, onView }) {
       </div>
 
       <div className="space-y-2 mb-3">
-        <span className={`inline-block text-xs font-medium px-2 py-1 rounded-full ${tipoBadgeCls(seguro.tipo)}`}>
-          {TIPOS_SEGURO.find(t => t.value === seguro.tipo)?.label ?? seguro.tipo}
+        <span className={`inline-block text-xs font-medium px-2 py-1 rounded-full ${tipoBadgeCls(seguro.tipo_seguro)}`}>
+          {TIPOS_SEGURO.find(t => t.value === seguro.tipo_seguro)?.label ?? seguro.tipo_seguro}
         </span>
 
         <div className="text-xs text-primary-500">
@@ -192,14 +193,14 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
   const [form, setForm] = useState(seguro ? {
     compania: seguro.compania ?? '',
     numero_poliza: seguro.numero_poliza ?? '',
-    tipo: seguro.tipo ?? 'flota_vehiculos',
+    tipo_seguro: seguro.tipo_seguro ?? 'flota_vehiculos',
     tipo_cobertura: seguro.tipo_cobertura ?? '',
     vigencia_desde: seguro.vigencia_desde ?? '',
     vigencia_hasta: seguro.vigencia_hasta ?? '',
     costo: seguro.costo ?? '',
     observaciones: seguro.observaciones ?? '',
   } : {
-    compania: '', numero_poliza: '', tipo: 'flota_vehiculos',
+    compania: '', numero_poliza: '', tipo_seguro: 'flota_vehiculos',
     tipo_cobertura: '', vigencia_desde: '', vigencia_hasta: '',
     costo: '', observaciones: '',
   })
@@ -211,7 +212,7 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
   const update = useUpdateSeguro()
   const upload = useUploadPoliza()
 
-  const canSubmit = !!form.compania && !!form.numero_poliza && !!form.tipo
+  const canSubmit = !!form.compania && !!form.numero_poliza && !!form.tipo_seguro
 
   async function handle() {
     setError('')
@@ -219,7 +220,7 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
       const payload = {
         compania:         form.compania.trim(),
         numero_poliza:    form.numero_poliza.trim(),
-        tipo:             form.tipo,
+        tipo_seguro:      form.tipo_seguro,
         tipo_cobertura:   form.tipo_cobertura.trim() || null,
         vigencia_desde:   form.vigencia_desde || null,
         vigencia_hasta:   form.vigencia_hasta || null,
@@ -235,10 +236,11 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
         seguroId = created.id
       }
 
-      // Subir archivo si hay uno nuevo
+      // Subir archivo si hay uno nuevo — uploadPoliza() devuelve el
+      // path del bucket privado 'seguros', no una URL.
       if (file && seguroId) {
-        const url = await upload.mutateAsync({ file, municipioId, seguroId })
-        await update.mutateAsync({ id: seguroId, poliza_url: url })
+        const path = await upload.mutateAsync({ file, municipioId, seguroId })
+        await update.mutateAsync({ id: seguroId, archivo_url: path })
       }
 
       onClose()
@@ -273,8 +275,8 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
         />
         <Select
           label="Tipo de seguro"
-          value={form.tipo}
-          onChange={v => set('tipo', v)}
+          value={form.tipo_seguro}
+          onChange={v => set('tipo_seguro', v)}
           options={TIPOS_SEGURO}
         />
         <Input
@@ -312,7 +314,7 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
             onChange={e => setFile(e.target.files?.[0] || null)}
             className="input-field"
           />
-          {seguro?.poliza_url && !file && (
+          {seguro?.archivo_url && !file && (
             <p className="mt-1 text-xs text-primary-500">Ya hay un archivo adjunto</p>
           )}
         </div>
@@ -339,6 +341,7 @@ function SeguroFormModal({ municipioId, seguro, onClose }) {
 function SeguroDetalleDrawer({ seguro, municipioId, onClose }) {
   const [modalEdit, setModalEdit] = useState(false)
   const [modalAdd, setModalAdd] = useState(false)
+  const [verArchivoLoading, setVerArchivoLoading] = useState(false)
   const { data: items = [], isLoading: loadingItems } = useSeguroItems(seguro.id)
   const deleteSeguro = useDeleteSeguro()
   const removeItem = useRemoveSeguroItem()
@@ -346,6 +349,24 @@ function SeguroDetalleDrawer({ seguro, municipioId, onClose }) {
   const dias = diasParaVencer(seguro.vigencia_hasta)
   const vencido = dias !== null && dias < 0
   const porVencer = dias !== null && dias >= 0 && dias <= 30
+
+  // seguro.archivo_url guarda un PATH del bucket privado 'seguros', no
+  // una URL — firmar al hacer clic, abriendo la pestaña en blanco
+  // DENTRO del gesto de click (ver CLAUDE.md, patrón window.open()).
+  async function handleVerArchivo() {
+    const tab = window.open('', '_blank')
+    setVerArchivoLoading(true)
+    try {
+      const url = await getDocumentoSignedUrl('seguros', seguro.archivo_url)
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch (e) {
+      tab?.close()
+      alert('No pudimos abrir el archivo de la póliza: ' + e.message)
+    } finally {
+      setVerArchivoLoading(false)
+    }
+  }
 
   async function handleDelete() {
     if (!confirm('¿Eliminar esta póliza y todos sus elementos vinculados?')) return
@@ -390,7 +411,7 @@ function SeguroDetalleDrawer({ seguro, municipioId, onClose }) {
             <InfoCelda label="N° Póliza" value={seguro.numero_poliza} />
             <InfoCelda
               label="Tipo"
-              value={TIPOS_SEGURO.find(t => t.value === seguro.tipo)?.label ?? seguro.tipo}
+              value={TIPOS_SEGURO.find(t => t.value === seguro.tipo_seguro)?.label ?? seguro.tipo_seguro}
             />
             <InfoCelda label="Cobertura" value={seguro.tipo_cobertura || '—'} />
             <InfoCelda label="Vigencia desde" value={dateOf(seguro.vigencia_desde)} />
@@ -422,19 +443,19 @@ function SeguroDetalleDrawer({ seguro, municipioId, onClose }) {
             </div>
           )}
 
-          {seguro.poliza_url && (
+          {seguro.archivo_url && (
             <div>
-              <a
-                href={seguro.poliza_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
+              <button
+                type="button"
+                onClick={handleVerArchivo}
+                disabled={verArchivoLoading}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline disabled:opacity-50"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-4 w-4" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                 </svg>
-                Ver archivo de póliza →
-              </a>
+                {verArchivoLoading ? 'Abriendo…' : 'Ver archivo de póliza →'}
+              </button>
             </div>
           )}
 

@@ -11,21 +11,26 @@ function logAudit(args) {
 // =============================================================
 // useSeguros — gestión de pólizas de seguros y elementos cubiertos
 //
-// Schema asumido (existente en Supabase):
+// Schema real (verificado en prod 2026-07-28 — el comentario anterior
+// asumía `tipo`/`poliza_url`, ninguna de las dos existe; las
+// migraciones locales de mayo 2026 tampoco reflejan esto, no confiar
+// en supabase/migrations/ acá):
 //   seguros       (id, municipio_id, compania, numero_poliza,
-//                  tipo, tipo_cobertura, vigencia_desde, vigencia_hasta,
-//                  costo, observaciones, poliza_url, created_at)
+//                  tipo_seguro, tipo_cobertura, vigencia_desde,
+//                  vigencia_hasta, costo, archivo_url, observaciones,
+//                  created_at)
 //   seguros_items (id, seguro_id, tipo_entidad, entidad_id,
 //                  created_at)
 //
-// Bucket 'seguros' en Storage (privado, requiere auth).
+// Bucket 'seguros' en Storage — privado. `archivo_url` guarda el PATH
+// del storage, no una URL — se firma al mostrar (createSignedUrl).
 // =============================================================
 
 const TIMEOUT_MS = 8000
 
 const SEG_COLS = `
-  id, municipio_id, compania, numero_poliza, tipo, tipo_cobertura,
-  vigencia_desde, vigencia_hasta, costo, observaciones, poliza_url,
+  id, municipio_id, compania, numero_poliza, tipo_seguro, tipo_cobertura,
+  vigencia_desde, vigencia_hasta, costo, observaciones, archivo_url,
   created_at
 `
 const ITEM_COLS = `
@@ -49,7 +54,7 @@ async function fetchSeguros({ municipioId, tipo } = {}) {
       .order('vigencia_hasta', { ascending: false })
       .abortSignal(signal)
     if (municipioId) q = q.eq('municipio_id', municipioId)
-    if (tipo) q = q.eq('tipo', tipo)
+    if (tipo) q = q.eq('tipo_seguro', tipo)
     const { data, error } = await q
     clear()
     if (error) throw error
@@ -230,9 +235,10 @@ async function uploadPoliza({ file, municipioId, seguroId }) {
     throw new Error(error.message ?? 'No pudimos subir el archivo.')
   }
 
-  // Obtener URL privada (requiere auth)
-  const { data } = supabase.storage.from('seguros').getPublicUrl(path)
-  return data.publicUrl
+  // El bucket 'seguros' es privado — no hay URL pública. Se guarda el
+  // path; la URL firmada se genera al mostrar el archivo (ver
+  // Seguros.jsx, getDocumentoSignedUrl con bucket='seguros').
+  return path
 }
 
 export function useCreateSeguro() {

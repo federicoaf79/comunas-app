@@ -34,7 +34,7 @@ export default function AgendaPublicaAdmin({ dependenciaId, municipioId }) {
     const tab = window.open('', '_blank')
     setVerOrdenLoading(true)
     try {
-      const url = await getDocumentoSignedUrl(turnoDetalle.orden_medica_url)
+      const url = await getDocumentoSignedUrl('documentos-hc', turnoDetalle.orden_medica_url)
       if (url && tab) tab.location.href = url
       else tab?.close()
     } catch (e) {

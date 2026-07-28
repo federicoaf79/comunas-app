@@ -186,7 +186,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         .maybeSingle()
       if (error) throw error
       if (!data?.archivo_url) throw new Error('No se encontró el archivo de la orden.')
-      const url = await getDocumentoSignedUrl(data.archivo_url)
+      const url = await getDocumentoSignedUrl('documentos-hc', data.archivo_url)
       if (url && tab) tab.location.href = url
       else tab?.close()
     } catch (e) {

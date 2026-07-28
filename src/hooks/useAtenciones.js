@@ -346,15 +346,17 @@ function filenameFromPath(path) {
   return idx === -1 ? path : path.slice(idx + 1)
 }
 
-// documentos-hc es un bucket PRIVADO — no hay URL pública (getPublicUrl
-// devuelve un link que siempre da 400). Hay que firmar bajo demanda, al
-// hacer clic en "Ver"/"Descargar", nunca al listar: firmar en el .map()
-// de arriba dispararía N requests por render y la firma vence mientras
-// la pantalla sigue abierta.
-export async function getDocumentoSignedUrl(storagePath) {
+// Firma bajo demanda un path de un bucket PRIVADO cualquiera — no hay
+// URL pública (getPublicUrl devuelve un link que siempre da 400). Hay
+// que firmar al hacer clic en "Ver"/"Descargar", nunca al listar:
+// firmar en un .map() dispararía N requests por render y la firma
+// vence mientras la pantalla sigue abierta. `bucket` es obligatorio
+// (sin default a 'documentos-hc') para que un caller de otro bucket
+// (ej. 'seguros') no firme por accidente contra el bucket equivocado.
+export async function getDocumentoSignedUrl(bucket, storagePath) {
   if (!storagePath) return null
   const { data, error } = await supabase.storage
-    .from('documentos-hc')
+    .from(bucket)
     .createSignedUrl(storagePath, 3600)
   if (error) throw error
   return data.signedUrl
