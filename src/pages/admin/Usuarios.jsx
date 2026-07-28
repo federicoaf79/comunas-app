@@ -46,12 +46,22 @@ const ROLES_INFO = {
   admin_portal: 'Gestiona el portal ciudadano: noticias, trámites, historia.',
   usuario_admin: 'Acceso a operaciones administrativas cross-dependencias.',
   subadmin: 'Administrador de una dependencia específica.',
-  usuario_subadmin: 'Operador de una dependencia. Carga turnos y datos.',
   usuario_sub: 'Operador de una dependencia. Carga turnos y datos.',
   reporting: 'Solo lectura. Puede ver reportes y exportar datos.',
   vecino: 'Ciudadano registrado. Acceso al portal y sus turnos.',
 }
 
+// 'reporting' está temporalmente fuera del catálogo asignable.
+// Su descripción dice "Solo lectura", pero hoy is_staff() lo incluye
+// y hereda ESCRITURA completa vía las ~15 policies ALL — un usuario
+// con este rol podría insertar y borrar historia clínica. Volver a
+// habilitarlo recién cuando RLS distinga lectura de escritura
+// (is_staff() vs. una función de escritura que lo excluya).
+// Verificado 2026-07-28: ningún usuario lo tiene asignado.
+//
+// 'operador' tiene el mismo problema de fondo (está en is_staff()),
+// pero nunca estuvo en este catálogo de la UI -- no hay nada que sacar,
+// solo dejar constancia acá para no repetir la investigación.
 const ROLES = [
   { value: 'superadmin',    label: 'Superadmin',             desc: ROLES_INFO.superadmin },
   { value: 'admin_comuna',  label: 'Admin Comuna',           desc: ROLES_INFO.admin_comuna },
@@ -59,7 +69,6 @@ const ROLES = [
   { value: 'usuario_admin', label: 'Usuario Admin',          desc: ROLES_INFO.usuario_admin },
   { value: 'subadmin',      label: 'Subadmin de dependencia', desc: ROLES_INFO.subadmin },
   { value: 'usuario_sub',   label: 'Usuario de dependencia',  desc: ROLES_INFO.usuario_sub },
-  { value: 'reporting',     label: 'Reporting',              desc: ROLES_INFO.reporting },
   { value: 'vecino',        label: 'Vecino',                 desc: ROLES_INFO.vecino },
 ]
 const ROLE_LABEL = Object.fromEntries(ROLES.map(r => [r.value, r.label]))
