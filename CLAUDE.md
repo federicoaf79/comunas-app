@@ -684,8 +684,8 @@ antes de esta lista y no había motivo para tocarlo).
   `proveedor_accesos`, listado y desvinculación de `proveedor_dispositivos`) —
   CERRADA y verificada en vivo 2026-07-27 (ver detalle abajo). Resto de Fase 4
   (auditoría/reportes adicionales) sigue pendiente.
-- **Fase 5** (`logAudit()` en emisión/canje) — emisión ya loguea en `useVales.js`;
-  la anulación también loguea (`accion:'update'`, ver Fase 4 parte 1); falta el canje
+- **Fase 5** (`logAudit()` en emisión/anulación/canje/vincular/desvincular) —
+  CERRADA y verificada en vivo 2026-07-28 (ver detalle abajo).
 
 ## Actualizaciones sesión 25-26 julio 2026
 
@@ -986,3 +986,45 @@ agregado (`{'canjeado_por' in v && <p>Canjeado por: {v.canjeado_por}</p>}`).
 
 Archivo: `useProveedorVecino.js` → `fetchHistorialCanjesProveedor()` /
 `useHistorialCanjesProveedor(proveedorId)`.
+
+### Vales Electrónicos — Fase 5: logAudit() en canje, vincular y desvincular (CERRADA)
+
+Emisión y anulación ya logueaban (`useVales.js`, ver Fase 4 parte 1). Faltaba
+el canje, y vincular/desvincular desde el portal del comerciante (antes solo
+logueaba la desvinculación hecha por staff, en `useProveedores.js`).
+
+`useProveedorVecino.js` ahora tiene su propio `logAuditVecino()` (mismo patrón
+`.catch()` best-effort que el resto del repo) sobre `createAuditLogVecino()`
+— `usuario_id` siempre `null`, quien ejecuta es un vecino (comerciante), no
+staff. Los tres logs corren DESPUÉS de que la RPC correspondiente tuvo éxito,
+nunca antes ni envueltos en el mismo try/catch de la mutación — un fallo del
+log no puede hacerle creer al comerciante que el canje no se hizo.
+
+- `canjear_vale` → `entidad:'vales'`, `accion:'update'`, `entidadId` el id
+  del vale; `metadata` con código, proveedor (id+nombre), y monto o
+  cantidad+unidad.
+- `vincular_dispositivo`/`desvincular_dispositivo` → `entidad:
+  'proveedor_dispositivos'`, `entidadId` el `device_id` (ninguna de las dos
+  RPCs devuelve una fila con `id` predecible — `desvincular_dispositivo`
+  devuelve `boolean` — así que el device_id es el identificador estable).
+
+**Verificado en vivo 2026-07-28** con el ciclo completo real: Luis emitió
+`5D88-YREE` ($1.500, Almacén Don Ramón) → Vecino Demo abrió el QR → Comerciante
+Demo lo canjeó desde `/portal/proveedor` → confirmado por SQL directo (no
+service role para el chequeo de permisos de pantalla, ver hallazgo abajo) que
+la fila quedó con `entidad:'vales'`, `accion:'update'`, `usuario_id:null`,
+código y monto correctos, y el `vecino_id` del comerciante ejecutor en
+`datos_despues`.
+
+**Dos hallazgos de esta verificación, anotados pero sin arreglar todavía:**
+- La fila de **emisión** de vale guarda `datos_despues: {}` (vacío) — a
+  diferencia del canje (Fase 5) y la anulación (Fase 4 parte 1), que sí
+  llevan `metadata`. `createVale()` (`useVales.js`) nunca le pasó `metadata`
+  a `logAudit()` desde que se escribió en Fase 1 — inconsistencia entre
+  fases, no una regresión de esta sesión.
+- **Luis (rol `admin_portal`) no tiene acceso a `/admin/auditoria`** — la
+  pantalla está gateada a `admin_comuna`/`superadmin` únicamente. No es un
+  bug (es el gate de esa pantalla, no de esta fase), pero vale tenerlo
+  presente: si el director real de una dependencia no tiene rol
+  `admin_comuna`, no puede revisar el log de auditoría aunque tenga todos
+  los demás permisos de gestión.
