@@ -89,20 +89,49 @@ referencia para navegar después. Aplica a cualquier flujo futuro que abra una
 pestaña con datos que hay que buscar async primero (URLs firmadas, exports
 generados server-side, etc.).
 
-**ALTO — `ordenes_derivacion.archivo_url` guarda una URL PÚBLICA PERMANENTE de un
-bucket PRIVADO:** mismo bug de fondo que se acaba de cerrar en `hc_documentos`
-(`getPublicUrl()` sobre `documentos-hc`, que es privado) pero en otro flujo,
-todavía sin arreglar: `useOrdenMedicaUpload.js` (upload de orden médica física) y
-`AgendaPublica.jsx` (`handleUploadOrden`, portal) arman la URL con `getPublicUrl()`
-y la guardan tal cual en `ordenes_derivacion.archivo_url` /
-`turnos_agenda.orden_medica_url`. Es **peor** que el caso de `hc_documentos`: ahí la
-URL se derivaba al renderizar (bug visible pero acotado a la sesión); acá queda
-**persistida rota en la base** — cualquier orden médica subida por un vecino desde
-que se privatizó el bucket es un link muerto para siempre, no autocorregible sin
-re-firmar o re-derivar. Real Sayana va a usar este flujo (subida de orden médica)
-desde el día uno. Pendiente: mismo tratamiento que `hc_documentos` — signed URL
-generada al mostrar el archivo (`validarOrden()` en `CicSalud.jsx`, y donde sea que
-el vecino vea su propia orden en el portal), no una URL guardada.
+**REGLA — buckets privados: NUNCA guardar una URL en la base.** Se guarda el PATH
+y se firma al mostrar (`createSignedUrl`, patrón de arriba). `getPublicUrl()` solo
+sirve para buckets públicos. Buckets privados confirmados: `documentos-hc`. Antes
+de usar `getPublicUrl()` en un bucket nuevo, verificar `select public from
+storage.buckets`. Apareció 3 veces el mismo día (2026-07-28): `hc_documentos`,
+`ordenes_derivacion.archivo_url` y `turnos_agenda.orden_medica_url` — mismo bug de
+fondo, tres call sites distintos, encontrado uno por uno en vez de buscado de una
+vez. Para la próxima: grep `getPublicUrl` completo del repo apenas se confirma que
+un bucket es privado, no ir arreglando a medida que aparecen.
+
+**RESUELTO — `ordenes_derivacion.archivo_url` / `turnos_agenda.orden_medica_url`
+guardaban una URL PÚBLICA PERMANENTE de un bucket PRIVADO:** mismo bug de fondo que
+`hc_documentos`, pero peor — ahí la URL se derivaba al renderizar (acotado a la
+sesión), acá quedaba **persistida rota en la base** (link muerto para siempre, no
+autocorregible sin re-firmar). Cero filas afectadas al momento del fix (confirmado
+en vivo por REST con sesión de staff: `ordenes_derivacion` 3 filas totales, 0 con
+`origen='fisica'`; `turnos_agenda` 105 filas, 0 con `orden_medica_nombre`) — sin
+migración de datos necesaria. Fix 2026-07-28, en dos partes:
+- **Escritura** — `useOrdenMedicaUpload.js` y `AgendaPublica.jsx` (`handleUploadOrden`)
+  ahora guardan el path, no `getPublicUrl()`. De paso, `AgendaPublica.jsx` subía con
+  `supabasePublic` (cliente sin sesión) a un bucket cuya policy de INSERT exige
+  `authenticated` — el input de archivo solo se renderiza con
+  `vecino.auth_mode === 'supabase'` (sesión Auth real, confirmado en
+  `VecinoContext.jsx`), así que el código era alcanzable y hubiera fallado 403 en
+  cualquier subida real; cambiado a `supabase`. Path scopeado
+  `municipioId/vecinoId/ordenes/<timestamp>_<archivo>` — con `ordenes/<archivo>`
+  plano (el original) la carpeta 1 no matchea ningún `municipio_id`, así que ni
+  staff ni vecino podían leer el archivo aunque la firma funcionara.
+- **Lectura** — grep exhaustivo confirmó que `ordenes_derivacion.archivo_url` no se
+  leía en NINGÚN lado del código (`validarOrden()` en `CicSalud.jsx` valida a
+  ciegas, sin mostrar el archivo; el vecino nunca veía su propia orden en el
+  portal — `ORDEN_DERIVACION_COLS` ni siquiera seleccionaba la columna). Se
+  construyó la funcionalidad que faltaba, no solo el fix: botón "Ver orden" nuevo
+  al lado de "Validar orden" en `CicSalud.jsx` (busca el `archivo_url` puntual en
+  `ordenes_derivacion` por `turno_id` al click, sin tocar `useTurnos.js` — hook
+  compartido por 10 pantallas); `ORDEN_DERIVACION_COLS` (`useVecinoData.js`) ahora
+  trae `archivo_url`/`archivo_nombre`; `DerivacionCard.jsx` (reusada en
+  `VecinoHC.jsx`, `AtencionDrawer.jsx` y el portal) muestra el link cuando existe.
+  `turnos_agenda.orden_medica_url` sí tenía dos lectores reales, ambos con `<a
+  href>` directo — `TurnoDetalleModal.jsx` y `AgendaPublicaAdmin.jsx` — pasados al
+  mismo patrón de firma + pestaña en blanco. Los 5 puntos (2 de escritura, 3 de
+  lectura) reusan `getDocumentoSignedUrl()`/`fetchDocumentoSignedUrl()`, ninguna
+  función nueva.
 **RESUELTO — `partidas_tipo` sin policy de SELECT:** tabla catálogo (sin `municipio_id`, `codigo` como PK) usada por el selector de partida en "Nueva solicitud" de Inventario. Tenía 4 filas de categoría (`02`-`05`) invisibles para staff por falta de policy de SELECT — agregada el 2026-07-23. Se sumaron 12 partidas granulares más (combustibles, insumos médicos, alimentos, etc.) vía service_role. Selector ya funcional.
 **RESUELTO — `ordenes_compra.numero` es NOT NULL pero la UI lo marcaba "opcional":** el campo "N° de orden (opcional)" en `OrdenFormModal` (`Inventario.jsx`) podía quedar vacío, pero la columna `numero` en prod no acepta null. Confirmado en vivo 2026-07-23. Fix 2026-07-23: se sacó el "(opcional)" del label y se agregó `numero` a la validación `canSubmit` — los botones "Guardar borrador"/"Enviar a aprobación" quedan deshabilitados sin número. Verificado en vivo: sin número los botones están disabled, con número se habilitan y la orden se crea con el número guardado.
 **RESUELTO — UPDATE en `vecinos` bloqueado por RLS para todo el staff:** confirmado en vivo 2026-07-23 al intentar completar la HC de un vecino desde `AtencionDrawer.jsx` (alergias, contacto de emergencia) — el guardado fallaba con `Cannot coerce the result to a single JSON object` / `200 []` (0 filas) para cualquier campo, cualquier usuario. Causa real: **cero policies de UPDATE en `vecinos`** (ni para staff ni para el propio vecino). Agregadas dos policies (staff por municipio, vecino por su propia fila) — verificado en vivo que el UPDATE ya funciona (HC de vecino de prueba completada + registrada en `audit_log` con shape correcto).
