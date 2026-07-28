@@ -290,10 +290,17 @@ function AtencionDocumentos({ atencionId }) {
 
   async function handleAbrir(d) {
     setOpeningId(d.id)
+    // Pestaña abierta YA, dentro del gesto de click — esperar la firma
+    // async antes de abrir pierde el "user activation" y Chrome bloquea
+    // el window.open() como popup en silencio. Sin `noopener`: con
+    // noopener window.open() devuelve null y no hay nada que navegar.
+    const tab = window.open('', '_blank')
     try {
       const url = await fetchDocumentoSignedUrl(d.storage_path, supabase)
-      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      if (url && tab) tab.location.href = url
+      else tab?.close()
     } catch (e) {
+      tab?.close()
       console.error('[AtencionDocumentos] signed url error:', e)
     } finally {
       setOpeningId(null)

@@ -92,10 +92,19 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
   async function handleVer(d) {
     setError('')
     setVerLoadingId(d.id)
+    // Abrimos la pestaña YA, dentro del gesto de click — si esperamos a
+    // la firma async, Chrome pierde el "user activation" y bloquea el
+    // window.open() como popup en silencio (pasó en la verificación en
+    // vivo: la firma llegaba 200 pero nunca abría nada). Navegamos esa
+    // pestaña recién cuando llega la URL. Sin `noopener`: con noopener
+    // window.open() devuelve null y no hay pestaña que navegar después.
+    const tab = window.open('', '_blank')
     try {
       const url = await getDocumentoSignedUrl(d.storage_path)
-      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      if (url && tab) tab.location.href = url
+      else tab?.close()
     } catch (e) {
+      tab?.close()
       setError(e?.message ?? 'No pudimos abrir el documento.')
     } finally {
       setVerLoadingId(null)
