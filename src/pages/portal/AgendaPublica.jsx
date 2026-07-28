@@ -4,7 +4,7 @@ import { usePortalMunicipioId, useDatosMunicipio } from '../../hooks/useConfigPo
 import { useAgendaPublica } from '../../hooks/useAgendaPublica'
 import { useCrearTurnoAgenda } from '../../hooks/useTurnosAgenda'
 import { useVecino } from '../../context/VecinoContext'
-import { supabasePublic } from '../../lib/supabase'
+import { supabase } from '../../lib/supabase'
 import { todayArgYMD } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
 
@@ -163,13 +163,17 @@ export default function AgendaPublica() {
     if (!file) return
     setUploading(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `ordenes/${Date.now()}.${ext}`
-      const { error } = await supabasePublic.storage.from('documentos-hc').upload(path, file)
+      // Este input solo se renderiza con vecino.auth_mode==='supabase'
+      // (sesión real de Supabase Auth) — por eso el cliente autenticado
+      // `supabase` es correcto acá, no `supabasePublic` (que nunca
+      // adjunta el token de la sesión y la policy de INSERT, que exige
+      // `authenticated`, lo rechazaría con 403). Path scopeado
+      // municipioId/vecinoId — igual que useOrdenMedicaUpload.js.
+      const path = `${municipioId}/${vecino.id}/ordenes/${Date.now()}_${file.name}`
+      const { error } = await supabase.storage.from('documentos-hc').upload(path, file)
       if (error) throw error
-      const { data } = supabasePublic.storage.from('documentos-hc').getPublicUrl(path)
       setOrdenPreview(file.name)
-      setFormTurno(p => ({ ...p, orden: { url: data.publicUrl, nombre: file.name } }))
+      setFormTurno(p => ({ ...p, orden: { path, nombre: file.name } }))
     } catch(e) { alert('Error al subir: ' + e.message) }
     finally { setUploading(false) }
   }
@@ -192,7 +196,7 @@ export default function AgendaPublica() {
         hora_inicio:         modalEvento.hora_inicio,
         hora_fin:            modalEvento.hora_fin,
         motivo:              formTurno.motivo,
-        orden_medica_url:    formTurno.orden?.url ?? null,
+        orden_medica_url:    formTurno.orden?.path ?? null,
         orden_medica_nombre: formTurno.orden?.nombre ?? null,
       })
       setTurnoOk(turno)

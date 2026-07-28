@@ -3,6 +3,14 @@
 // portal. `children` es un slot para que cada lugar agregue su propio
 // pie (indicador de uso, CTA de reserva, etc.) sin bifurcar el diseño
 // base con props de variante.
+//
+// `archivo_url` (si existe) es un path de storage, no una URL — el
+// bucket documentos-hc es privado. getDocumentoSignedUrl() sirve para
+// los 3 contextos donde se usa esta card: todos resuelven la sesión
+// vía el mismo cliente `supabase` autenticado.
+
+import { useState } from 'react'
+import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
 
 const ESTADO_BADGE = {
   pendiente:  'inline-flex items-center rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700 ring-1 ring-inset ring-accent-100',
@@ -33,6 +41,22 @@ export default function DerivacionCard({ derivacion, children }) {
   const d = derivacion
   const origen = ORIGEN_INFO[d.origen] ?? { label: d.origen || '—', className: ORIGEN_INFO.fisica.className }
   const estadoClass = ESTADO_BADGE[d.estado] ?? ESTADO_BADGE.pendiente
+  const [verLoading, setVerLoading] = useState(false)
+
+  async function handleVerArchivo() {
+    setVerLoading(true)
+    const tab = window.open('', '_blank')
+    try {
+      const url = await getDocumentoSignedUrl(d.archivo_url)
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch (e) {
+      tab?.close()
+      alert('No pudimos abrir el archivo: ' + e.message)
+    } finally {
+      setVerLoading(false)
+    }
+  }
 
   return (
     <div className="card p-4">
@@ -65,6 +89,18 @@ export default function DerivacionCard({ derivacion, children }) {
               <p className="mt-0.5 text-primary-700">{d.indicaciones}</p>
             </div>
           )}
+        </div>
+      )}
+      {d.archivo_url && (
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleVerArchivo}
+            disabled={verLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-50 disabled:opacity-50"
+          >
+            📄 {verLoading ? 'Abriendo…' : (d.archivo_nombre || 'Ver orden subida')}
+          </button>
         </div>
       )}
       {children}

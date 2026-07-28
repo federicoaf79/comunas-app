@@ -478,7 +478,7 @@ export default function SacarTurnoFormPortal() {
           throw new Error('No pudimos vincular tu derivación digital al turno. Contactanos para resolverlo.')
         }
       } else if (especialidadRequiereOrden && form.ordenFile) {
-        const uploadResult = await uploadOrden(form.ordenFile, turno.id, vecinoSession.id)
+        const uploadResult = await uploadOrden(form.ordenFile, turno.id, vecinoSession.id, dep.municipio_id)
         if (!uploadResult.success) {
           throw new Error('Error al subir orden médica: ' + uploadResult.error)
         }

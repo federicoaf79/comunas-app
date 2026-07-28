@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Modal from '../ui/Modal'
 import Spinner from '../ui/Spinner'
+import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
 
 // =============================================================
 // TurnoDetalleModal — modal de detalle y acciones de un turno.
@@ -45,6 +46,7 @@ const CANAL_LABELS = {
 export default function TurnoDetalleModal({ turno, isOpen, onClose, onConfirmar, onCancelar }) {
   const [isConfirming, setIsConfirming] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [verOrdenLoading, setVerOrdenLoading] = useState(false)
 
   if (!turno) return null
 
@@ -106,6 +108,24 @@ export default function TurnoDetalleModal({ turno, isOpen, onClose, onConfirmar,
       alert(`No se pudo cancelar: ${e.message}`)
     } finally {
       setIsCancelling(false)
+    }
+  }
+
+  // orden_medica_url guarda un PATH del bucket privado documentos-hc,
+  // no una URL — firmar al hacer clic, abriendo la pestaña en blanco
+  // DENTRO del gesto de click (ver CLAUDE.md, patrón window.open()).
+  async function handleVerOrden() {
+    const tab = window.open('', '_blank')
+    setVerOrdenLoading(true)
+    try {
+      const url = await getDocumentoSignedUrl(ordenMedicaUrl)
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch (e) {
+      tab?.close()
+      alert('No pudimos abrir la orden médica: ' + e.message)
+    } finally {
+      setVerOrdenLoading(false)
     }
   }
 
@@ -214,18 +234,18 @@ export default function TurnoDetalleModal({ turno, isOpen, onClose, onConfirmar,
         {ordenMedicaUrl && (
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-blue-700">Orden médica adjunta</p>
-            <a
-              href={ordenMedicaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
+            <button
+              type="button"
+              onClick={handleVerOrden}
+              disabled={verOrdenLoading}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" />
                 <path d="M13 2v7h7" />
               </svg>
-              {ordenMedicaNombre}
-            </a>
+              {verOrdenLoading ? 'Abriendo…' : ordenMedicaNombre}
+            </button>
           </div>
         )}
       </div>

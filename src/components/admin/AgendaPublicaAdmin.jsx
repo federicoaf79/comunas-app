@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useProfesionales } from '../../hooks/useProfesionales'
 import { useTurnosAgendaDependencia, useUpdateEstadoTurnoAgenda, getSemanaActual, getDiasSemana, generarSlots } from '../../hooks/useTurnosAgenda'
+import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
 import Spinner from '../ui/Spinner'
 
 const ESTADO_CLS = {
@@ -24,6 +25,25 @@ export default function AgendaPublicaAdmin({ dependenciaId, municipioId }) {
   const [semanaOffset, setSemanaOffset] = useState(0)
   const [profSelec, setProfSelec] = useState('todos')
   const [turnoDetalle, setTurnoDetalle] = useState(null)
+  const [verOrdenLoading, setVerOrdenLoading] = useState(false)
+
+  // orden_medica_url guarda un PATH del bucket privado documentos-hc,
+  // no una URL — firmar al hacer clic, abriendo la pestaña en blanco
+  // DENTRO del gesto de click (ver CLAUDE.md, patrón window.open()).
+  async function handleVerOrden() {
+    const tab = window.open('', '_blank')
+    setVerOrdenLoading(true)
+    try {
+      const url = await getDocumentoSignedUrl(turnoDetalle.orden_medica_url)
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch (e) {
+      tab?.close()
+      alert('No pudimos abrir la orden médica: ' + e.message)
+    } finally {
+      setVerOrdenLoading(false)
+    }
+  }
 
   const { desde, hasta, lunes } = getSemanaActual(semanaOffset)
   const dias = getDiasSemana(desde)
@@ -258,13 +278,13 @@ export default function AgendaPublicaAdmin({ dependenciaId, municipioId }) {
               {turnoDetalle.orden_medica_url && (
                 <div>
                   <p className="text-xs text-primary-400 uppercase tracking-wide mb-1">Orden médica</p>
-                  <a href={turnoDetalle.orden_medica_url} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-primary hover:bg-primary-50">
+                  <button type="button" onClick={handleVerOrden} disabled={verOrdenLoading}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-primary hover:bg-primary-50 disabled:opacity-50">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                     </svg>
-                    {turnoDetalle.orden_medica_nombre ?? 'Ver orden médica'}
-                  </a>
+                    {verOrdenLoading ? 'Abriendo…' : (turnoDetalle.orden_medica_nombre ?? 'Ver orden médica')}
+                  </button>
                 </div>
               )}
               {/* Acciones de estado */}

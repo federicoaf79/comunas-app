@@ -5,16 +5,16 @@ export function useOrdenMedicaUpload() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState(null)
 
-  async function uploadOrden(file, turnoId, vecinoId) {
+  async function uploadOrden(file, turnoId, vecinoId, municipioId) {
     setUploading(true)
     setUploadError(null)
 
     try {
-      // Generar nombre único para el archivo
-      const timestamp = Date.now()
-      const ext = file.name.split('.').pop()
-      const fileName = `orden-${vecinoId}-${timestamp}.${ext}`
-      const filePath = `ordenes/${fileName}`
+      // Path scopeado municipioId/vecinoId — las policies de storage
+      // de documentos-hc leen la carpeta 1 como municipio y la carpeta
+      // 2 como vecino. Con `ordenes/<archivo>` plano no matchean nada
+      // y el archivo queda ilegible para todos, staff y vecino.
+      const filePath = `${municipioId}/${vecinoId}/ordenes/${Date.now()}_${file.name}`
 
       // Subir a Supabase Storage
       const { error: uploadError } = await supabase.storage
@@ -26,11 +26,10 @@ export function useOrdenMedicaUpload() {
 
       if (uploadError) throw uploadError
 
-      // Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('documentos-hc')
-        .getPublicUrl(filePath)
-
+      // documentos-hc es privado — no hay URL pública. Se guarda el
+      // path; la URL firmada se genera al mostrar el archivo (ver
+      // "Ver orden" en CicSalud.jsx y DerivacionCard.jsx).
+      //
       // Crear registro en ordenes_derivacion — validada_por queda en su
       // default/null hasta que el staff la valide de verdad en
       // validarOrden() (CicSalud.jsx). No completar acá: quien sube el
@@ -41,7 +40,7 @@ export function useOrdenMedicaUpload() {
           turno_id: turnoId,
           vecino_id: vecinoId,
           origen: 'fisica',
-          archivo_url: publicUrl,
+          archivo_url: filePath,
           archivo_nombre: file.name,
           estado: 'pendiente',
         })
@@ -49,7 +48,7 @@ export function useOrdenMedicaUpload() {
       if (insertError) throw insertError
 
       setUploading(false)
-      return { success: true, url: publicUrl }
+      return { success: true, path: filePath }
     } catch (error) {
       console.error('[useOrdenMedicaUpload] Error:', error)
       setUploadError(error.message || 'Error al subir orden médica')

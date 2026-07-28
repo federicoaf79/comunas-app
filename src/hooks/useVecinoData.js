@@ -248,6 +248,7 @@ export function useAtencionesVecino(vecinoId, client = supabaseAnon, ready = tru
 const ORDEN_DERIVACION_COLS = `
   id, vecino_id, profesional_id, dependencia_destino_id, especialidad_destino,
   diagnostico, indicaciones, origen, estado, turno_id, created_at,
+  archivo_url, archivo_nombre,
   dependencia_destino:dependencia_destino_id ( id, nombre )
 `
 

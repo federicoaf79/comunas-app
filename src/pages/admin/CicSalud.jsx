@@ -7,6 +7,7 @@ import { useProfesionales } from '../../hooks/useProfesionales'
 import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import { supabase } from '../../lib/supabase'
 import { createAuditLog } from '../../hooks/useAuditLog'
+import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
 function logAudit(args) {
@@ -130,6 +131,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
   const [especialidadFiltro, setEspecialidadFiltro] = useState('todas')
   const [modalTurnoOpen, setModalTurnoOpen] = useState(false)
   const [validandoOrden, setValidandoOrden] = useState(null)
+  const [verOrdenLoading, setVerOrdenLoading] = useState(null)
 
   const ymdSeleccionada = ymdLocal(fechaSeleccionada)
   const inicioSemana = startOfWeekMonday(fechaSeleccionada)
@@ -165,6 +167,36 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
       return prof?.especialidad?.toLowerCase() === especialidadFiltro
     })
   }, [turnos, especialidadFiltro, profesionales])
+
+  // La orden física vive en ordenes_derivacion (origen='fisica'),
+  // linkeada por turno_id — no en turnos_agenda. Se busca puntual al
+  // click, igual que ya hace validarOrden() acá abajo, para no sumar
+  // el join a useTurnos() (hook compartido por 10 pantallas más).
+  async function verOrden(turnoId) {
+    setVerOrdenLoading(turnoId)
+    const tab = window.open('', '_blank')
+    try {
+      const { data, error } = await supabase
+        .from('ordenes_derivacion')
+        .select('archivo_url')
+        .eq('turno_id', turnoId)
+        .eq('origen', 'fisica')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      if (!data?.archivo_url) throw new Error('No se encontró el archivo de la orden.')
+      const url = await getDocumentoSignedUrl(data.archivo_url)
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch (e) {
+      tab?.close()
+      console.error('[CicSalud] verOrden error:', e)
+      alert('No pudimos abrir la orden médica: ' + e.message)
+    } finally {
+      setVerOrdenLoading(null)
+    }
+  }
 
   async function validarOrden(turnoId) {
     setValidandoOrden(turnoId)
@@ -391,13 +423,23 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
                   {t.estado}
                 </span>
                 {requiereValidacion && (
-                  <Button
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); validarOrden(t.id) }}
-                    loading={validandoOrden === t.id}
-                  >
-                    Validar orden
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={(e) => { e.stopPropagation(); verOrden(t.id) }}
+                      loading={verOrdenLoading === t.id}
+                    >
+                      Ver orden
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); validarOrden(t.id) }}
+                      loading={validandoOrden === t.id}
+                    >
+                      Validar orden
+                    </Button>
+                  </>
                 )}
               </div>
             )
