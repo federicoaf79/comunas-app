@@ -1139,6 +1139,7 @@ function TabBotIA({ dep }) {
           'Content-Type': 'application/json',
           'x-internal-key': 'comunas-sync-2026',
         },
+        body: JSON.stringify({ municipio_id: dep.municipio_id }),
       })
       if (!res.ok) throw new Error('Error al sincronizar con Plan-B')
       setSyncOk(true)

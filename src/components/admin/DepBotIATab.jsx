@@ -37,6 +37,7 @@ export default function DepBotIATab({ dep }) {
       const res = await fetch('/api/sync-planb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-internal-key': 'comunas-sync-2026' },
+        body: JSON.stringify({ municipio_id: dep?.municipio_id }),
       })
       if (!res.ok) throw new Error('Error al sincronizar')
       setSyncOk(true)

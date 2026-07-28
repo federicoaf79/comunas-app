@@ -71,19 +71,25 @@ export default async function handler(req, res) {
   if (!municipio_id) return res.status(400).json({ error: 'municipio_id requerido' })
 
   try {
-    // 1. Obtener config del municipio (plan_b_org_id + nombre)
-    const { data: config, error: configError } = await supabase
+    // 1. Obtener config del municipio (plan_b_org_id + datos_municipio)
+    // configuracion_portal es clave/valor, no columnas por dato -- mismo
+    // patrón que send-whatsapp.js/cron-recordatorios.js.
+    const { data: configs, error: configError } = await supabase
       .from('configuracion_portal')
-      .select('plan_b_org_id, datos')
+      .select('clave, valor')
       .eq('municipio_id', municipio_id)
-      .single()
+      .in('clave', ['plan_b_org_id', 'datos_municipio'])
 
-    if (configError || !config?.plan_b_org_id) {
+    if (configError) throw configError
+
+    const cfg = Object.fromEntries(configs?.map(c => [c.clave, c.valor]) ?? [])
+
+    if (!cfg.plan_b_org_id) {
       return res.status(404).json({ error: 'Municipio sin Plan-B configurado' })
     }
 
-    const org_id = config.plan_b_org_id
-    const municipioNombre = config.datos?.nombre_oficial || 'Municipio'
+    const org_id = cfg.plan_b_org_id
+    const municipioNombre = cfg.datos_municipio?.nombre_oficial || 'Municipio'
 
     // 2. Obtener dependencias activas con campos del bot
     const { data: dependencias, error: depsError } = await supabase

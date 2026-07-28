@@ -91,13 +91,19 @@ export default async function handler(req, res) {
         .maybeSingle()
 
       if (vecino && dep) {
-        await supabase.from('turnos').insert({
+        // turnos_agenda no tiene fecha_hora — fecha (date) + hora_inicio
+        // por separado. Mismo gate que antes: solo hay hora agendada si
+        // vinieron los dos, si no, ninguno (igual que fecha_hora ? : null).
+        const tieneFechaHora = entities.fecha && entities.hora
+        await supabase.from('turnos_agenda').insert({
           municipio_id,
           vecino_id: vecino.id,
           dependencia_id: dep.id,
-          fecha_hora: entities.fecha && entities.hora
-            ? `${entities.fecha}T${entities.hora}:00-03:00`
-            : null,
+          fecha:       tieneFechaHora ? entities.fecha : null,
+          hora_inicio: tieneFechaHora ? entities.hora : null,
+          // hora_fin sin valor: este flujo no selecciona profesional, no
+          // hay duracion_turno_min de la que derivarla.
+          hora_fin: null,
           estado: 'confirmado',
           motivo: message,
           canal: 'whatsapp',
