@@ -109,15 +109,20 @@ export default function NuevoReclamoPortal() {
     })
   }
 
+  // El bucket 'reclamos' es privado — no hay URL pública. Se guarda el
+  // PATH en fotos_urls; la URL firmada se genera al mostrar la foto
+  // (FotoFirmada.jsx). Path scopeado municipioId/vecinoId — no
+  // municipioId/reclamoId porque el reclamo todavía no existe en este
+  // punto (las fotos se suben ANTES de crear la fila).
   async function subirFotos() {
     if (fotos.length === 0) return []
 
-    const urls = []
+    const paths = []
     for (let i = 0; i < fotos.length; i++) {
       const foto = fotos[i]
       const ext = foto.file.name.split('.').pop()
       const timestamp = Date.now()
-      const path = `${vecinoSession.id}/${timestamp}-${i}.${ext}`
+      const path = `${vecinoSession.municipio_id}/${vecinoSession.id}/${timestamp}-${i}.${ext}`
 
       const { error: uploadError } = await supabase.storage
         .from('reclamos')
@@ -128,14 +133,10 @@ export default function NuevoReclamoPortal() {
         throw new Error(`Error al subir foto ${i + 1}`)
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('reclamos')
-        .getPublicUrl(path)
-
-      urls.push(publicUrl)
+      paths.push(path)
     }
 
-    return urls
+    return paths
   }
 
   async function handleSubmit(e) {

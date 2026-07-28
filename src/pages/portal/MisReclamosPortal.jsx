@@ -4,6 +4,7 @@ import { useVecino } from '../../context/VecinoContext'
 import { useReclamosVecino } from '../../hooks/useVecinoData'
 import { supabase } from '../../lib/supabase'
 import Spinner from '../../components/ui/Spinner'
+import FotoFirmada from '../../components/ui/FotoFirmada'
 
 const ESTADO_BADGES = {
   pendiente:   { bg: 'bg-[#0F1C35]', text: 'text-white', ring: 'ring-[#0F1C35]/20', label: 'Pendiente' },
@@ -42,9 +43,13 @@ function ReclamoCard({ reclamo, onClick }) {
       <div className="flex gap-4">
         {/* Foto thumbnail */}
         {primeraFoto ? (
-          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border">
-            <img src={primeraFoto} alt="Foto del reclamo" className="h-full w-full object-cover" />
-          </div>
+          <FotoFirmada
+            bucket="reclamos"
+            path={primeraFoto}
+            alt="Foto del reclamo"
+            wrapperClassName="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border"
+            imgClassName="h-full w-full object-cover"
+          />
         ) : (
           <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-border bg-primary-50">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-8 w-8 text-primary-400">
@@ -138,16 +143,16 @@ function ReclamoDetalleModal({ reclamo, onClose }) {
             <div>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-primary-500">Fotos</p>
               <div className="grid grid-cols-2 gap-3">
-                {reclamo.fotos_urls.map((url, idx) => (
-                  <a
+                {reclamo.fotos_urls.map((path, idx) => (
+                  <FotoFirmada
                     key={idx}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative aspect-square overflow-hidden rounded-lg border border-border"
-                  >
-                    <img src={url} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                  </a>
+                    bucket="reclamos"
+                    path={path}
+                    alt={`Foto ${idx + 1}`}
+                    linkify
+                    wrapperClassName="group relative aspect-square overflow-hidden rounded-lg border border-border"
+                    imgClassName="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
                 ))}
               </div>
             </div>

@@ -4,6 +4,7 @@ import { useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import Spinner from '../../components/ui/Spinner'
+import FotoFirmada from '../../components/ui/FotoFirmada'
 
 const ESTADO_BADGES = {
   pendiente:   { bg: 'bg-[#0F1C35]', text: 'text-white', ring: 'ring-[#0F1C35]/20', label: 'Pendiente' },
@@ -107,10 +108,16 @@ function ReclamoDetalleModal({ reclamo, onClose, onUpdate, dependencias }) {
               <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary-500">Fotos</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {reclamo.fotos_urls.map((url, idx) => (
-                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="group relative aspect-square overflow-hidden rounded-lg border border-border">
-                      <img src={url} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-                    </a>
+                  {reclamo.fotos_urls.map((path, idx) => (
+                    <FotoFirmada
+                      key={idx}
+                      bucket="reclamos"
+                      path={path}
+                      alt={`Foto ${idx + 1}`}
+                      linkify
+                      wrapperClassName="group relative aspect-square overflow-hidden rounded-lg border border-border"
+                      imgClassName="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    />
                   ))}
                 </div>
               </div>
@@ -268,9 +275,13 @@ export default function Reclamos() {
               >
                 <div className="flex gap-4">
                   {primeraFoto ? (
-                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border">
-                      <img src={primeraFoto} alt="Foto" className="h-full w-full object-cover" />
-                    </div>
+                    <FotoFirmada
+                      bucket="reclamos"
+                      path={primeraFoto}
+                      alt="Foto"
+                      wrapperClassName="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-border"
+                      imgClassName="h-full w-full object-cover"
+                    />
                   ) : (
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-border bg-primary-50">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6 text-primary-400">
