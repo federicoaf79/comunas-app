@@ -285,11 +285,9 @@ async function fetchDocumentosAtencion(atencionId, clientType) {
     .order('created_at', { ascending: false })
   if (error) throw error
 
-  // Generar URLs públicas para cada documento
   return (data ?? []).map(d => ({
     ...d,
-    public_url: publicUrlFor(d.storage_path),
-    nombre_archivo: filenameFromPath(d.storage_path),
+    nombre_archivo: d.nombre || filenameFromPath(d.storage_path),
   }))
 }
 
@@ -299,10 +297,17 @@ function filenameFromPath(path) {
   return idx === -1 ? path : path.slice(idx + 1)
 }
 
-function publicUrlFor(path) {
-  if (!path) return null
-  const { data } = supabaseAnon.storage.from('documentos-hc').getPublicUrl(path)
-  return data?.publicUrl ?? null
+// documentos-hc es un bucket PRIVADO — no hay URL pública. Firmar bajo
+// demanda (al abrir el documento), nunca al listar: firmar en el
+// .map() de fetchDocumentosAtencion dispararía N requests por render y
+// la firma vence mientras la pantalla sigue abierta. `client` tiene
+// que ser el mismo que resolvió la lista (el vecino solo puede firmar
+// sus propios documentos, autenticado).
+export async function fetchDocumentoSignedUrl(storagePath, client = supabaseAnon) {
+  if (!storagePath) return null
+  const { data, error } = await client.storage.from('documentos-hc').createSignedUrl(storagePath, 3600)
+  if (error) throw error
+  return data.signedUrl
 }
 
 export function useDocumentosAtencion(atencionId, client = supabaseAnon) {

@@ -18,8 +18,6 @@ const CONSULTA_SELECT = `
   dependencia:dependencia_id ( id, nombre )
 `
 
-const DOCUMENTO_COLS = 'id, vecino_id, municipio_id, consulta_id, tipo, descripcion, storage_path, mime_type, uploaded_by, created_at'
-
 // Aplana los joins a strings simples para que el componente
 // ConsultaCard no necesite saber del shape de PostgREST.
 function normalizeConsulta(c) {
@@ -73,33 +71,6 @@ export async function createConsulta(data) {
   return normalizeConsulta(row)
 }
 
-export async function fetchDocumentos(vecinoId) {
-  if (!vecinoId) return []
-  const { data, error } = await supabase
-    .from('hc_documentos')
-    .select(DOCUMENTO_COLS)
-    .eq('vecino_id', vecinoId)
-    .order('created_at', { ascending: false })
-  if (error) {
-    console.error('[useHC] fetchDocumentos error:', error)
-    throw error
-  }
-  return data ?? []
-}
-
-export async function createDocumento(data) {
-  const { data: row, error } = await supabase
-    .from('hc_documentos')
-    .insert(data)
-    .select(DOCUMENTO_COLS)
-    .single()
-  if (error) {
-    console.error('[useHC] createDocumento error:', error)
-    throw error
-  }
-  return row
-}
-
 // Resuelve municipio_id para el insert de consulta:
 // 1) del perfil del usuario (admin_comuna/operador)
 // 2) si no, lookup al municipio del vecino (caso superadmin)
@@ -143,12 +114,6 @@ export function useHC(vecinoId) {
     enabled,
   })
 
-  const documentosQuery = useQuery({
-    queryKey: ['hc', 'documentos', vecinoId ?? '__none__'],
-    queryFn:  () => fetchDocumentos(vecinoId),
-    enabled,
-  })
-
   const createConsultaMut = useMutation({
     // formData: { motivo, diagnostico, receta }
     mutationFn: async (formData) => {
@@ -174,27 +139,12 @@ export function useHC(vecinoId) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['hc', 'consultas', vecinoId] }),
   })
 
-  const createDocumentoMut = useMutation({
-    mutationFn: async (data) => {
-      const municipio_id = await resolveMunicipioForVecino(perfil, vecinoId)
-      return createDocumento({
-        vecino_id:    vecinoId,
-        municipio_id,
-        uploaded_by:  perfil?.id,
-        ...data,
-      })
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['hc', 'documentos', vecinoId] }),
-  })
-
   return {
-    consultas:       consultasQuery.data ?? [],
-    documentos:      documentosQuery.data ?? [],
-    isLoading:       consultasQuery.isLoading,
-    isFetching:      consultasQuery.isFetching,
-    error:           consultasQuery.error,
-    refetch:         consultasQuery.refetch,
-    createConsulta:  createConsultaMut,
-    createDocumento: createDocumentoMut,
+    consultas:      consultasQuery.data ?? [],
+    isLoading:      consultasQuery.isLoading,
+    isFetching:     consultasQuery.isFetching,
+    error:          consultasQuery.error,
+    refetch:        consultasQuery.refetch,
+    createConsulta: createConsultaMut,
   }
 }

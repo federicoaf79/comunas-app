@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
-import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino, useOrdenesDerivacionVecino } from '../../hooks/useVecinoData'
+import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino, useOrdenesDerivacionVecino, fetchDocumentoSignedUrl } from '../../hooks/useVecinoData'
 import { useAccesosProveedorVecino } from '../../hooks/useProveedorVecino'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
@@ -276,31 +276,44 @@ function DatosVitalesCard({ vecino }) {
 
 function AtencionDocumentos({ atencionId }) {
   const { data: documentos, isLoading } = useDocumentosAtencion(atencionId, supabase)
+  const [openingId, setOpeningId] = useState(null)
 
   if (isLoading) return <Spinner size="sm" />
   if (!documentos || documentos.length === 0) return null
 
   const TIPOS_ICONO = {
-    receta:  '📋',
-    estudio: '🔬',
-    informe: '🏥',
-    otro:    '📄',
+    receta:       '📋',
+    estudio:      '🔬',
+    orden_medica: '🏥',
+    otro:         '📄',
+  }
+
+  async function handleAbrir(d) {
+    setOpeningId(d.id)
+    try {
+      const url = await fetchDocumentoSignedUrl(d.storage_path, supabase)
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      console.error('[AtencionDocumentos] signed url error:', e)
+    } finally {
+      setOpeningId(null)
+    }
   }
 
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {documentos.map(d => (
-        <a
+        <button
           key={d.id}
-          href={d.public_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 transition-colors hover:bg-accent-100"
+          type="button"
+          onClick={() => handleAbrir(d)}
+          disabled={openingId === d.id}
+          className="inline-flex items-center gap-1 rounded-full bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100 transition-colors hover:bg-accent-100 disabled:opacity-50"
           title={d.nombre || 'Ver documento'}
         >
           <span aria-hidden="true">{TIPOS_ICONO[d.tipo] ?? '📄'}</span>
-          {d.nombre_archivo}
-        </a>
+          {openingId === d.id ? 'Abriendo…' : d.nombre_archivo}
+        </button>
       ))}
     </div>
   )

@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react'
 import {
-  useDocumentosAtencion, useUploadDocumento, useDeleteDocumento,
+  useDocumentosAtencion, useUploadDocumento, useDeleteDocumento, getDocumentoSignedUrl,
 } from '../../hooks/useAtenciones'
 import Spinner from '../ui/Spinner'
 import Button from '../ui/Button'
 import Select from '../ui/Select'
 import Input from '../ui/Input'
-import { dateOf } from '../../lib/datetime'
+import { dateOf, todayArgYMD } from '../../lib/datetime'
 
 // =============================================================
 // DocumentosAtencion — sección que va dentro del tab Atención
@@ -22,14 +22,13 @@ import { dateOf } from '../../lib/datetime'
 // opciones nativamente.
 // =============================================================
 
-// Mapa del label humano del tipo (con ícono) al valor del check
-// constraint en hc_documentos.tipo. Mantener sincronizado con la
-// migración 20250505000001 (estudio|receta|informe|imagen|otro).
+// `tipo` es texto libre en hc_documentos (sin CHECK constraint) —
+// esta lista es solo convención de UI.
 const TIPOS_DOC = [
-  { value: 'receta',  label: 'Receta médica',     icono: '📋' },
-  { value: 'estudio', label: 'Estudio / análisis', icono: '🔬' },
-  { value: 'informe', label: 'Derivación',         icono: '🏥' },
-  { value: 'otro',    label: 'Otro documento',     icono: '📄' },
+  { value: 'receta',       label: 'Receta médica',     icono: '📋' },
+  { value: 'estudio',      label: 'Estudio / análisis', icono: '🔬' },
+  { value: 'orden_medica', label: 'Orden médica',       icono: '🏥' },
+  { value: 'otro',         label: 'Otro documento',     icono: '📄' },
 ]
 
 function iconoTipo(t) {
@@ -45,11 +44,12 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
   const remove = useDeleteDocumento()
   const inputRef = useRef(null)
 
-  const [tipo, setTipo]               = useState('receta')
-  const [descripcion, setDescripcion] = useState('')
+  const [tipo, setTipo]               = useState('otro')
+  const [fecha, setFecha]             = useState(todayArgYMD())
   const [pendingFile, setPendingFile] = useState(null)
   const [error, setError]             = useState('')
   const [ok, setOk]                   = useState('')
+  const [verLoadingId, setVerLoadingId] = useState(null)
 
   const items = docsQ.data ?? []
 
@@ -78,14 +78,27 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
         vecinoId,
         municipioId,
         tipo,
-        descripcion,
+        fecha,
       })
       setOk('Documento subido.')
       setPendingFile(null)
-      setDescripcion('')
+      setFecha(todayArgYMD())
       if (inputRef.current) inputRef.current.value = ''
     } catch (e) {
       setError(e?.message ?? 'No pudimos subir el documento.')
+    }
+  }
+
+  async function handleVer(d) {
+    setError('')
+    setVerLoadingId(d.id)
+    try {
+      const url = await getDocumentoSignedUrl(d.storage_path)
+      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos abrir el documento.')
+    } finally {
+      setVerLoadingId(null)
     }
   }
 
@@ -134,20 +147,19 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
                   {d.nombre_archivo}
                 </p>
                 <p className="text-[11px] text-primary-500">
-                  {labelTipo(d.tipo)} · {dateOf(d.created_at)}
-                  {d.descripcion && <> · {d.descripcion}</>}
+                  {labelTipo(d.tipo)} · {dateOf(d.fecha ?? d.created_at)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3 text-xs font-medium">
-                {d.public_url && (
-                  <a
-                    href={d.public_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-accent-700 hover:underline"
+                {d.storage_path && (
+                  <button
+                    type="button"
+                    onClick={() => handleVer(d)}
+                    disabled={verLoadingId === d.id}
+                    className="text-accent-700 hover:underline disabled:opacity-50"
                   >
-                    Ver
-                  </a>
+                    {verLoadingId === d.id ? 'Abriendo…' : 'Ver'}
+                  </button>
                 )}
                 {!disabled && (
                   <button
@@ -185,10 +197,10 @@ export default function DocumentosAtencion({ atencionId, vecinoId, municipioId, 
               options={TIPOS_DOC.map(t => ({ value: t.value, label: `${t.icono} ${t.label}` }))}
             />
             <Input
-              label="Descripción (opcional)"
-              value={descripcion}
-              onChange={e => setDescripcion(e.target.value)}
-              placeholder="Ej: Análisis de sangre, control mensual"
+              label="Fecha del documento"
+              type="date"
+              value={fecha}
+              onChange={e => setFecha(e.target.value)}
             />
           </div>
           {pendingFile && (

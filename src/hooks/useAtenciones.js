@@ -309,18 +309,16 @@ export function useCloseAtencion() {
 // ─────────────────────────────────────────────────────────────────
 // Documentos adjuntos (hc_documentos)
 //
-// Schema real: id, municipio_id, vecino_id, consulta_id, tipo,
-// descripcion, storage_path, mime_type, uploaded_by, created_at,
-// atencion_id (migration 20260511_atencion_documentos).
-//
-// `tipo` está restringido por check constraint a:
-//   ('estudio','receta','informe','imagen','otro')
-// El UI mapea "Derivación" → 'informe' para encajar.
+// Schema real (verificado en prod 2026-07-28): id, vecino_id,
+// subido_por_rol, tipo, nombre, storage_path, fecha, created_at,
+// atencion_id. Sin municipio_id, consulta_id, descripcion, mime_type
+// ni uploaded_by — no existen. Sin CHECK constraint: `tipo` es texto
+// libre (usamos 'orden_medica'|'estudio'|'receta'|'otro' por
+// convención de UI, no por restricción de DB).
 // ─────────────────────────────────────────────────────────────────
 
 const DOC_COLS = `
-  id, municipio_id, vecino_id, atencion_id, consulta_id,
-  tipo, descripcion, storage_path, mime_type, uploaded_by, created_at
+  id, vecino_id, atencion_id, subido_por_rol, tipo, nombre, storage_path, fecha, created_at
 `
 
 export function useDocumentosAtencion(atencionId) {
@@ -335,8 +333,7 @@ export function useDocumentosAtencion(atencionId) {
       if (error) throw error
       return (data ?? []).map(d => ({
         ...d,
-        public_url: publicUrlFor(d.storage_path),
-        nombre_archivo: filenameFromPath(d.storage_path),
+        nombre_archivo: d.nombre || filenameFromPath(d.storage_path),
       }))
     },
     enabled: !!atencionId,
@@ -349,10 +346,18 @@ function filenameFromPath(path) {
   return idx === -1 ? path : path.slice(idx + 1)
 }
 
-function publicUrlFor(path) {
-  if (!path) return null
-  const { data } = supabase.storage.from('documentos-hc').getPublicUrl(path)
-  return data?.publicUrl ?? null
+// documentos-hc es un bucket PRIVADO — no hay URL pública (getPublicUrl
+// devuelve un link que siempre da 400). Hay que firmar bajo demanda, al
+// hacer clic en "Ver"/"Descargar", nunca al listar: firmar en el .map()
+// de arriba dispararía N requests por render y la firma vence mientras
+// la pantalla sigue abierta.
+export async function getDocumentoSignedUrl(storagePath) {
+  if (!storagePath) return null
+  const { data, error } = await supabase.storage
+    .from('documentos-hc')
+    .createSignedUrl(storagePath, 3600)
+  if (error) throw error
+  return data.signedUrl
 }
 
 // Sanitiza un filename para usarlo en el path del bucket: minúsculas,
@@ -371,12 +376,13 @@ function safeFilename(name) {
 }
 
 async function uploadDocumento({
-  file, atencionId, vecinoId, municipioId, uploadedBy,
-  tipo, descripcion,
+  file, atencionId, vecinoId, municipioId,
+  tipo, fecha,
 }) {
   if (!file || !atencionId || !vecinoId || !municipioId) {
     throw new Error('Faltan datos para subir el documento.')
   }
+  // municipioId solo organiza el path del bucket — la tabla no tiene esa columna.
   const path = `${municipioId}/${vecinoId}/${atencionId}/${Date.now()}_${safeFilename(file.name)}`
   const { error: upErr } = await supabase.storage
     .from('documentos-hc')
@@ -389,14 +395,13 @@ async function uploadDocumento({
     throw new Error(upErr.message ?? 'No pudimos subir el archivo.')
   }
   const payload = {
-    municipio_id: municipioId,
-    vecino_id:    vecinoId,
-    atencion_id:  atencionId,
-    tipo,                                  // estudio|receta|informe|imagen|otro
-    descripcion:  descripcion?.trim() || null,
-    storage_path: path,
-    mime_type:    file.type || null,
-    uploaded_by:  uploadedBy ?? null,
+    vecino_id:       vecinoId,
+    atencion_id:     atencionId,
+    subido_por_rol:  'staff',
+    tipo,                                  // orden_medica|estudio|receta|otro
+    nombre:          file.name,
+    storage_path:    path,
+    fecha,
   }
   const { data: row, error: insErr } = await supabase
     .from('hc_documentos').insert(payload).select(DOC_COLS).single()
@@ -411,9 +416,8 @@ async function uploadDocumento({
 
 export function useUploadDocumento() {
   const qc = useQueryClient()
-  const { perfil } = useAuth()
   return useMutation({
-    mutationFn: (vars) => uploadDocumento({ uploadedBy: perfil?.id, ...vars }),
+    mutationFn: uploadDocumento,
     onSuccess:  (row) => qc.invalidateQueries({ queryKey: ['hc-documentos', 'atencion', row.atencion_id] }),
   })
 }
