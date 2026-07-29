@@ -162,7 +162,7 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 // ─────────────────────────────────────────────────────────────────
 
 const RECLAMO_COLS_PUBLIC =
-  'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at'
+  'id, vecino_id, tipo, descripcion, ubicacion, estado, prioridad, canal, created_at, fotos_urls'
 
 async function fetchReclamosByVecino(vecinoId, clientType) {
   console.log('[fetchReclamosByVecino] CALLED', { vecinoId, clientType })
