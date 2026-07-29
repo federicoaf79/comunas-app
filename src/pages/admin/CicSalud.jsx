@@ -164,7 +164,10 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
     if (especialidadFiltro === 'todas') return turnos
     return turnos.filter(t => {
       const prof = profesionales.find(p => p.id === t.profesional_id)
-      return prof?.especialidad?.toLowerCase() === especialidadFiltro
+      // Columna real primero — es lo que eligió el vecino al sacar el
+      // turno; el profesional es solo inferencia cuando no hay dato propio.
+      const especialidad = t.especialidad ?? prof?.especialidad
+      return especialidad?.toLowerCase() === especialidadFiltro
     })
   }, [turnos, especialidadFiltro, profesionales])
 
@@ -248,7 +251,10 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
   if (vistaActual === 'semana') {
     const eventosCalendario = turnosFiltrados.map(t => {
       const prof = profesionales.find(p => p.id === t.profesional_id)
-      const especialidad = normalizarEspecialidad(prof?.especialidad)
+      // Columna real primero — es lo que eligió el vecino al sacar el
+      // turno; el profesional es solo inferencia cuando no hay dato propio.
+      const especialidadTurno = t.especialidad ?? prof?.especialidad
+      const especialidad = normalizarEspecialidad(especialidadTurno)
       // turnos_agenda no tiene columna fecha_hora — solo fecha + hora_inicio
       // por separado. Hay que combinarlos acá; CalendarioSemanal.jsx solo
       // sabe leer fecha_hora (ISO) o el par fecha+hora, nunca hora_inicio.
@@ -256,7 +262,7 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
         id: t.id,
         fecha_hora: t.fecha && t.hora_inicio ? `${t.fecha}T${t.hora_inicio}${ARG_OFFSET}` : undefined,
         titulo: vecinoLabel(t),
-        subtitulo: prof?.especialidad || 'Sin especialidad',
+        subtitulo: especialidadTurno || 'Sin especialidad',
         color: COLOR_POR_ESPECIALIDAD[especialidad] || COLOR_ESPECIALIDAD_DEFAULT,
       }
     })
@@ -404,7 +410,10 @@ function TurnosTab({ depCicSalud, municipioId, canCreate }) {
                 <div className="flex-1">
                   <p className="font-sora text-sm font-semibold text-primary">{vecinoLabel(t)}</p>
                   <p className="text-xs text-primary-500">
-                    {prof?.especialidad || 'Sin especialidad'} · {prof?.nombre || 'Sin profesional'}
+                    {/* Columna real primero — es lo que eligió el vecino al
+                        sacar el turno; el profesional es solo inferencia
+                        cuando no hay dato propio. */}
+                    {t.especialidad ?? prof?.especialidad ?? 'Sin especialidad'} · {prof?.nombre || 'Sin profesional'}
                   </p>
                   <p className="text-xs text-primary-400">
                     {/* turnos_agenda no tiene columna fecha_hora — solo fecha +
