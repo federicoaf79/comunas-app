@@ -16,9 +16,10 @@ function logAudit(args) {
 //   inventario             (id, municipio_id, dependencia_id, nombre,
 //                           categoria, unidad, stock_actual, stock_minimo,
 //                           precio_referencia, partida_codigo, created_at)
-//   movimientos_inventario (id, inventario_id, tipo entrada|salida|ajuste,
-//                           cantidad, stock_anterior, stock_posterior,
-//                           motivo, registrado_por, fecha timestamptz)
+//   movimientos_inventario (id, inventario_id, municipio_id, tipo
+//                           entrada|salida|ajuste, cantidad, stock_anterior,
+//                           stock_posterior, motivo, referencia_gasto_id,
+//                           registrado_por, created_at)
 //   ordenes_compra         (id, municipio_id, dependencia_id, numero,
 //                           proveedor, descripcion, monto_total,
 //                           partida_codigo, tipo directa|cotizacion,
@@ -44,7 +45,7 @@ const INV_COLS = `
 `
 const MOV_COLS = `
   id, inventario_id, tipo, cantidad, stock_anterior, stock_posterior,
-  motivo, registrado_por, fecha,
+  motivo, registrado_por, created_at,
   inventario:inventario_id (
     id, nombre, unidad, dependencia_id,
     dependencia:dependencia_id ( id, nombre )
@@ -202,15 +203,13 @@ async function fetchMovimientos({
     }
 
     let q = supabase.from('movimientos_inventario').select(MOV_COLS)
-      .order('fecha', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(limit)
       .abortSignal(signal)
     if (inventarioIds)  q = q.in('inventario_id', inventarioIds)
     if (tipo)           q = q.eq('tipo', tipo)
-    // El timestamp confiable es `created_at` — la columna `fecha`
-    // existe en algunas instancias pero queda nullable y devuelve
-    // 400 al filtrar por rango en otras. Mismo criterio que usa
-    // TopInsumos en Administracion.jsx.
+    // La tabla no tiene columna `fecha` — el timestamp real es
+    // `created_at`. Mismo criterio que usa TopInsumos en Administracion.jsx.
     if (fechaDesde)     q = q.gte('created_at', fechaDesde)
     if (fechaHasta)     q = q.lt('created_at',  fechaHasta)
 
@@ -402,7 +401,7 @@ async function createMovimiento({ inventarioId, tipo, cantidad, motivo, registra
     .eq('id', inventarioId)
   if (upErr) throw upErr
 
-  // 3) insertar movimiento
+  // 3) insertar movimiento — created_at tiene default now(), no se manda
   const payload = {
     inventario_id:    inventarioId,
     tipo,
@@ -411,7 +410,6 @@ async function createMovimiento({ inventarioId, tipo, cantidad, motivo, registra
     stock_posterior:  posterior,
     motivo:           motivo || null,
     registrado_por:   registradoPor || null,
-    fecha:            new Date().toISOString(),
   }
   const { data: mov, error: movErr } = await supabase
     .from('movimientos_inventario').insert(payload).select(MOV_COLS).single()

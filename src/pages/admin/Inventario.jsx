@@ -672,7 +672,7 @@ function MovimientosTab({ municipioId, dependencias }) {
   function exportCSV() {
     const headers = ['Fecha', 'Dependencia', 'Ítem', 'Tipo', 'Cantidad', 'Stock anterior', 'Stock posterior', 'Motivo']
     const rows = movimientos.map(m => [
-      dateTimeOf(m.fecha),
+      dateTimeOf(m.created_at),
       m.inventario?.dependencia?.nombre ?? '',
       m.inventario?.nombre ?? '',
       m.tipo,
@@ -737,7 +737,7 @@ function MovimientosTab({ municipioId, dependencias }) {
                 className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-white px-4 py-3 text-sm shadow-card"
               >
                 <span className="whitespace-nowrap font-mono text-xs text-primary-400">
-                  {dateTimeOf(m.fecha)}
+                  {dateTimeOf(m.created_at)}
                 </span>
                 <span className={badge.cls}>{badge.label}</span>
                 <span className="font-semibold text-primary">{m.inventario?.nombre ?? '—'}</span>

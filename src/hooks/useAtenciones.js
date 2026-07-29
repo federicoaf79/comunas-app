@@ -217,7 +217,10 @@ async function closeAtencion({ atencionId, registradoPor, estado = 'cerrada' }) 
           stock_posterior: posterior,
           motivo:          `Atención clínica ${atencionId.slice(0, 8)}`,
           registrado_por:  registradoPor ?? null,
-          fecha:           new Date().toISOString(),
+          // created_at tiene default now(), no se manda — la tabla no
+          // tiene columna `fecha`. Este INSERT tiraba 42703 en silencio;
+          // el stock ya se había descontado en el paso de arriba pero sin
+          // dejar rastro en movimientos_inventario.
         })
       if (movErr) throw movErr
     } catch (e) {
