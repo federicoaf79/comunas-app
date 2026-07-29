@@ -42,24 +42,46 @@ function normalize(str) {
 }
 
 // ─── Fuzzy duplicate detection ────────────────────────────────────────────────
+// Two-row: en vez de una matriz (m+1)×(n+1) completa (m+1 arrays nuevos
+// por llamada), reusa dos arrays de una fila. Mismo resultado exacto,
+// mismo O(m·n) en tiempo, pero sin la asignación repetida de arrays chicos
+// que dominaba el costo real (confirmado en vivo: agrupar por apellido
+// bajó los pares un 90% sin bajar el tiempo un centavo -- el cuello de
+// botella era la matriz, no la cantidad de pares).
 function levenshtein(a, b) {
   const m = a.length, n = b.length
-  const dp = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
-  )
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i-1] === b[j-1]
-        ? dp[i-1][j-1]
-        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
-  return dp[m][n]
+  if (m === 0) return n
+  if (n === 0) return m
+  let prev = new Array(n + 1)
+  let curr = new Array(n + 1)
+  for (let j = 0; j <= n; j++) prev[j] = j
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i
+    for (let j = 1; j <= n; j++) {
+      curr[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j], curr[j - 1], prev[j - 1])
+    }
+    const tmp = prev; prev = curr; curr = tmp
+  }
+  return prev[n]
 }
 
-function similarity(a, b) {
-  const na = normalize(a), nb = normalize(b)
-  if (!na || !nb) return 0
-  const maxLen = Math.max(na.length, nb.length)
-  return (maxLen - levenshtein(na, nb)) / maxLen
+// Recibe los nombres YA normalizados -- normalizar una vez por vecino
+// afuera del bucle de pares es más barato que normalizar de nuevo en
+// cada comparación (un vecino participa de varios pares dentro de su
+// grupo).
+//
+// Salida temprana: levenshtein(a,b) nunca es menor que |len(a)-len(b)|
+// (hacen falta al menos esas inserciones/borrados). Si esa diferencia ya
+// supera el 20% del largo mayor, similarity no puede llegar a 0.8 --
+// evita calcular la distancia completa para pares que ya se sabe que
+// no van a calificar.
+function similarity(normA, normB) {
+  if (!normA || !normB) return 0
+  const maxLen = Math.max(normA.length, normB.length)
+  if (Math.abs(normA.length - normB.length) > maxLen * 0.2) return 0
+  return (maxLen - levenshtein(normA, normB)) / maxLen
 }
 
 // Detecta pares con similitud >80% y sin DNI compartido.
@@ -73,12 +95,19 @@ function similarity(a, b) {
 // duplicados" en el resultado), nunca automáticamente durante el import
 // -- ver nota en handleImport().
 export function detectFuzzyDuplicates(vecinos) {
-  const grupos = new Map()
-  for (const v of vecinos) {
+  // Nombre normalizado UNA vez por vecino -- antes se normalizaba
+  // adentro de similarity() en cada comparación, repitiendo el mismo
+  // trabajo tantas veces como pares participara ese vecino.
+  const conNombre = vecinos.map(v => {
     const apellido = v.apellido || v.nombre_completo?.split(',')[0]?.trim() || ''
-    const letra = normalize(apellido).charAt(0) || '_'
-    if (!grupos.has(letra)) grupos.set(letra, [])
-    grupos.get(letra).push(v)
+    const nombreCompleto = v.nombre_completo || `${v.apellido} ${v.nombre}`
+    return { v, letra: normalize(apellido).charAt(0) || '_', nombreNorm: normalize(nombreCompleto) }
+  })
+
+  const grupos = new Map()
+  for (const item of conNombre) {
+    if (!grupos.has(item.letra)) grupos.set(item.letra, [])
+    grupos.get(item.letra).push(item)
   }
 
   const pairs = []
@@ -86,14 +115,13 @@ export function detectFuzzyDuplicates(vecinos) {
   for (const grupo of grupos.values()) {
     for (let i = 0; i < grupo.length; i++) {
       for (let j = i + 1; j < grupo.length; j++) {
-        const a = grupo[i], b = grupo[j]
+        const { v: a, nombreNorm: normA } = grupo[i]
+        const { v: b, nombreNorm: normB } = grupo[j]
         const key = [a.id, b.id].sort().join('|')
         if (seen.has(key)) continue
         // Saltar si comparten DNI (ya los manejamos como update)
         if (a.dni && a.dni === b.dni) continue
-        const nameA = a.nombre_completo || `${a.apellido} ${a.nombre}`
-        const nameB = b.nombre_completo || `${b.apellido} ${b.nombre}`
-        const score = similarity(nameA, nameB)
+        const score = similarity(normA, normB)
         if (score >= 0.8) {
           seen.add(key)
           pairs.push({ a, b, score: Math.round(score * 100) })
