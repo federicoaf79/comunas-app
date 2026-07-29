@@ -66,7 +66,6 @@ import VecinoAcceso        from './pages/portal/VecinoAcceso'
 import ResetPassword       from './pages/portal/ResetPassword'
 import VecinoDashboard        from './pages/portal/VecinoDashboard'
 import NuevoReclamoPortal     from './pages/portal/NuevoReclamoPortal'
-import MisReclamosPortal      from './pages/portal/MisReclamosPortal'
 import MisVales               from './pages/portal/MisVales'
 import Proveedor              from './pages/portal/Proveedor'
 import ReservarPolideportivo  from './pages/portal/ReservarPolideportivo'
@@ -165,7 +164,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/portal/mi-cuenta', element: <VecinoDashboard /> },
       { path: '/portal/reclamos/nuevo', element: <NuevoReclamoPortal /> },
-      { path: '/portal/reclamos', element: <MisReclamosPortal /> },
+      { path: '/portal/reclamos', element: <Navigate to="/portal/mi-cuenta?tab=reclamos" replace /> },
       { path: '/portal/mis-vales', element: <MisVales /> },
       { path: '/portal/proveedor', element: <Proveedor /> },
       { path: '/portal/polideportivo/reservar', element: <ReservarPolideportivo /> },

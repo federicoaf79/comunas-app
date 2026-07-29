@@ -39,6 +39,7 @@ export function useOrdenMedicaUpload() {
         .insert({
           turno_id: turnoId,
           vecino_id: vecinoId,
+          municipio_id: municipioId,
           origen: 'fisica',
           archivo_url: filePath,
           archivo_nombre: file.name,

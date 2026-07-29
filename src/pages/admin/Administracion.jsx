@@ -367,8 +367,10 @@ function TopDependenciasGasto({ gastosMes, onClick }) {
 function TopInsumos({ municipioId, onClick }) {
   const today = new Date()
   const ymd   = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
-  // movimientos_inventario NO tiene municipio_id propio — el filtro
-  // por municipio se hace en dos pasos: primero traemos los ids de
+  // movimientos_inventario sí tiene municipio_id (confirmado contra
+  // schema.json y contra prod: 32 filas, cero nulls) — pero PostgREST
+  // no permite filtrar por igualdad sobre columnas de un embed, así
+  // que igual se filtra en dos pasos: primero traemos los ids de
   // inventario del municipio, luego filtramos los movimientos con
   // `.in('inventario_id', ids)`. Mismo patrón que useMovimientos.
   const insumosQ = useQuery({

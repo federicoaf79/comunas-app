@@ -16,11 +16,12 @@ function logAudit(args) {
 //                       marca, modelo, anio, tipo, km_actuales,
 //                       estado, seguro_vencimiento, vtv_vencimiento,
 //                       observaciones, created_at)
-//   combustible_log    (id, vehiculo_id, fecha, litros, km_al_cargar,
-//                       tipo_combustible, costo_total, proveedor)
-//   service_vehiculos  (id, vehiculo_id, fecha, tipo_service,
+//   combustible_log    (id, vehiculo_id, municipio_id, fecha, litros,
+//                       km_al_cargar, tipo_combustible, costo_total,
+//                       proveedor, referencia_gasto_id)
+//   service_vehiculos  (id, vehiculo_id, municipio_id, fecha, tipo_service,
 //                       descripcion, km_al_service, proximo_service_km,
-//                       costo, taller)
+//                       costo, taller, referencia_gasto_id)
 // =============================================================
 
 const TIMEOUT_MS = 8000
@@ -32,12 +33,12 @@ const VEH_COLS = `
   dependencia:dependencia_id ( id, nombre )
 `
 const COMB_COLS = `
-  id, vehiculo_id, fecha, litros, km_al_cargar, tipo_combustible,
+  id, vehiculo_id, municipio_id, fecha, litros, km_al_cargar, tipo_combustible,
   costo_total, proveedor,
   vehiculo:vehiculo_id ( id, patente, marca, modelo )
 `
 const SERV_COLS = `
-  id, vehiculo_id, fecha, tipo_service, descripcion, km_al_service,
+  id, vehiculo_id, municipio_id, fecha, tipo_service, descripcion, km_al_service,
   proximo_service_km, costo, taller,
   vehiculo:vehiculo_id ( id, patente, marca, modelo )
 `

@@ -263,13 +263,15 @@ async function createMunicipio(payload, onProgress = () => {}) {
   // PASO E — presupuesto_partidas (no aborta si falla)
   onProgress('e:start')
   const partidaCodigos = ['02', '03', '04']
+  const anioActual = new Date().getFullYear()
   const partidasRows = []
   for (const dep of (depsCreadas ?? [])) {
     for (const p of partidaCodigos) {
       partidasRows.push({
         municipio_id:   muni.id,
         dependencia_id: dep.id,
-        partida:        p,
+        partida_codigo: p,
+        anio:           anioActual,
         monto_asignado: 0,
       })
     }

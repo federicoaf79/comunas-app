@@ -562,6 +562,7 @@ function CombustibleFormModal({ vehiculo, onClose }) {
     try {
       await create.mutateAsync({
         vehiculo_id:      vehiculo.id,
+        municipio_id:     vehiculo.municipio_id,
         fecha:            form.fecha,
         litros:           Number(form.litros),
         km_al_cargar:     form.km_al_cargar ? Number(form.km_al_cargar) : null,
@@ -655,6 +656,7 @@ function ServiceFormModal({ vehiculo, onClose }) {
     try {
       await create.mutateAsync({
         vehiculo_id:        vehiculo.id,
+        municipio_id:       vehiculo.municipio_id,
         fecha:              form.fecha,
         tipo_service:       form.tipo_service,
         descripcion:        form.descripcion.trim() || null,
@@ -836,6 +838,7 @@ function CombustibleFormModalTab({ vehiculos, onClose }) {
     try {
       await create.mutateAsync({
         vehiculo_id:       form.vehiculo_id,
+        municipio_id:      vehiculos.find(v => v.id === form.vehiculo_id)?.municipio_id,
         fecha:             form.fecha,
         litros:            Number(form.litros),
         km_al_cargar:      form.km_al_cargar ? Number(form.km_al_cargar) : null,
@@ -977,6 +980,7 @@ function ServiceFormModalTab({ vehiculos, onClose }) {
     try {
       await create.mutateAsync({
         vehiculo_id:        form.vehiculo_id,
+        municipio_id:       vehiculos.find(v => v.id === form.vehiculo_id)?.municipio_id,
         fecha:              form.fecha,
         tipo_service:       form.tipo_service,
         descripcion:        form.descripcion.trim(),

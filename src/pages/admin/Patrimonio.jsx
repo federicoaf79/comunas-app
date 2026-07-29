@@ -821,9 +821,9 @@ function BienDetalleDrawer({ bien, dependencias, onClose }) {
                     <span className="badge-neutral">{labelMantTipo(m.tipo)}</span>
                     <p className="min-w-0 flex-1 text-primary-700">
                       <span className="font-medium">{m.descripcion || '—'}</span>
-                      {m.responsable && (
+                      {m.proveedor && (
                         <span className="block text-[11px] text-primary-400">
-                          Responsable: {m.responsable}
+                          Responsable: {m.proveedor}
                         </span>
                       )}
                     </p>
@@ -858,6 +858,7 @@ function BienDetalleDrawer({ bien, dependencias, onClose }) {
       {modalMant && (
         <MantenimientoFormModal
           bienId={bien.id}
+          municipioId={bien.municipio_id}
           onClose={() => setModalMant(false)}
         />
       )}
@@ -884,13 +885,13 @@ function Dato({ label, value, fullSpan }) {
 // Modal de nuevo mantenimiento
 // ─────────────────────────────────────────────────────────────────
 
-function MantenimientoFormModal({ bienId, onClose }) {
+function MantenimientoFormModal({ bienId, municipioId, onClose }) {
   const [form, setForm] = useState({
     fecha:       todayArgYMD(),
     tipo:        'mantenimiento',
     descripcion: '',
     costo:       '',
-    responsable: '',
+    proveedor:   '',
   })
   const [error, setError] = useState('')
   const set = (k, v) => setForm(s => ({ ...s, [k]: v }))
@@ -901,12 +902,13 @@ function MantenimientoFormModal({ bienId, onClose }) {
     setError('')
     try {
       await create.mutateAsync({
-        bien_id:     bienId,
-        fecha:       form.fecha,
-        tipo:        form.tipo,
-        descripcion: form.descripcion.trim(),
-        costo:       form.costo === '' ? 0 : Number(form.costo),
-        responsable: form.responsable.trim() || null,
+        bien_id:      bienId,
+        municipio_id: municipioId,
+        fecha:        form.fecha,
+        tipo:         form.tipo,
+        descripcion:  form.descripcion.trim(),
+        costo:        form.costo === '' ? 0 : Number(form.costo),
+        proveedor:    form.proveedor.trim() || null,
       })
       onClose()
     } catch (e) {
@@ -960,8 +962,8 @@ function MantenimientoFormModal({ bienId, onClose }) {
         />
         <Input
           label="Responsable / proveedor"
-          value={form.responsable}
-          onChange={e => set('responsable', e.target.value)}
+          value={form.proveedor}
+          onChange={e => set('proveedor', e.target.value)}
         />
         {error && (
           <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger sm:col-span-2">

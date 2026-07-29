@@ -14,7 +14,8 @@ import { dateOf } from '../../lib/datetime'
 //
 // Solo cuenta completa (auth_mode === 'supabase'): current_vecino_id()
 // -- usado por la policy de SELECT y por abrir_vale() -- depende de
-// una sesión real de Supabase Auth. Mismo guard que MisReclamosPortal.jsx.
+// una sesión real de Supabase Auth. Mismo guard que ReclamosTab en
+// VecinoDashboard.jsx.
 // =============================================================
 
 function detalleVale(v) {

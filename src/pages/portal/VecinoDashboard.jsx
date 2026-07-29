@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase'
 import DashboardHeader from '../../components/portal/DashboardHeader'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
+import FotoFirmada from '../../components/ui/FotoFirmada'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
@@ -653,31 +654,174 @@ function DatosTab({ vecino }) {
 // D) Mis reclamos — denuncias del vecino
 // ─────────────────────────────────────────────────────────────────
 
-const ESTADO_RECLAMO_LABEL = {
-  abierto:    'Abierto',
-  en_proceso: 'En proceso',
-  resuelto:   'Resuelto',
-  cerrado:    'Cerrado',
-  rechazado:  'Rechazado',
-}
-
 // Colores por estado: azul OK / gold / navy / gris (cero verde).
-const ESTADO_RECLAMO_CLASS = {
-  abierto:    'inline-flex items-center rounded-full bg-ok-50 px-2.5 py-0.5 text-xs font-semibold text-ok-700 ring-1 ring-inset ring-ok-100',
-  en_proceso: 'inline-flex items-center rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-semibold text-accent-700 ring-1 ring-inset ring-accent-100',
-  resuelto:   'inline-flex items-center rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-semibold text-primary-700 ring-1 ring-inset ring-primary-200',
-  cerrado:    'inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200',
-  rechazado:  'inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200',
+const ESTADO_BADGES = {
+  pendiente:   { bg: 'bg-[#0F1C35]', text: 'text-white', ring: 'ring-[#0F1C35]/20', label: 'Pendiente' },
+  en_proceso:  { bg: 'bg-[#1D4ED8]', text: 'text-white', ring: 'ring-blue-200', label: 'En proceso' },
+  resuelto:    { bg: 'bg-[#1e40af]', text: 'text-white', ring: 'ring-blue-300', label: 'Resuelto' },
+  abierto:     { bg: 'bg-[#0F1C35]', text: 'text-white', ring: 'ring-[#0F1C35]/20', label: 'Abierto' },
+  cerrado:     { bg: 'bg-slate-500', text: 'text-white', ring: 'ring-slate-200', label: 'Cerrado' },
+  rechazado:   { bg: 'bg-red-100', text: 'text-red-700', ring: 'ring-red-200', label: 'Rechazado' },
 }
 
-const PRIORIDAD_BADGE = {
-  alta:    'inline-flex items-center rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-800 ring-1 ring-inset ring-accent-200',
-  urgente: 'inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-danger ring-1 ring-inset ring-red-200',
+const TIPO_LABELS_RECLAMO = {
+  escombros:    'Escombros',
+  ramas:        'Ramas y poda',
+  restos_poda:  'Residuo de gran tamaño',
+  otro:         'Otro',
 }
 
 function truncate(text, max = 60) {
   const s = (text ?? '').trim()
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
+}
+
+// ReclamoCard/ReclamoDetalleModal — traídos de MisReclamosPortal.jsx
+// (la vista que sí mostraba fotos, pero a la que nada en la UI
+// enlazaba: los 3 navigate() de NuevoReclamoPortal.jsx y el tab bar
+// de este dashboard apuntaban siempre acá, a la versión sin fotos).
+// /portal/reclamos quedó como redirect a este tab (ver App.jsx).
+function ReclamoCard({ reclamo, onClick }) {
+  const badge = ESTADO_BADGES[reclamo.estado] || ESTADO_BADGES.pendiente
+  const tipoLabel = TIPO_LABELS_RECLAMO[reclamo.tipo] || reclamo.tipo
+
+  const fechaFormateada = new Date(reclamo.created_at).toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+
+  const primeraFoto = reclamo.fotos_urls?.[0]
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-xl border border-border bg-white p-4 text-left shadow-sm transition-all hover:shadow-md"
+    >
+      <div className="flex gap-4">
+        {primeraFoto ? (
+          <FotoFirmada
+            bucket="reclamos"
+            path={primeraFoto}
+            alt="Foto del reclamo"
+            wrapperClassName="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-border"
+            imgClassName="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-border bg-primary-50">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-8 w-8 text-primary-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide ring-1 ring-inset ${badge.bg} ${badge.text} ${badge.ring}`}>
+              {badge.label}
+            </span>
+            <span className="text-xs text-primary-500">{fechaFormateada}</span>
+          </div>
+          <p className="mb-1 text-sm font-semibold text-primary">{tipoLabel}</p>
+          <p className="mb-2 text-xs text-primary-600">{reclamo.ubicacion}</p>
+          <p className="line-clamp-2 text-xs text-primary-500">{truncate(reclamo.descripcion, 120)}</p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function ReclamoDetalleModal({ reclamo, onClose }) {
+  if (!reclamo) return null
+
+  const badge = ESTADO_BADGES[reclamo.estado] || ESTADO_BADGES.pendiente
+  const tipoLabel = TIPO_LABELS_RECLAMO[reclamo.tipo] || reclamo.tipo
+
+  const fechaFormateada = new Date(reclamo.created_at).toLocaleDateString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-primary-900/50 px-4 py-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 className="font-sora text-lg font-bold text-primary">Detalle del reclamo</h2>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1.5 text-primary-400 transition-colors hover:bg-primary-50 hover:text-primary"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-6 p-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-bold uppercase tracking-wide ring-1 ring-inset ${badge.bg} ${badge.text} ${badge.ring}`}>
+              {badge.label}
+            </span>
+            <span className="text-sm text-primary-600 capitalize">{fechaFormateada}</span>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">Tipo</p>
+            <p className="mt-1 text-base font-semibold text-primary">{tipoLabel}</p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">Dirección</p>
+            <p className="mt-1 text-base text-primary-700">{reclamo.ubicacion}</p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-500">Descripción</p>
+            <p className="mt-1 text-sm text-primary-700 whitespace-pre-wrap">{reclamo.descripcion}</p>
+          </div>
+
+          {reclamo.fotos_urls && reclamo.fotos_urls.length > 0 && (
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-primary-500">Fotos</p>
+              <div className="grid grid-cols-2 gap-3">
+                {reclamo.fotos_urls.map((path, idx) => (
+                  <FotoFirmada
+                    key={idx}
+                    bucket="reclamos"
+                    path={path}
+                    alt={`Foto ${idx + 1}`}
+                    linkify
+                    wrapperClassName="group relative aspect-square overflow-hidden rounded-lg border border-border"
+                    imgClassName="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-border px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-lg border border-border bg-white px-6 py-2.5 font-sora text-sm font-semibold text-primary transition-colors hover:bg-primary-50 sm:w-auto"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Entrada simple hacia /portal/mis-vales (Vales Electrónicos, Fase 2)
@@ -734,6 +878,7 @@ function ValesTab({ vecino }) {
 
 function ReclamosTab({ vecino, reclamos, isLoading, error }) {
   const navigate = useNavigate()
+  const [reclamoSeleccionado, setReclamoSeleccionado] = useState(null)
 
   // Restricción: solo auth_mode === 'supabase' puede ver reclamos
   if (vecino?.auth_mode !== 'supabase') {
@@ -803,45 +948,22 @@ function ReclamosTab({ vecino, reclamos, isLoading, error }) {
       )}
 
       {!isLoading && !error && reclamos.length > 0 && (
-        <div className="card overflow-hidden p-0">
-          <ul className="divide-y divide-border">
-            {reclamos.map(r => {
-              const estadoCls = ESTADO_RECLAMO_CLASS[r.estado]
-                ?? ESTADO_RECLAMO_CLASS.abierto
-              const prioridadCls = PRIORIDAD_BADGE[r.prioridad] ?? null
-              return (
-                <li key={r.id} className="space-y-2 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">
-                        {dateOf(r.created_at)}
-                      </p>
-                      {r.tipo && (
-                        <p className="mt-1 text-xs font-bold uppercase tracking-wide text-accent-700">
-                          {r.tipo}
-                        </p>
-                      )}
-                      <p className="mt-1 text-sm text-primary-700 sm:text-base">
-                        {truncate(r.descripcion, 60)}
-                      </p>
-                      {r.ubicacion && (
-                        <p className="mt-0.5 text-xs text-primary-400">📍 {r.ubicacion}</p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <span className={estadoCls}>
-                        {ESTADO_RECLAMO_LABEL[r.estado] ?? r.estado}
-                      </span>
-                      {prioridadCls && (
-                        <span className={prioridadCls}>{r.prioridad}</span>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+        <div className="space-y-3">
+          {reclamos.map(r => (
+            <ReclamoCard
+              key={r.id}
+              reclamo={r}
+              onClick={() => setReclamoSeleccionado(r)}
+            />
+          ))}
         </div>
+      )}
+
+      {reclamoSeleccionado && (
+        <ReclamoDetalleModal
+          reclamo={reclamoSeleccionado}
+          onClose={() => setReclamoSeleccionado(null)}
+        />
       )}
     </section>
   )

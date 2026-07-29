@@ -422,6 +422,7 @@ function AtencionFormInner({
       } else {
         await createMut.mutateAsync({
           municipio_id:   municipioId,
+          dependencia_id: dependenciaIdTurno,
           turno_id:       turno.id,
           vecino_id:      turno.vecino_id ?? turno.vecino?.id,
           profesional_id: profesionalId,

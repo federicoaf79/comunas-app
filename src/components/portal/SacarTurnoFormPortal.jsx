@@ -436,13 +436,12 @@ export default function SacarTurnoFormPortal() {
         estado:         (especialidadRequiereOrden && !derivacionDigital) ? 'pendiente_validacion' : 'pendiente',
         canal:          form.canal,
         motivo:         form.motivo || null,
+        // Columna real (ver useTurnos.js TURNO_SELECT / TurnoPresencialModal.jsx) —
+        // no meterla solo en metadata, CicSalud/AtencionDetalle filtran y muestran turno.especialidad.
+        especialidad:   form.especialidad || null,
       }
       if (isFamiliar) {
         payload.metadata = buildFamiliarMetadata(form, vecinoSession)
-      }
-      // Especialidad — precargada desde ?esp= o elegida a mano en el selector
-      if (form.especialidad) {
-        payload.metadata = { ...(payload.metadata || {}), especialidad: form.especialidad }
       }
 
       const { data: turno, error: tErr } = await supabase

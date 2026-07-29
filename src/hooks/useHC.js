@@ -117,9 +117,8 @@ export function useHC(vecinoId) {
   const createConsultaMut = useMutation({
     // formData: { motivo, diagnostico, receta }
     mutationFn: async (formData) => {
-      // Resolvemos municipio sólo para poder buscar la dependencia
-      // (CAPS) por defecto. NO se inserta en atenciones porque la
-      // tabla no tiene `municipio_id`.
+      // Resolvemos municipio también para buscar la dependencia
+      // (CAPS) por defecto.
       const municipio_id   = await resolveMunicipioForVecino(perfil, vecinoId)
       const dependencia_id = await resolveDependenciaForMunicipio(perfil, municipio_id)
       // profesional_id hardcodeado al usuario actual (placeholder hasta que
@@ -128,6 +127,7 @@ export function useHC(vecinoId) {
 
       return createConsulta({
         vecino_id: vecinoId,
+        municipio_id,
         dependencia_id,
         profesional_id,
         fecha_hora:  new Date().toISOString(),
