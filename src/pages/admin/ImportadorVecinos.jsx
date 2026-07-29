@@ -112,9 +112,17 @@ function parseSheet(wb, XLSX, sheetName) {
     String(h ?? '').trim() || `Col_${i + 1}`
   )
 
+  // __fileRow__ se calcula ANTES de filtrar filas en blanco, para que
+  // apunte a la fila real del archivo (1-based, como la ve un humano en
+  // Excel) — necesario para poder reportar errores por fila más abajo.
   return raw.slice(headerRowIdx + 1)
-    .filter(row => row.some(v => v !== '' && v != null))
-    .map(row => Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ''])))
+    .map((row, idx) => ({ row, fileRow: headerRowIdx + idx + 2 }))
+    .filter(({ row }) => row.some(v => v !== '' && v != null))
+    .map(({ row, fileRow }) => {
+      const obj = Object.fromEntries(headers.map((h, i) => [h, row[i] ?? '']))
+      obj.__fileRow__ = fileRow
+      return obj
+    })
 }
 
 async function parseFile(file, sheetName = null) {
@@ -129,6 +137,37 @@ async function parseFile(file, sheetName = null) {
   }
 
   throw new Error('Formato no soportado. Usá .xlsx, .xls, .csv o .ods')
+}
+
+// ─── DNIs existentes (para dedup real) ─────────────────────────────────────────
+// Antes se dependía de un prop `existingVecinos` que nunca llegaba poblado
+// (ImportadorVecinos se monta sin props en App.jsx) — el dedup por DNI
+// nunca funcionó en la práctica. Acá se trae directo, paginado con
+// .range() para no pisar el límite default de PostgREST (1000 filas).
+const DNI_PAGE_SIZE = 1000
+
+// Tamaño de lote para inserts/updates masivos. 200 balancea payload por
+// request contra cantidad de round-trips — con 2.000 filas son ~10
+// requests en vez de 2.000.
+const BATCH_SIZE = 200
+
+async function fetchExistingDnis(municipioId) {
+  const dnis = new Set()
+  if (!municipioId) return dnis
+  let from = 0
+  for (;;) {
+    const { data, error } = await supabase
+      .from('vecinos')
+      .select('dni')
+      .eq('municipio_id', municipioId)
+      .not('dni', 'is', null)
+      .range(from, from + DNI_PAGE_SIZE - 1)
+    if (error) throw error
+    ;(data ?? []).forEach(r => { if (r.dni) dnis.add(r.dni) })
+    if (!data || data.length < DNI_PAGE_SIZE) break
+    from += DNI_PAGE_SIZE
+  }
+  return dnis
 }
 
 // ─── AI mapping ───────────────────────────────────────────────────────────────
@@ -177,8 +216,14 @@ Respondé SOLO con JSON: {"columna": "campo"}. Sin markdown.`
   }
 }
 
+// Devuelve { rows, skipped } — skipped son filas del archivo que, después
+// de mapear columnas, no tienen ningún dato de identidad (ni DNI, ni
+// nombre, ni apellido). Antes se descartaban en el .filter() final sin
+// que nadie las contara en ningún lado.
 function applyMapping(rows, mapping) {
-  return rows.map(row => {
+  let skipped = 0
+  const mappedRows = []
+  rows.forEach(row => {
     const vecino = {}
     Object.entries(mapping).forEach(([col, field]) => {
       if (field === '__ignore__') return
@@ -190,13 +235,41 @@ function applyMapping(rows, mapping) {
       vecino.nombre_completo = `${vecino.apellido}, ${vecino.nombre}`
     }
     vecino.__key__ = vecino.dni || null
-    return vecino
-  }).filter(v => v.dni || v.nombre || v.apellido)
+    vecino.__row__ = row.__fileRow__ ?? null
+    if (vecino.dni || vecino.nombre || vecino.apellido) {
+      mappedRows.push(vecino)
+    } else {
+      skipped++
+    }
+  })
+  return { rows: mappedRows, skipped }
 }
 
 // ─── Helper exportado ─────────────────────────────────────────────────────────
 export function vecinoNeedsReview(vecino) {
   return !vecino.telefono && !vecino.email
+}
+
+function nombreDe(vecino) {
+  return vecino.nombre_completo
+    || [vecino.apellido, vecino.nombre].filter(Boolean).join(', ')
+    || vecino.nombre || vecino.apellido || '(sin nombre)'
+}
+
+// ─── Exportar errores de importación a CSV ────────────────────────────────────
+// Mismo patrón (BOM UTF-8 + campos entre comillas) que Auditoria.jsx.
+function exportarErroresCSV(rowErrors) {
+  const headers = ['Fila', 'DNI', 'Nombre', 'Error'].join(',')
+  const filas = rowErrors.map(e => [e.row ?? '', e.dni ?? '', e.nombre ?? '', e.message ?? '']
+    .map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+  const csv = [headers, ...filas].join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `errores-importacion-${Date.now()}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ─── STEP 0: Upload ───────────────────────────────────────────────────────────
@@ -376,12 +449,10 @@ function StepSheetSelector({ sheetNames, file, onSheetSelected, onBack }) {
 }
 
 // ─── STEP 2: Analizar + Confirmar ─────────────────────────────────────────────
-function StepConfirm({ mapped, existingVecinos, onImport, importing, importResult, onBack, municipioId }) {
+function StepConfirm({ mapped, existingDnis, onImport, importing, importResult, onBack, progress }) {
   const withContact   = mapped.filter(v => v.email || v.telefono).length
   const incomplete    = mapped.length - withContact
-  const conflictCount = mapped.filter(v =>
-    v.__key__ && existingVecinos.some(e => e.dni === v.__key__)
-  ).length
+  const conflictCount = mapped.filter(v => v.__key__ && existingDnis.has(v.__key__)).length
 
   if (importResult) {
     return (
@@ -409,7 +480,30 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
                 <span className="text-primary-400 font-semibold text-base">{importResult.skipped}</span> salteados
               </span>
             )}
+            {importResult.errors > 0 && (
+              <span className="text-primary-500">
+                <span className="text-danger font-semibold text-base">{importResult.errors}</span> con error
+              </span>
+            )}
           </div>
+
+          {importResult.rowErrors?.length > 0 && (
+            <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4 max-w-sm mx-auto text-left">
+              <p className="text-sm text-danger">
+                <strong>{importResult.rowErrors.length}</strong> fila{importResult.rowErrors.length === 1 ? '' : 's'} del
+                archivo no se pudo{importResult.rowErrors.length === 1 ? '' : 'ieron'} importar.
+                Descargá el detalle, corregí esas filas en el archivo original y volvé a intentar
+                solo con esas.
+              </p>
+              <button
+                onClick={() => exportarErroresCSV(importResult.rowErrors)}
+                className="mt-3 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-medium text-danger hover:bg-red-50 transition-colors"
+              >
+                Descargar errores (CSV)
+              </button>
+            </div>
+          )}
+
           {importResult.needsReview > 0 && (
             <div className="mt-4 flex items-center gap-2 rounded-lg bg-accent-50 border border-accent-100 px-4 py-3 text-sm text-accent-700 max-w-sm mx-auto">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
@@ -527,7 +621,7 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
       <button onClick={onImport} disabled={importing}
         className="btn-primary w-full flex items-center justify-center gap-2 py-3">
         {importing
-          ? <><Spinner size="sm" /> Importando…</>
+          ? <><Spinner size="sm" /> Importando… {progress.total > 0 ? `${progress.done} de ${progress.total}` : ''}</>
           : <>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -536,6 +630,14 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
             </>
         }
       </button>
+      {importing && progress.total > 0 && (
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-primary-100">
+          <div
+            className="h-full rounded-full bg-[#1D4ED8] transition-all"
+            style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }}
+          />
+        </div>
+      )}
 
       <button onClick={onBack}
         className="w-full text-center text-xs text-primary-500 hover:text-primary transition-colors">
@@ -546,7 +648,7 @@ function StepConfirm({ mapped, existingVecinos, onImport, importing, importResul
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
-export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
+export default function ImportadorVecinos({ onDone }) {
   const { municipioId } = useEffectiveMunicipioId()
 
   // step: 'upload' | 'sheet' | 'confirm'
@@ -554,16 +656,36 @@ export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
   const [fileData, setFileData]   = useState(null)
   const [rows, setRows]           = useState([])
   const [mapped, setMapped]       = useState([])
+  const [skippedCount, setSkippedCount] = useState(0)
+  const [existingDnis, setExistingDnis] = useState(() => new Set())
   const [analyzing, setAnalyzing] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [progress, setProgress]   = useState({ done: 0, total: 0 })
   const [importResult, setImportResult] = useState(null)
 
   async function analyzeAndConfirm(rawRows) {
     setAnalyzing(true)
-    const columns = rawRows.length ? Object.keys(rawRows[0]) : []
-    const mapping = await aiMapColumns(columns, rawRows.slice(0, 8))
-    const result  = applyMapping(rawRows, mapping)
-    setMapped(result)
+    // __fileRow__ es un campo propio que agregamos en parseSheet, no una
+    // columna real del archivo — no se lo pasamos a la IA ni al mapeo.
+    const columns = rawRows.length
+      ? Object.keys(rawRows[0]).filter(c => c !== '__fileRow__')
+      : []
+    // En paralelo: el mapeo de columnas (IA) y los DNI ya existentes del
+    // municipio (para que el dedup por DNI no dependa de un prop que
+    // nunca llegaba poblado). Si la query de DNIs falla, seguimos con un
+    // Set vacío — peor caso: se trata todo como alta nueva, igual que
+    // pasaba antes del fix, no un comportamiento nuevo/peor.
+    const [mapping, dnis] = await Promise.all([
+      aiMapColumns(columns, rawRows.slice(0, 8)),
+      fetchExistingDnis(municipioId).catch(e => {
+        console.warn('[ImportadorVecinos] fetchExistingDnis:', e.message)
+        return new Set()
+      }),
+    ])
+    const result = applyMapping(rawRows, mapping)
+    setMapped(result.rows)
+    setSkippedCount(result.skipped)
+    setExistingDnis(dnis)
     setAnalyzing(false)
     setStep('confirm')
   }
@@ -588,52 +710,120 @@ export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
 
   async function handleImport() {
     setImporting(true)
-    let inserted = 0, updated = 0, skipped = 0, errors = 0, needsReview = 0
+    let inserted = 0, updated = 0, errors = 0, needsReview = 0
+    const rowErrors = []
     const newVecinos = []
+    setProgress({ done: 0, total: mapped.length })
 
-    const existingDNIs = new Set(existingVecinos.map(v => v.dni).filter(Boolean))
-
+    const toInsert = []
+    const toUpdate = []
     for (const row of mapped) {
-      const { __key__, ...vecino } = row
+      const { __key__, __row__, ...vecino } = row
       vecino.municipio_id = municipioId
-
-      try {
-        const isConflict = __key__ && existingDNIs.has(__key__)
-
-        if (isConflict) {
-          const existing = existingVecinos.find(v => v.dni === __key__)
-          if (existing) {
-            const { data, error } = await supabase
-              .from('vecinos').update(vecino).eq('id', existing.id).select().single()
-            if (error) { errors++; continue }
-            newVecinos.push(data); updated++
-            if (vecinoNeedsReview(data)) needsReview++
-            continue
-          }
-        }
-
-        const { data, error } = await supabase
-          .from('vecinos').insert(vecino).select().single()
-        if (error) { errors++; continue }
-        newVecinos.push(data); inserted++
-        if (vecinoNeedsReview(data)) needsReview++
-      } catch { errors++ }
+      if (__key__ && existingDnis.has(__key__)) {
+        toUpdate.push({ vecino, __row__ })
+      } else {
+        toInsert.push({ vecino, __row__ })
+      }
     }
 
-    setImportResult({ inserted, updated, skipped, errors, needsReview })
+    function markDone(n = 1) {
+      setProgress(p => ({ ...p, done: Math.min(p.total, p.done + n) }))
+    }
+    function recordError(vecino, __row__, message) {
+      errors++
+      rowErrors.push({ row: __row__, dni: vecino.dni ?? null, nombre: nombreDe(vecino), message })
+    }
+
+    // ── Updates ──────────────────────────────────────────────────────
+    // Resolvemos los ids reales en lotes de BATCH_SIZE con .in('dni', ...)
+    // en vez de una query por fila — existingDnis solo tiene los DNI, no
+    // los ids (esa query se mantuvo liviana a propósito).
+    if (toUpdate.length > 0) {
+      const dnisToResolve = [...new Set(toUpdate.map(u => u.vecino.dni))]
+      const idByDni = new Map()
+      for (let i = 0; i < dnisToResolve.length; i += BATCH_SIZE) {
+        const chunk = dnisToResolve.slice(i, i + BATCH_SIZE)
+        const { data, error } = await supabase
+          .from('vecinos').select('id, dni')
+          .eq('municipio_id', municipioId).in('dni', chunk)
+        if (!error) data.forEach(r => idByDni.set(r.dni, r.id))
+        // Si esta consulta falla, esos DNI simplemente no aparecen en el
+        // Map — las filas correspondientes caen al "no encontrado" de
+        // abajo y quedan como error por fila, no se pierden en silencio.
+      }
+
+      for (const { vecino, __row__ } of toUpdate) {
+        const id = idByDni.get(vecino.dni)
+        if (!id) {
+          recordError(vecino, __row__, 'No se encontró el vecino existente para actualizar (DNI ' + vecino.dni + ').')
+          markDone()
+          continue
+        }
+        try {
+          const { error } = await supabase.from('vecinos').update(vecino).eq('id', id)
+          if (error) throw error
+          updated++
+          if (vecinoNeedsReview(vecino)) needsReview++
+          newVecinos.push({ id, dni: vecino.dni, nombre: vecino.nombre, apellido: vecino.apellido, nombre_completo: vecino.nombre_completo })
+        } catch (e) {
+          recordError(vecino, __row__, e.message ?? 'Error desconocido al actualizar.')
+        }
+        markDone()
+      }
+    }
+
+    // ── Inserts en lotes de BATCH_SIZE ──────────────────────────────────
+    // Si el lote entero falla, reintentamos sus filas de a una para
+    // aislar cuál dato específico rompe, en vez de tirar abajo el lote
+    // completo por una sola fila mala.
+    const RETURN_COLS = 'id, dni, nombre, apellido, nombre_completo, telefono, email'
+    for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+      const chunk = toInsert.slice(i, i + BATCH_SIZE)
+      const payload = chunk.map(c => c.vecino)
+      const { data, error } = await supabase.from('vecinos').insert(payload).select(RETURN_COLS)
+
+      if (!error) {
+        inserted += data.length
+        data.forEach(d => { if (vecinoNeedsReview(d)) needsReview++ })
+        newVecinos.push(...data)
+        markDone(chunk.length)
+        continue
+      }
+
+      // Lote roto — reintentar fila por fila
+      for (const { vecino, __row__ } of chunk) {
+        try {
+          const { data: row, error: rowErr } = await supabase
+            .from('vecinos').insert(vecino).select(RETURN_COLS).single()
+          if (rowErr) throw rowErr
+          inserted++
+          if (vecinoNeedsReview(row)) needsReview++
+          newVecinos.push(row)
+        } catch (e) {
+          recordError(vecino, __row__, e.message ?? 'Error desconocido al insertar.')
+        }
+        markDone()
+      }
+    }
+
+    setImportResult({ inserted, updated, skipped: skippedCount, errors, needsReview, rowErrors })
     setImporting(false)
     if (inserted + updated > 0) {
-      // Detección fuzzy sobre todos los vecinos (existentes + nuevos)
-      const allVecinos = [...existingVecinos, ...newVecinos]
-      const fuzzyPairs  = detectFuzzyDuplicates(allVecinos)
-      setImportResult({ inserted, updated, skipped, errors, needsReview, fuzzyPairs })
+      // Detección fuzzy solo sobre el lote recién importado — comparar
+      // contra TODO el padrón existente es O(n²) con Levenshtein y
+      // congelaría la pestaña en municipios con miles de vecinos ya
+      // cargados (ver nota de performance más arriba en el archivo).
+      const fuzzyPairs = detectFuzzyDuplicates(newVecinos)
+      setImportResult({ inserted, updated, skipped: skippedCount, errors, needsReview, rowErrors, fuzzyPairs })
       // Resumen agregado — loguear fila por fila sería impráctico
-      // para importaciones de cientos de vecinos.
+      // para importaciones de cientos de vecinos. Los errores por fila
+      // ya quedan en el CSV descargable, no hace falta duplicarlos acá.
       logAudit({
         accion: inserted > 0 ? 'create' : 'update',
         entidad: 'vecinos',
-        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualizaci${updated === 1 ? 'ón' : 'ones'}`,
-        metadata: { inserted, updated, skipped, errors, needsReview },
+        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualizaci${updated === 1 ? 'ón' : 'ones'}, ${errors} error${errors === 1 ? '' : 'es'}`,
+        metadata: { inserted, updated, skipped: skippedCount, errors, needsReview },
       })
       onDone?.(newVecinos)
     }
@@ -697,18 +887,26 @@ export default function ImportadorVecinos({ existingVecinos = [], onDone }) {
             />
           )}
 
-          {step === 'confirm' && (
-            <>
-              <StepConfirm
-                mapped={mapped}
-                existingVecinos={existingVecinos}
-                onImport={handleImport}
-                importing={importing}
-                importResult={importResult}
-                onBack={() => setStep('upload')}
-                municipioId={municipioId}
-              />
-            </>
+          {step === 'confirm' && !municipioId && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-danger">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              No pudimos determinar tu municipio — recargá la página antes de importar.
+              Sin eso, la importación va a fallar fila por fila (vecinos.municipio_id es obligatorio).
+            </div>
+          )}
+
+          {step === 'confirm' && municipioId && (
+            <StepConfirm
+              mapped={mapped}
+              existingDnis={existingDnis}
+              onImport={handleImport}
+              importing={importing}
+              importResult={importResult}
+              onBack={() => setStep('upload')}
+              progress={progress}
+            />
           )}
         </div>
       </div>
