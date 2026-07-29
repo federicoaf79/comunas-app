@@ -62,23 +62,42 @@ function similarity(a, b) {
   return (maxLen - levenshtein(na, nb)) / maxLen
 }
 
-// Detecta pares con similitud >80% y sin DNI compartido
+// Detecta pares con similitud >80% y sin DNI compartido.
+//
+// Se agrupa primero por primera letra normalizada del apellido antes de
+// comparar -- dos apellidos que empiezan distinto rara vez son la misma
+// persona mal tipeada, y esto baja los pares a comparar de O(n²) sobre
+// TODOS a O(n²) solo DENTRO de cada grupo (~27 grupos en la práctica).
+// Con 2.000 vecinos eso son decenas de miles de comparaciones en vez de
+// ~2 millones. Se llama a pedido del staff (ver botón "Buscar posibles
+// duplicados" en el resultado), nunca automáticamente durante el import
+// -- ver nota en handleImport().
 export function detectFuzzyDuplicates(vecinos) {
+  const grupos = new Map()
+  for (const v of vecinos) {
+    const apellido = v.apellido || v.nombre_completo?.split(',')[0]?.trim() || ''
+    const letra = normalize(apellido).charAt(0) || '_'
+    if (!grupos.has(letra)) grupos.set(letra, [])
+    grupos.get(letra).push(v)
+  }
+
   const pairs = []
   const seen  = new Set()
-  for (let i = 0; i < vecinos.length; i++) {
-    for (let j = i + 1; j < vecinos.length; j++) {
-      const a = vecinos[i], b = vecinos[j]
-      const key = [a.id, b.id].sort().join('|')
-      if (seen.has(key)) continue
-      // Saltar si comparten DNI (ya los manejamos como update)
-      if (a.dni && a.dni === b.dni) continue
-      const nameA = a.nombre_completo || `${a.apellido} ${a.nombre}`
-      const nameB = b.nombre_completo || `${b.apellido} ${b.nombre}`
-      const score = similarity(nameA, nameB)
-      if (score >= 0.8) {
-        seen.add(key)
-        pairs.push({ a, b, score: Math.round(score * 100) })
+  for (const grupo of grupos.values()) {
+    for (let i = 0; i < grupo.length; i++) {
+      for (let j = i + 1; j < grupo.length; j++) {
+        const a = grupo[i], b = grupo[j]
+        const key = [a.id, b.id].sort().join('|')
+        if (seen.has(key)) continue
+        // Saltar si comparten DNI (ya los manejamos como update)
+        if (a.dni && a.dni === b.dni) continue
+        const nameA = a.nombre_completo || `${a.apellido} ${a.nombre}`
+        const nameB = b.nombre_completo || `${b.apellido} ${b.nombre}`
+        const score = similarity(nameA, nameB)
+        if (score >= 0.8) {
+          seen.add(key)
+          pairs.push({ a, b, score: Math.round(score * 100) })
+        }
       }
     }
   }
@@ -449,7 +468,10 @@ function StepSheetSelector({ sheetNames, file, onSheetSelected, onBack }) {
 }
 
 // ─── STEP 2: Analizar + Confirmar ─────────────────────────────────────────────
-function StepConfirm({ mapped, existingDnis, onImport, importing, importResult, onBack, progress }) {
+function StepConfirm({
+  mapped, existingDnis, onImport, importing, importResult, onBack, progress,
+  fuzzyState, fuzzyPairs, newVecinosCount, onCheckFuzzy, onConfirmFuzzy, onCancelFuzzy,
+}) {
   const withContact   = mapped.filter(v => v.email || v.telefono).length
   const incomplete    = mapped.length - withContact
   const conflictCount = mapped.filter(v => v.__key__ && existingDnis.has(v.__key__)).length
@@ -516,38 +538,83 @@ function StepConfirm({ mapped, existingDnis, onImport, importing, importResult, 
             </div>
           )}
 
-          {/* Posibles duplicados fuzzy */}
-          {importResult.fuzzyPairs?.length > 0 && (
-            <div className="mt-4 rounded-xl border border-border overflow-hidden text-left max-w-sm mx-auto">
-              <div className="flex items-center gap-2 px-4 py-2.5 bg-primary-50 border-b border-border">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-accent shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <p className="text-xs font-medium text-accent-700">
-                  {importResult.fuzzyPairs.length} posibles duplicados detectados
-                </p>
-              </div>
-              <div className="divide-y divide-border bg-white">
-                {importResult.fuzzyPairs.map((pair, i) => {
-                  const nameA = pair.a.nombre_completo || `${pair.a.apellido} ${pair.a.nombre}`
-                  const nameB = pair.b.nombre_completo || `${pair.b.apellido} ${pair.b.nombre}`
-                  return (
-                    <div key={i} className="px-4 py-2.5">
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="text-primary font-medium truncate max-w-[120px]">{nameA}</span>
-                        <span className="text-primary-400 shrink-0">≈</span>
-                        <span className="text-primary font-medium truncate max-w-[120px]">{nameB}</span>
-                        <span className="ml-auto shrink-0 text-primary-400">{pair.score}%</span>
-                      </div>
+          {/* Posibles duplicados fuzzy — a demanda, no automático.
+              Es información útil pero no urgente; correrla sola acá
+              bloquearía la pantalla justo cuando el usuario está
+              esperando el resultado del import (ver handleImport). */}
+          {(importResult.inserted + importResult.updated) > 0 && (
+            <div className="mt-4">
+              {fuzzyState === 'idle' && (
+                <button
+                  onClick={onCheckFuzzy}
+                  className="mx-auto flex items-center gap-2 rounded-lg border border-border bg-white px-4 py-2 text-xs font-medium text-primary hover:bg-primary-50 transition-colors"
+                >
+                  Buscar posibles duplicados
+                </button>
+              )}
+
+              {fuzzyState === 'confirmar' && (
+                <div className="mx-auto max-w-sm rounded-xl border border-accent-100 bg-accent-50 p-4 text-left">
+                  <p className="text-sm text-accent-700">
+                    Son <strong>{newVecinosCount}</strong> vecinos — la búsqueda puede tardar un rato
+                    y la pantalla no va a responder mientras tanto. ¿Buscar igual?
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={onCancelFuzzy}
+                      className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-primary hover:bg-primary-50 transition-colors">
+                      Cancelar
+                    </button>
+                    <button onClick={onConfirmFuzzy}
+                      className="flex-1 rounded-lg bg-[#1D4ED8] px-3 py-2 text-xs font-medium text-white hover:bg-[#1e40af] transition-colors">
+                      Buscar igual
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {fuzzyState === 'buscando' && (
+                <div className="flex items-center justify-center gap-2 text-sm text-primary-500">
+                  <Spinner size="sm" /> Buscando posibles duplicados…
+                </div>
+              )}
+
+              {fuzzyState === 'listo' && (
+                fuzzyPairs.length === 0 ? (
+                  <p className="text-xs text-primary-500">No se encontraron posibles duplicados.</p>
+                ) : (
+                  <div className="rounded-xl border border-border overflow-hidden text-left max-w-sm mx-auto">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-primary-50 border-b border-border">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-accent shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <p className="text-xs font-medium text-accent-700">
+                        {fuzzyPairs.length} posibles duplicados detectados
+                      </p>
                     </div>
-                  )
-                })}
-              </div>
-              <div className="px-4 py-2.5 bg-primary-50 border-t border-border">
-                <p className="text-xs text-primary-500">
-                  Revisalos en el CRM y fusionalos manualmente si son la misma persona.
-                </p>
-              </div>
+                    <div className="divide-y divide-border bg-white">
+                      {fuzzyPairs.map((pair, i) => {
+                        const nameA = pair.a.nombre_completo || `${pair.a.apellido} ${pair.a.nombre}`
+                        const nameB = pair.b.nombre_completo || `${pair.b.apellido} ${pair.b.nombre}`
+                        return (
+                          <div key={i} className="px-4 py-2.5">
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className="text-primary font-medium truncate max-w-[120px]">{nameA}</span>
+                              <span className="text-primary-400 shrink-0">≈</span>
+                              <span className="text-primary font-medium truncate max-w-[120px]">{nameB}</span>
+                              <span className="ml-auto shrink-0 text-primary-400">{pair.score}%</span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    <div className="px-4 py-2.5 bg-primary-50 border-t border-border">
+                      <p className="text-xs text-primary-500">
+                        Revisalos en el CRM y fusionalos manualmente si son la misma persona.
+                      </p>
+                    </div>
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
@@ -662,9 +729,21 @@ export default function ImportadorVecinos({ onDone }) {
   const [importing, setImporting] = useState(false)
   const [progress, setProgress]   = useState({ done: 0, total: 0 })
   const [importResult, setImportResult] = useState(null)
+  const [newVecinosImported, setNewVecinosImported] = useState([])
+  // fuzzyState: 'idle' | 'confirmar' | 'buscando' | 'listo'
+  const [fuzzyState, setFuzzyState] = useState('idle')
+  const [fuzzyPairs, setFuzzyPairs] = useState([])
 
   async function analyzeAndConfirm(rawRows) {
     setAnalyzing(true)
+    // Limpiar el resultado de una importación anterior -- si no, "Subir
+    // otro archivo" podía mostrar de entrada el resultado (y los
+    // duplicados) de la corrida previa en vez de la pantalla de
+    // confirmación del archivo nuevo.
+    setImportResult(null)
+    setNewVecinosImported([])
+    setFuzzyState('idle')
+    setFuzzyPairs([])
     // __fileRow__ es un campo propio que agregamos en parseSheet, no una
     // columna real del archivo — no se lo pasamos a la IA ni al mapeo.
     const columns = rawRows.length
@@ -808,14 +887,17 @@ export default function ImportadorVecinos({ onDone }) {
     }
 
     setImportResult({ inserted, updated, skipped: skippedCount, errors, needsReview, rowErrors })
+    setNewVecinosImported(newVecinos)
     setImporting(false)
+    // La detección fuzzy NO corre acá. Es información útil pero no
+    // urgente (avisa que dos vecinos podrían ser la misma persona), y
+    // es un cálculo O(n²) síncrono con Levenshtein -- correrla acá
+    // congelaba la pestaña justo cuando el usuario está esperando el
+    // resultado de cargar todo su padrón (confirmado en vivo: ~48s sin
+    // responder con 2.000 filas). Se movió a un botón a demanda en el
+    // resultado ("Buscar posibles duplicados"), donde el usuario ya
+    // sabe que va a esperar. Ver runFuzzyCheck().
     if (inserted + updated > 0) {
-      // Detección fuzzy solo sobre el lote recién importado — comparar
-      // contra TODO el padrón existente es O(n²) con Levenshtein y
-      // congelaría la pestaña en municipios con miles de vecinos ya
-      // cargados (ver nota de performance más arriba en el archivo).
-      const fuzzyPairs = detectFuzzyDuplicates(newVecinos)
-      setImportResult({ inserted, updated, skipped: skippedCount, errors, needsReview, rowErrors, fuzzyPairs })
       // Resumen agregado — loguear fila por fila sería impráctico
       // para importaciones de cientos de vecinos. Los errores por fila
       // ya quedan en el CSV descargable, no hace falta duplicarlos acá.
@@ -827,6 +909,34 @@ export default function ImportadorVecinos({ onDone }) {
       })
       onDone?.(newVecinos)
     }
+  }
+
+  // Umbral a partir del cual avisamos que la búsqueda de duplicados
+  // puede tardar, antes de arrancarla.
+  const FUZZY_CONFIRM_THRESHOLD = 500
+
+  function handleCheckFuzzy() {
+    if (newVecinosImported.length > FUZZY_CONFIRM_THRESHOLD) {
+      setFuzzyState('confirmar')
+      return
+    }
+    runFuzzyCheck()
+  }
+
+  function runFuzzyCheck() {
+    setFuzzyState('buscando')
+    // Deferido un tick para que el spinner llegue a pintarse antes de
+    // que el cálculo síncrono bloquee el hilo -- si no, el "honesto"
+    // del spinner es mentira: nunca se vería.
+    setTimeout(() => {
+      const pairs = detectFuzzyDuplicates(newVecinosImported)
+      setFuzzyPairs(pairs)
+      setFuzzyState('listo')
+    }, 50)
+  }
+
+  function handleCancelFuzzy() {
+    setFuzzyState('idle')
   }
 
   const STEP_LABELS = {
@@ -906,6 +1016,12 @@ export default function ImportadorVecinos({ onDone }) {
               importResult={importResult}
               onBack={() => setStep('upload')}
               progress={progress}
+              fuzzyState={fuzzyState}
+              fuzzyPairs={fuzzyPairs}
+              newVecinosCount={newVecinosImported.length}
+              onCheckFuzzy={handleCheckFuzzy}
+              onConfirmFuzzy={runFuzzyCheck}
+              onCancelFuzzy={handleCancelFuzzy}
             />
           )}
         </div>
