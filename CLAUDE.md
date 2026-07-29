@@ -238,6 +238,30 @@ del mismo botón "Sincronizar con bot" que ya vive en `DepBotIATab.jsx`:** las d
 tenían el mismo bug y hubo que arreglarlas por separado. Mismo patrón de hooks
 duplicados que ya causó bugs de staleness antes. Unificar post-entrega.
 
+**PATRÓN A ELIMINAR (post-entrega, no tocado todavía) — fallback silencioso ante
+42703 en cinco hooks:** `useDependenciaPublica.js:41-48`, `useInventario.js:151` y
+`:255-281`, `useObras.js:30/57/82/174/223`, `usePatrimonio.js:99`. Capturan el
+error de "columna inexistente" y reintentan la misma query con menos columnas.
+Viene de mayo 2026, pensado como resiliencia ante bases de clientes
+desactualizadas — pero COMUNAS usa **una sola base para todos los tenants**: el
+schema es exactamente uno, así que el patrón no protege de nada y solo esconde
+mismatches. La pantalla carga con datos incompletos y nadie se entera.
+
+Es la explicación de fondo de por qué `hc_documentos`, `seguros`,
+`expedientes_juzgado` y `movimientos_inventario.fecha` pudieron estar rotos meses
+sin que nadie lo notara: los hooks con fallback degradaban en silencio: las
+pantallas sin fallback directamente no cargaban nada, y nadie llegó a abrirlas.
+Dato que lo confirma: `movimientos_inventario.fecha` estaba documentado como bug
+conocido ya en la sesión de mayo 2026 ("movimientos_inventario uses created_at not
+fecha") y siguió mal en 3 lugares hasta el 2026-07-28 — **documentar un bug no lo
+arregla.**
+
+**Pendiente post-entrega:** sacar los 5 fallbacks y dejar que el 42703 falle
+fuerte. **Antes de sacarlos**, correr `node scripts/audit-schema.mjs schema.json
+src` y arreglar las columnas que esos hooks están absorbiendo hoy — si no, sacar el
+fallback sin arreglar la columna real va a romper pantallas que hoy "funcionan"
+(degradadas, pero funcionan).
+
 ---
 
 ## Auditoría — Log de operaciones (`audit_log`)
