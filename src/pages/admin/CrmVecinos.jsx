@@ -53,6 +53,7 @@ export default function CrmVecinos() {
   const [barrio, setBarrio]     = useState('')
   const [zona, setZona]         = useState('')
   const [portalEstado, setPortalEstado] = useState('')
+  const [datosIncompletos, setDatosIncompletos] = useState('')
   const [open, setOpen]         = useState(false)
 
   // Debounce de la búsqueda — evita una query por tecla.
@@ -63,10 +64,12 @@ export default function CrmVecinos() {
 
   const {
     rows, total, isLoading, isFetching, error, create, updateVecino,
-  } = useVecinos({ search: debouncedQ, barrio, zona, portal_estado: portalEstado, page: 0 })
+  } = useVecinos({
+    search: debouncedQ, barrio, zona, portal_estado: portalEstado, datosIncompletos, page: 0,
+  })
 
   const pendientesCount = rows.filter(v => v.portal_estado === 'pendiente').length
-  const hasFilters  = !!debouncedQ.trim() || !!barrio || !!zona || !!portalEstado
+  const hasFilters  = !!debouncedQ.trim() || !!barrio || !!zona || !!portalEstado || !!datosIncompletos
   const showRows    = !isLoading && !error
   const empty       = showRows && rows.length === 0
 
@@ -119,6 +122,16 @@ export default function CrmVecinos() {
             { value: 'rechazado', label: 'Rechazados' },
           ]}
           className="min-w-[180px]"
+        />
+        <Select
+          value={datosIncompletos}
+          onChange={setDatosIncompletos}
+          placeholder="Datos completos"
+          options={[
+            { value: 'sin_contacto', label: 'Sin contacto (ni tel. ni email)' },
+            { value: 'sin_email',    label: 'Sin email' },
+          ]}
+          className="min-w-[220px]"
         />
       </div>
 

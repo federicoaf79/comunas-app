@@ -48,7 +48,7 @@ export default function VecinoBuscador({
         const pattern = `%${term.replace(/[%_]/g, '\\$&')}%`
         let q = supabase
           .from('vecinos')
-          .select('id, municipio_id, dni, nombre, apellido, nombre_completo, telefono')
+          .select('id, municipio_id, dni, nombre, apellido, nombre_completo, telefono, email')
           .limit(8)
         q = esNumerico
           ? q.or(`dni.eq.${term},dni.ilike.${pattern}`)

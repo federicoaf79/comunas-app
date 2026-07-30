@@ -43,7 +43,7 @@ function escapeLike(s) {
 //
 // Timeout de 8s: si el fetch no responde, el AbortController dispara
 // y la query falla con un error claro en lugar de quedar colgada.
-export async function fetchVecinos(municipioId, { search = '', barrio = '', zona = '', portal_estado = '', page = 0 } = {}) {
+export async function fetchVecinos(municipioId, { search = '', barrio = '', zona = '', portal_estado = '', datosIncompletos = '', page = 0 } = {}) {
   const controller = new AbortController()
   const timeoutId  = setTimeout(() => controller.abort(), TIMEOUT_MS)
 
@@ -65,6 +65,24 @@ export async function fetchVecinos(municipioId, { search = '', barrio = '', zona
   if (search.trim()) {
     const pattern = `%${escapeLike(search.trim())}%`
     q = q.or(`apellido.ilike.${pattern},nombre.ilike.${pattern},dni.ilike.${pattern}`)
+  }
+
+  // Datos incompletos — dos señales separadas (ver lib/vecinoHelpers.js
+  // para el porqué). El importador solo las calcula en JS sobre la
+  // tanda recién insertada; acá hace falta a nivel de query para que
+  // pagine y cuente bien sobre TODO el padrón, no solo la página
+  // actual. `telefono`/`email` pueden venir NULL (import sin ese dato)
+  // o '' (formulario manual guardado en blanco) — se cubren los 4
+  // combos para no dejar afuera ninguno de los dos casos reales.
+  if (datosIncompletos === 'sin_contacto') {
+    q = q.or([
+      'and(telefono.is.null,email.is.null)',
+      'and(telefono.is.null,email.eq.)',
+      'and(telefono.eq.,email.is.null)',
+      'and(telefono.eq.,email.eq.)',
+    ].join(','))
+  } else if (datosIncompletos === 'sin_email') {
+    q = q.or('email.is.null,email.eq.')
   }
 
   const from = page * PAGE_SIZE
@@ -161,7 +179,7 @@ export async function updateVecino(id, data) {
 // superadmin sin municipio asignado cae al primer municipio activo.
 // Sin este fallback, el listado quedaba sin datos para superadmin
 // porque la RLS o el query devolvían 0 filas.
-export function useVecinos({ search = '', barrio = '', zona = '', portal_estado = '', page = 0 } = {}) {
+export function useVecinos({ search = '', barrio = '', zona = '', portal_estado = '', datosIncompletos = '', page = 0 } = {}) {
   const { perfil } = useAuth()
   const qc = useQueryClient()
   const { municipioId } = useEffectiveMunicipioId()
@@ -177,8 +195,8 @@ export function useVecinos({ search = '', barrio = '', zona = '', portal_estado 
     // descartamos cualquier issue con object identity en la key.
     // Para municipioId null usamos el sentinel '__ALL__' para que
     // el key sea estable y no colisione con un uuid real.
-    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, zona, portal_estado, page],
-    queryFn:  () => fetchVecinos(municipioId, { search, barrio, zona, portal_estado, page }),
+    queryKey: ['vecinos', municipioId ?? '__ALL__', search, barrio, zona, portal_estado, datosIncompletos, page],
+    queryFn:  () => fetchVecinos(municipioId, { search, barrio, zona, portal_estado, datosIncompletos, page }),
     enabled,
   })
 

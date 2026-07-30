@@ -154,6 +154,18 @@ async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
   })
 }
 
+// Escribe el email en `vecinos` cuando el vecino elegido en el alta de
+// staff todavía no tenía uno cargado — ANTES de invitar, para que el
+// email de la invitación y el de `vecinos` nunca puedan divergir (el
+// vínculo usuarios↔vecinos es únicamente por email). Si esto falla no
+// seguimos a invitarUsuario(): invitar con un email que no quedó
+// guardado en `vecinos` reproduciría exactamente el bug que este
+// cambio vino a cerrar.
+async function actualizarEmailVecino(vecinoId, email) {
+  const { error } = await supabase.from('vecinos').update({ email }).eq('id', vecinoId)
+  if (error) throw error
+}
+
 async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id }) {
   const response = await fetch('/api/invite-user', {
     method: 'POST',
@@ -374,7 +386,11 @@ export default function Usuarios() {
     if (!municipioId) {
       throw new Error('Sin municipio destino. Pedile al administrador que asigne uno.')
     }
-    await invitarMut.mutateAsync({ ...payload, municipio_id: municipioId })
+    const { vecino, ...rest } = payload
+    if (vecino && !vecino.email && rest.email) {
+      await actualizarEmailVecino(vecino.id, rest.email)
+    }
+    await invitarMut.mutateAsync({ ...rest, municipio_id: municipioId })
   }
 
   if (!canManageUsers) {
@@ -562,6 +578,7 @@ export default function Usuarios() {
         saving={invitarMut.isPending}
         rolesAsignables={rolesAsignables}
         dependencias={dependencias}
+        municipioId={municipioId}
       />
     </div>
   )
