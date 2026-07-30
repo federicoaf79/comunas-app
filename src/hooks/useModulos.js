@@ -231,4 +231,17 @@ export function useSincronizarModulosFaltantes() {
 // queda invisible para el municipio sin que nadie se entere; un módulo
 // de más y desactivado a pedido es un caso visible y reversible. El
 // wizard sigue permitiendo destildar antes de crear.
-export const MODULOS_DEFAULT_ON = new Set(MODULOS_DISPONIBLES.map(m => m.id))
+//
+// ÚNICA EXCEPCIÓN — mensajeria: Mensajeria.jsx consume `mockData.js`, no
+// `sms_log` (tabla real, vacía) — el panel "Historial" muestra 5 mensajes
+// 100% inventados con vecino_id que no existen en el tenant, y "Enviar"
+// es un alert() simulado que no llama ninguna API real. Un tenant nuevo no
+// puede nacer viendo un historial de envíos que nunca hizo, a vecinos que
+// no son suyos — no es una demo incompleta, es información falsa en un
+// sistema de gestión municipal real. Sacar esta excepción y volver a
+// incluir mensajeria en el default recién cuando la pantalla lea de
+// `sms_log`/vecinos reales (o, como mínimo, muestre un estado vacío
+// honesto en vez de mockData.js) — ver riesgo abierto en CLAUDE.md.
+export const MODULOS_DEFAULT_ON = new Set(
+  MODULOS_DISPONIBLES.filter(m => m.id !== 'mensajeria').map(m => m.id)
+)
