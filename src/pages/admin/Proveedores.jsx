@@ -105,7 +105,12 @@ export default function Proveedores() {
             Comercios adheridos al programa de Vales Electrónicos.
           </p>
         </div>
-        <Button onClick={handleNuevo}>+ Nuevo proveedor</Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => navigate('/admin/importador?entidad=proveedores')}>
+            Importar
+          </Button>
+          <Button onClick={handleNuevo}>+ Nuevo proveedor</Button>
+        </div>
       </header>
 
       {error && (

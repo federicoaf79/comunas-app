@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { createAuditLog } from '../../hooks/useAuditLog'
+import { vecinoSinContacto } from '../../lib/vecinoHelpers'
 import Spinner from '../../components/ui/Spinner'
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
@@ -9,16 +11,24 @@ function logAudit(args) {
   createAuditLog(args).catch(e => console.warn('[ImportadorVecinos] audit log:', e.message))
 }
 
-// ─── Schema fields ────────────────────────────────────────────────────────────
-const SCHEMA_FIELDS = [
+// =============================================================
+// Importador parametrizado por entidad — vecinos y proveedores
+// comparten TODO el motor (parseo de archivo, mapeo IA, batching,
+// dedup real, reporte de errores por fila con CSV, guard de
+// municipio_id): lo único que cambia entre uno y otro vive en
+// ENTITY_CONFIGS, más abajo. No hay un segundo importador — es el
+// mismo componente con un selector de entidad arriba.
+// =============================================================
+
+// ─── Schema fields — VECINOS ──────────────────────────────────────────────────
+const VECINO_SCHEMA_FIELDS = [
   'dni', 'nombre', 'apellido', 'nombre_completo', 'email', 'telefono',
   'direccion', 'barrio', 'localidad', 'zona',
   'fecha_nac', 'sexo', 'grupo_sanguineo',
   'contacto_emergencia_nombre', 'contacto_emergencia_telefono',
 ]
 
-// ─── Fallback sin IA ──────────────────────────────────────────────────────────
-const AUTO_MAP = {
+const VECINO_AUTO_MAP = {
   'dni': 'dni', 'documento': 'dni', 'nro documento': 'dni', 'numero documento': 'dni',
   'nombre': 'nombre', 'first name': 'nombre', 'primer nombre': 'nombre',
   'apellido': 'apellido', 'last name': 'apellido', 'surname': 'apellido',
@@ -36,18 +46,37 @@ const AUTO_MAP = {
   'tel emergencia': 'contacto_emergencia_telefono',
 }
 
+// ─── Schema fields — PROVEEDORES ──────────────────────────────────────────────
+// Columnas reales de `proveedores` (verificado en prod): id, municipio_id,
+// nombre, categoria, telefono, direccion, activo, created_at. `nombre` es
+// el único campo NOT NULL además de municipio_id (que siempre lo inyecta
+// el importador, nunca viene del archivo).
+const PROVEEDOR_SCHEMA_FIELDS = ['nombre', 'categoria', 'telefono', 'direccion']
+
+const PROVEEDOR_AUTO_MAP = {
+  'nombre': 'nombre', 'proveedor': 'nombre', 'comercio': 'nombre',
+  'razon social': 'nombre', 'razón social': 'nombre', 'negocio': 'nombre',
+  'categoria': 'categoria', 'categoría': 'categoria', 'rubro': 'categoria', 'tipo': 'categoria',
+  'telefono': 'telefono', 'teléfono': 'telefono', 'celular': 'telefono', 'tel': 'telefono',
+  'direccion': 'direccion', 'dirección': 'direccion', 'domicilio': 'direccion',
+}
+
 function normalize(str) {
   return String(str ?? '').trim().toLowerCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-// ─── Fuzzy duplicate detection ────────────────────────────────────────────────
+// ─── Fuzzy duplicate detection (solo VECINOS) ─────────────────────────────────
 // Two-row: en vez de una matriz (m+1)×(n+1) completa (m+1 arrays nuevos
 // por llamada), reusa dos arrays de una fila. Mismo resultado exacto,
 // mismo O(m·n) en tiempo, pero sin la asignación repetida de arrays chicos
 // que dominaba el costo real (confirmado en vivo: agrupar por apellido
 // bajó los pares un 90% sin bajar el tiempo un centavo -- el cuello de
 // botella era la matriz, no la cantidad de pares).
+//
+// Proveedores NO usa esto — su dedup es exacto por nombre normalizado
+// (mismo mecanismo que DNI en vecinos, ver ENTITY_CONFIGS.getKey), no
+// hace falta aproximar similitud.
 function levenshtein(a, b) {
   const m = a.length, n = b.length
   if (m === 0) return n
@@ -133,7 +162,7 @@ export function detectFuzzyDuplicates(vecinos) {
   return pairs.slice(0, 10)
 }
 
-// ─── Parsers ──────────────────────────────────────────────────────────────────
+// ─── Parsers (entidad-agnósticos) ──────────────────────────────────────────────
 async function loadWorkbook(file) {
   const XLSXmod = await import('xlsx')
   const XLSX = XLSXmod.default ?? XLSXmod
@@ -186,54 +215,61 @@ async function parseFile(file, sheetName = null) {
   throw new Error('Formato no soportado. Usá .xlsx, .xls, .csv o .ods')
 }
 
-// ─── DNIs existentes (para dedup real) ─────────────────────────────────────────
-// Antes se dependía de un prop `existingVecinos` que nunca llegaba poblado
-// (ImportadorVecinos se monta sin props en App.jsx) — el dedup por DNI
-// nunca funcionó en la práctica. Acá se trae directo, paginado con
-// .range() para no pisar el límite default de PostgREST (1000 filas).
-const DNI_PAGE_SIZE = 1000
+// ─── Claves existentes (para dedup real) ──────────────────────────────────────
+// Generalización de lo que antes era fetchExistingDnis(): un solo fetch
+// paginado (id + la columna clave de la entidad) devuelve directamente
+// un Map<clave, id> — antes vecinos hacía esto en DOS pasos (un Set solo
+// de DNIs al analizar el archivo, y una resolución de ids aparte, en
+// lotes .in('dni', chunk), solo para las filas que terminaban en
+// "actualizar"). Con el Map ya no hace falta ese segundo paso: la
+// existencia y el id salen de la misma consulta. Selecciona un poco más
+// de payload que antes (una columna UUID extra por fila existente) pero
+// es la misma cantidad de queries, y evita todo el bloque de resolución
+// posterior.
+const KEY_PAGE_SIZE = 1000
 
-// Tamaño de lote para inserts/updates masivos. 200 balancea payload por
+// Tamaño de lote para inserts masivos. 200 balancea payload por
 // request contra cantidad de round-trips — con 2.000 filas son ~10
 // requests en vez de 2.000.
 const BATCH_SIZE = 200
 
-async function fetchExistingDnis(municipioId) {
-  const dnis = new Set()
-  if (!municipioId) return dnis
+async function fetchExistingKeyMap(config, municipioId) {
+  const map = new Map()
+  if (!municipioId) return map
   let from = 0
   for (;;) {
     const { data, error } = await supabase
-      .from('vecinos')
-      .select('dni')
+      .from(config.table)
+      .select(`id, ${config.keyColumn}`)
       .eq('municipio_id', municipioId)
-      .not('dni', 'is', null)
-      .range(from, from + DNI_PAGE_SIZE - 1)
+      .not(config.keyColumn, 'is', null)
+      .range(from, from + KEY_PAGE_SIZE - 1)
     if (error) throw error
-    ;(data ?? []).forEach(r => { if (r.dni) dnis.add(r.dni) })
-    if (!data || data.length < DNI_PAGE_SIZE) break
-    from += DNI_PAGE_SIZE
+    ;(data ?? []).forEach(r => {
+      const raw = r[config.keyColumn]
+      if (raw == null || raw === '') return
+      const key = config.keyTransform(raw)
+      if (key) map.set(key, r.id)
+    })
+    if (!data || data.length < KEY_PAGE_SIZE) break
+    from += KEY_PAGE_SIZE
   }
-  return dnis
+  return map
 }
 
-// ─── AI mapping ───────────────────────────────────────────────────────────────
-async function aiMapColumns(columns, sampleRows) {
+// ─── AI mapping (parametrizado) ────────────────────────────────────────────────
+async function aiMapColumns(columns, sampleRows, config) {
   const samples = columns.slice(0, 30).map(col => {
     const vals = sampleRows.map(r => String(r[col] ?? '')).filter(Boolean).slice(0, 3)
     return `"${col}": [${vals.map(v => `"${v.slice(0, 40)}"`).join(', ')}]`
   }).join('\n')
 
-  const prompt = `Mapeá estas columnas de un padrón de vecinos al schema.
+  const prompt = `Mapeá estas columnas de un archivo de ${config.entidad} al schema.
 
-Schema válido: ${SCHEMA_FIELDS.join(', ')}, __ignore__
+Schema válido: ${config.schemaFields.join(', ')}, __ignore__
 
 Reglas:
-- Si la columna tiene DNI → "dni"
-- Si tiene nombre + apellido en columnas separadas → "nombre" y "apellido"
-- Si tiene nombre completo → "nombre_completo"
-- Si todos los valores son iguales o genéricos → "__ignore__"
-- Si no corresponde a ningún campo → "__ignore__"
+${config.promptRules}
 
 Columnas con muestras:
 ${samples}
@@ -247,54 +283,46 @@ Respondé SOLO con JSON: {"columna": "campo"}. Sin markdown.`
     if (res.error) throw new Error(res.error.message)
     const text = res.data?.text ?? ''
     const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
-    const validIds = new Set([...SCHEMA_FIELDS, '__ignore__'])
+    const validIds = new Set([...config.schemaFields, '__ignore__'])
     const safe = {}
     columns.forEach(col => {
       const entry = parsed[col]
       const fieldId = typeof entry === 'object' && entry !== null ? entry.field : entry
-      safe[col] = validIds.has(fieldId) ? fieldId : (AUTO_MAP[normalize(col)] ?? '__ignore__')
+      safe[col] = validIds.has(fieldId) ? fieldId : (config.autoMap[normalize(col)] ?? '__ignore__')
     })
     return safe
   } catch (err) {
     console.warn('aiMapColumns fallback:', err?.message ?? err)
     const safe = {}
-    columns.forEach(col => { safe[col] = AUTO_MAP[normalize(col)] ?? '__ignore__' })
+    columns.forEach(col => { safe[col] = config.autoMap[normalize(col)] ?? '__ignore__' })
     return safe
   }
 }
 
 // Devuelve { rows, skipped } — skipped son filas del archivo que, después
-// de mapear columnas, no tienen ningún dato de identidad (ni DNI, ni
-// nombre, ni apellido). Antes se descartaban en el .filter() final sin
-// que nadie las contara en ningún lado.
-function applyMapping(rows, mapping) {
+// de mapear columnas, no tienen ningún dato de identidad según
+// config.hasIdentity (antes esto era hardcoded a "ni DNI, ni nombre, ni
+// apellido" — ahora cada entidad define qué cuenta como identidad).
+function applyMapping(rows, mapping, config) {
   let skipped = 0
   const mappedRows = []
   rows.forEach(row => {
-    const vecino = {}
+    const entity = {}
     Object.entries(mapping).forEach(([col, field]) => {
       if (field === '__ignore__') return
       const val = String(row[col] ?? '').trim()
-      if (val) vecino[field] = val
+      if (val) entity[field] = val
     })
-    // Auto-completar nombre_completo si no viene
-    if (!vecino.nombre_completo && vecino.apellido && vecino.nombre) {
-      vecino.nombre_completo = `${vecino.apellido}, ${vecino.nombre}`
-    }
-    vecino.__key__ = vecino.dni || null
-    vecino.__row__ = row.__fileRow__ ?? null
-    if (vecino.dni || vecino.nombre || vecino.apellido) {
-      mappedRows.push(vecino)
+    config.postProcess?.(entity)
+    entity.__key__ = config.getKey(entity)
+    entity.__row__ = row.__fileRow__ ?? null
+    if (config.hasIdentity(entity)) {
+      mappedRows.push(entity)
     } else {
       skipped++
     }
   })
   return { rows: mappedRows, skipped }
-}
-
-// ─── Helper exportado ─────────────────────────────────────────────────────────
-export function vecinoNeedsReview(vecino) {
-  return !vecino.telefono && !vecino.email
 }
 
 function nombreDe(vecino) {
@@ -303,12 +331,22 @@ function nombreDe(vecino) {
     || vecino.nombre || vecino.apellido || '(sin nombre)'
 }
 
-// ─── Exportar errores de importación a CSV ────────────────────────────────────
-// Mismo patrón (BOM UTF-8 + campos entre comillas) que Auditoria.jsx.
-function exportarErroresCSV(rowErrors) {
-  const headers = ['Fila', 'DNI', 'Nombre', 'Error'].join(',')
-  const filas = rowErrors.map(e => [e.row ?? '', e.dni ?? '', e.nombre ?? '', e.message ?? '']
-    .map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
+// ─── Exportar errores de importación a CSV (parametrizado) ────────────────────
+// Mismo patrón (BOM UTF-8 + campos entre comillas) que Auditoria.jsx. La
+// columna de clave (DNI) solo aparece para entidades que la declaran —
+// proveedores no tiene un identificador propio en el archivo, así que
+// esa columna directamente no se agrega en vez de ir siempre vacía.
+function exportarErroresCSV(rowErrors, config) {
+  const cols = ['Fila']
+  if (config.errorKeyLabel) cols.push(config.errorKeyLabel)
+  cols.push('Nombre', 'Error')
+  const headers = cols.join(',')
+  const filas = rowErrors.map(e => {
+    const vals = [e.row ?? '']
+    if (config.errorKeyLabel) vals.push(e.key ?? '')
+    vals.push(e.nombre ?? '', e.message ?? '')
+    return vals.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')
+  })
   const csv = [headers, ...filas].join('\n')
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -319,8 +357,108 @@ function exportarErroresCSV(rowErrors) {
   URL.revokeObjectURL(url)
 }
 
+// ─── Configuración por entidad ─────────────────────────────────────────────────
+// Todo lo que distingue vecinos de proveedores vive acá. Agregar una
+// tercera entidad en el futuro es sumar una entrada acá + un tab en
+// ENTITY_TABS, sin tocar el motor de arriba.
+const ENTITY_CONFIGS = {
+  vecinos: {
+    table: 'vecinos',
+    entidad: 'vecinos',
+    entidadLabelPlural: 'vecinos',
+    titulo: 'Importar vecinos',
+    descripcion: 'Importá vecinos al padrón desde Excel o CSV. La IA mapea las columnas automáticamente.',
+    minColumnsHint: 'DNI, Nombre, Apellido o Nombre Completo. El resto se auto-completa.',
+    schemaFields: VECINO_SCHEMA_FIELDS,
+    autoMap: VECINO_AUTO_MAP,
+    promptRules:
+`- Si la columna tiene DNI → "dni"
+- Si tiene nombre + apellido en columnas separadas → "nombre" y "apellido"
+- Si tiene nombre completo → "nombre_completo"
+- Si todos los valores son iguales o genéricos → "__ignore__"
+- Si no corresponde a ningún campo → "__ignore__"`,
+    keyColumn: 'dni',
+    keyTransform: (v) => v,
+    getKey: (row) => row.dni || null,
+    hasIdentity: (row) => !!(row.dni || row.nombre || row.apellido),
+    // Auto-completar nombre_completo si no viene en el archivo.
+    postProcess: (vecino) => {
+      if (!vecino.nombre_completo && vecino.apellido && vecino.nombre) {
+        vecino.nombre_completo = `${vecino.apellido}, ${vecino.nombre}`
+      }
+    },
+    returnCols: 'id, dni, nombre, apellido, nombre_completo, telefono, email',
+    defaults: {},
+    // vecinoSinContacto (lib/vecinoHelpers.js): ni teléfono ni email —
+    // distinto de "sin email" (que sí puede tener teléfono), esa otra
+    // señal se usa en el filtro del CRM, no acá.
+    needsReview: vecinoSinContacto,
+    fuzzyEnabled: true,
+    showContactStats: true,
+    hasContact: (v) => !!(v.email || v.telefono),
+    errorKeyLabel: 'DNI',
+    errorKey: (v) => v.dni ?? null,
+    getLabel: nombreDe,
+    renderPreview: (v) => ({
+      titulo: v.nombre_completo || `${v.apellido || ''} ${v.nombre || ''}`.trim(),
+      subtitulo: [v.dni ? `DNI ${v.dni}` : '', v.email || v.telefono || ''].filter(Boolean).join(' '),
+      sinDatos: !v.email && !v.telefono,
+      sinDatosLabel: 'Sin contacto',
+    }),
+  },
+  proveedores: {
+    table: 'proveedores',
+    entidad: 'proveedores',
+    entidadLabelPlural: 'proveedores',
+    titulo: 'Importar proveedores',
+    descripcion: 'Importá el catálogo de comercios adheridos a Vales Electrónicos desde Excel o CSV.',
+    minColumnsHint: 'Nombre (obligatorio). Categoría, teléfono y dirección son opcionales.',
+    schemaFields: PROVEEDOR_SCHEMA_FIELDS,
+    autoMap: PROVEEDOR_AUTO_MAP,
+    promptRules:
+`- Si la columna es el nombre del comercio/proveedor → "nombre"
+- Si es un rubro o tipo de negocio → "categoria"
+- Si todos los valores son iguales o genéricos → "__ignore__"
+- Si no corresponde a ningún campo → "__ignore__"`,
+    // Dedup EXACTO por nombre normalizado (no hay CUIT ni identificador
+    // único en el schema real de proveedores) — mismo criterio que el
+    // DNI en vecinos: si ya existe, se actualiza en vez de duplicar.
+    // keyTransform normaliza tanto lo que ya está en la base como lo que
+    // viene del archivo, así "Almacén Don Ramón" y "almacen don ramon"
+    // matchean como el mismo proveedor.
+    keyColumn: 'nombre',
+    keyTransform: normalize,
+    getKey: (row) => normalize(row.nombre) || null,
+    hasIdentity: (row) => !!row.nombre,
+    postProcess: null,
+    returnCols: 'id, nombre, categoria, telefono, direccion, activo',
+    // Solo se aplica a ALTAS nuevas (ver handleImport) — nunca a un
+    // update, para no reactivar en silencio un proveedor que el
+    // municipio desactivó a propósito.
+    defaults: { activo: true },
+    needsReview: null,
+    fuzzyEnabled: false,
+    showContactStats: false,
+    hasContact: null,
+    errorKeyLabel: null,
+    errorKey: null,
+    getLabel: (p) => p.nombre || '(sin nombre)',
+    renderPreview: (p) => ({
+      titulo: p.nombre || '(sin nombre)',
+      subtitulo: [p.categoria, p.telefono, p.direccion].filter(Boolean).join(' · '),
+      sinDatos: false,
+      sinDatosLabel: '',
+    }),
+  },
+}
+
+const ENTITY_TABS = [
+  { value: 'vecinos',     label: 'Vecinos' },
+  { value: 'proveedores', label: 'Proveedores' },
+]
+
 // ─── STEP 0: Upload ───────────────────────────────────────────────────────────
-function StepUpload({ onFileLoaded }) {
+function StepUpload({ config, onFileLoaded }) {
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState(null)
@@ -346,10 +484,8 @@ function StepUpload({ onFileLoaded }) {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-primary">Importar vecinos</h2>
-        <p className="mt-1 text-sm text-primary-500">
-          Subí tu padrón. El sistema detecta las columnas automáticamente.
-        </p>
+        <h2 className="text-lg font-semibold text-primary">{config.titulo}</h2>
+        <p className="mt-1 text-sm text-primary-500">{config.descripcion}</p>
       </div>
 
       <div
@@ -405,7 +541,7 @@ function StepUpload({ onFileLoaded }) {
         </svg>
         <span>
           <span className="font-medium text-primary">Columnas mínimas:</span>{' '}
-          DNI, Nombre, Apellido o Nombre Completo. El resto se auto-completa.
+          {config.minColumnsHint}
         </span>
       </div>
     </div>
@@ -497,12 +633,12 @@ function StepSheetSelector({ sheetNames, file, onSheetSelected, onBack }) {
 
 // ─── STEP 2: Analizar + Confirmar ─────────────────────────────────────────────
 function StepConfirm({
-  mapped, existingDnis, onImport, importing, importResult, onBack, progress,
-  fuzzyState, fuzzyPairs, newVecinosCount, onCheckFuzzy, onConfirmFuzzy, onCancelFuzzy,
+  config, mapped, existingKeyMap, onImport, importing, importResult, onBack, progress,
+  fuzzyState, fuzzyPairs, newItemsCount, onCheckFuzzy, onConfirmFuzzy, onCancelFuzzy,
 }) {
-  const withContact   = mapped.filter(v => v.email || v.telefono).length
-  const incomplete    = mapped.length - withContact
-  const conflictCount = mapped.filter(v => v.__key__ && existingDnis.has(v.__key__)).length
+  const withContact   = config.showContactStats ? mapped.filter(r => config.hasContact(r)).length : 0
+  const incomplete    = config.showContactStats ? mapped.length - withContact : 0
+  const conflictCount = mapped.filter(r => r.__key__ && existingKeyMap.has(r.__key__)).length
 
   if (importResult) {
     return (
@@ -546,7 +682,7 @@ function StepConfirm({
                 solo con esas.
               </p>
               <button
-                onClick={() => exportarErroresCSV(importResult.rowErrors)}
+                onClick={() => exportarErroresCSV(importResult.rowErrors, config)}
                 className="mt-3 w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-medium text-danger hover:bg-red-50 transition-colors"
               >
                 Descargar errores (CSV)
@@ -554,23 +690,23 @@ function StepConfirm({
             </div>
           )}
 
-          {importResult.needsReview > 0 && (
+          {config.needsReview && importResult.needsReview > 0 && (
             <div className="mt-4 flex items-center gap-2 rounded-lg bg-accent-50 border border-accent-100 px-4 py-3 text-sm text-accent-700 max-w-sm mx-auto">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 shrink-0">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <span>
-                <strong>{importResult.needsReview}</strong> vecinos sin datos de contacto —
+                <strong>{importResult.needsReview}</strong> {config.entidadLabelPlural} sin datos de contacto —
                 aparecen en el CRM para completar después.
               </span>
             </div>
           )}
 
-          {/* Posibles duplicados fuzzy — a demanda, no automático.
-              Es información útil pero no urgente; correrla sola acá
-              bloquearía la pantalla justo cuando el usuario está
+          {/* Posibles duplicados fuzzy — solo vecinos, a demanda, no
+              automático. Es información útil pero no urgente; correrla
+              sola acá bloquearía la pantalla justo cuando el usuario está
               esperando el resultado del import (ver handleImport). */}
-          {(importResult.inserted + importResult.updated) > 0 && (
+          {config.fuzzyEnabled && (importResult.inserted + importResult.updated) > 0 && (
             <div className="mt-4">
               {fuzzyState === 'idle' && (
                 <button
@@ -584,7 +720,7 @@ function StepConfirm({
               {fuzzyState === 'confirmar' && (
                 <div className="mx-auto max-w-sm rounded-xl border border-accent-100 bg-accent-50 p-4 text-left">
                   <p className="text-sm text-accent-700">
-                    Son <strong>{newVecinosCount}</strong> vecinos — la búsqueda puede tardar un rato
+                    Son <strong>{newItemsCount}</strong> vecinos — la búsqueda puede tardar un rato
                     y la pantalla no va a responder mientras tanto. ¿Buscar igual?
                   </p>
                   <div className="mt-3 flex gap-2">
@@ -660,13 +796,15 @@ function StepConfirm({
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-primary-50 border border-border p-4 text-center">
           <p className="text-2xl font-bold text-primary">{mapped.length}</p>
-          <p className="text-xs text-primary-500 mt-1">Vecinos detectados</p>
+          <p className="text-xs text-primary-500 mt-1 capitalize">{config.entidadLabelPlural} detectados</p>
         </div>
-        <div className="rounded-xl bg-primary-50 border border-border p-4 text-center">
-          <p className="text-2xl font-bold text-primary">{withContact}</p>
-          <p className="text-xs text-primary-500 mt-1">Con datos de contacto</p>
-        </div>
-        {incomplete > 0 && (
+        {config.showContactStats && (
+          <div className="rounded-xl bg-primary-50 border border-border p-4 text-center">
+            <p className="text-2xl font-bold text-primary">{withContact}</p>
+            <p className="text-xs text-primary-500 mt-1">Con datos de contacto</p>
+          </div>
+        )}
+        {config.showContactStats && incomplete > 0 && (
           <div className="rounded-xl bg-accent-50 border border-accent-100 p-4 text-center">
             <p className="text-2xl font-bold text-accent-700">{incomplete}</p>
             <p className="text-xs text-accent-600 mt-1">Sin email ni teléfono</p>
@@ -688,18 +826,16 @@ function StepConfirm({
           </p>
         </div>
         <div className="divide-y divide-border">
-          {mapped.slice(0, 5).map((v, i) => {
-            const nombre = v.nombre_completo || `${v.apellido || ''} ${v.nombre || ''}`.trim()
+          {mapped.slice(0, 5).map((row, i) => {
+            const { titulo, subtitulo, sinDatos, sinDatosLabel } = config.renderPreview(row)
             return (
               <div key={i} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-primary truncate">{nombre}</p>
-                  <p className="text-xs text-primary-500 truncate">
-                    {v.dni ? `DNI ${v.dni}` : ''} {v.email || v.telefono || ''}
-                  </p>
+                  <p className="text-sm font-medium text-primary truncate">{titulo}</p>
+                  <p className="text-xs text-primary-500 truncate">{subtitulo}</p>
                 </div>
-                {!v.email && !v.telefono && (
-                  <span className="text-xs text-accent-700 shrink-0">Sin contacto</span>
+                {sinDatos && (
+                  <span className="text-xs text-accent-700 shrink-0">{sinDatosLabel}</span>
                 )}
               </div>
             )
@@ -707,9 +843,9 @@ function StepConfirm({
         </div>
       </div>
 
-      {incomplete > 0 && (
+      {config.showContactStats && incomplete > 0 && (
         <p className="text-xs text-primary-500">
-          Los vecinos sin datos se importan igual y quedan marcados para completar después.
+          Los {config.entidadLabelPlural} sin datos se importan igual y quedan marcados para completar después.
         </p>
       )}
 
@@ -721,7 +857,7 @@ function StepConfirm({
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Importar {mapped.length} vecinos
+              Importar {mapped.length} {config.entidadLabelPlural}
             </>
         }
       </button>
@@ -745,6 +881,16 @@ function StepConfirm({
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function ImportadorVecinos({ onDone }) {
   const { municipioId } = useEffectiveMunicipioId()
+  const [searchParams] = useSearchParams()
+
+  // `?entidad=proveedores` permite deep-link desde Proveedores.jsx ("+
+  // Importar"). Default vecinos — es el camino que entra desde el
+  // sidebar (Importador, sin querystring).
+  const [entidad, setEntidad] = useState(() => {
+    const fromUrl = searchParams.get('entidad')
+    return ENTITY_CONFIGS[fromUrl] ? fromUrl : 'vecinos'
+  })
+  const config = ENTITY_CONFIGS[entidad]
 
   // step: 'upload' | 'sheet' | 'confirm'
   const [step, setStep]           = useState('upload')
@@ -752,15 +898,35 @@ export default function ImportadorVecinos({ onDone }) {
   const [rows, setRows]           = useState([])
   const [mapped, setMapped]       = useState([])
   const [skippedCount, setSkippedCount] = useState(0)
-  const [existingDnis, setExistingDnis] = useState(() => new Set())
+  const [existingKeyMap, setExistingKeyMap] = useState(() => new Map())
   const [analyzing, setAnalyzing] = useState(false)
   const [importing, setImporting] = useState(false)
   const [progress, setProgress]   = useState({ done: 0, total: 0 })
   const [importResult, setImportResult] = useState(null)
-  const [newVecinosImported, setNewVecinosImported] = useState([])
-  // fuzzyState: 'idle' | 'confirmar' | 'buscando' | 'listo'
+  const [newItemsImported, setNewItemsImported] = useState([])
+  // fuzzyState: 'idle' | 'confirmar' | 'buscando' | 'listo' (solo vecinos)
   const [fuzzyState, setFuzzyState] = useState('idle')
   const [fuzzyPairs, setFuzzyPairs] = useState([])
+
+  // Cambiar de entidad reinicia todo el wizard — un mapeo de columnas a
+  // medio hacer para vecinos no tiene ningún sentido si se cambia a
+  // proveedores. Bloqueado desde el render mientras step !== 'upload'
+  // (ver selector de entidad más abajo), así que en la práctica esto
+  // solo corre con el wizard recién arrancado, pero igual limpia por si acaso.
+  function handleEntidadChange(next) {
+    if (next === entidad) return
+    setEntidad(next)
+    setStep('upload')
+    setFileData(null)
+    setRows([])
+    setMapped([])
+    setSkippedCount(0)
+    setExistingKeyMap(new Map())
+    setImportResult(null)
+    setNewItemsImported([])
+    setFuzzyState('idle')
+    setFuzzyPairs([])
+  }
 
   async function analyzeAndConfirm(rawRows) {
     setAnalyzing(true)
@@ -769,7 +935,7 @@ export default function ImportadorVecinos({ onDone }) {
     // duplicados) de la corrida previa en vez de la pantalla de
     // confirmación del archivo nuevo.
     setImportResult(null)
-    setNewVecinosImported([])
+    setNewItemsImported([])
     setFuzzyState('idle')
     setFuzzyPairs([])
     // __fileRow__ es un campo propio que agregamos en parseSheet, no una
@@ -777,22 +943,22 @@ export default function ImportadorVecinos({ onDone }) {
     const columns = rawRows.length
       ? Object.keys(rawRows[0]).filter(c => c !== '__fileRow__')
       : []
-    // En paralelo: el mapeo de columnas (IA) y los DNI ya existentes del
-    // municipio (para que el dedup por DNI no dependa de un prop que
-    // nunca llegaba poblado). Si la query de DNIs falla, seguimos con un
-    // Set vacío — peor caso: se trata todo como alta nueva, igual que
-    // pasaba antes del fix, no un comportamiento nuevo/peor.
-    const [mapping, dnis] = await Promise.all([
-      aiMapColumns(columns, rawRows.slice(0, 8)),
-      fetchExistingDnis(municipioId).catch(e => {
-        console.warn('[ImportadorVecinos] fetchExistingDnis:', e.message)
-        return new Set()
+    // En paralelo: el mapeo de columnas (IA) y las claves ya existentes
+    // del municipio (para que el dedup no dependa de nada más). Si la
+    // query de claves existentes falla, seguimos con un Map vacío --
+    // peor caso: se trata todo como alta nueva, mismo fallback que ya
+    // tenía vecinos antes de este cambio.
+    const [mapping, keyMap] = await Promise.all([
+      aiMapColumns(columns, rawRows.slice(0, 8), config),
+      fetchExistingKeyMap(config, municipioId).catch(e => {
+        console.warn('[ImportadorVecinos] fetchExistingKeyMap:', e.message)
+        return new Map()
       }),
     ])
-    const result = applyMapping(rawRows, mapping)
+    const result = applyMapping(rawRows, mapping, config)
     setMapped(result.rows)
     setSkippedCount(result.skipped)
-    setExistingDnis(dnis)
+    setExistingKeyMap(keyMap)
     setAnalyzing(false)
     setStep('confirm')
   }
@@ -819,105 +985,95 @@ export default function ImportadorVecinos({ onDone }) {
     setImporting(true)
     let inserted = 0, updated = 0, errors = 0, needsReview = 0
     const rowErrors = []
-    const newVecinos = []
+    const newItems = []
     setProgress({ done: 0, total: mapped.length })
 
+    // La existencia Y el id salen del mismo Map (existingKeyMap) — no
+    // hace falta una query aparte para resolver ids de las filas a
+    // actualizar, a diferencia de la versión anterior (ver comentario
+    // en fetchExistingKeyMap).
     const toInsert = []
     const toUpdate = []
     for (const row of mapped) {
-      const { __key__, __row__, ...vecino } = row
-      vecino.municipio_id = municipioId
-      if (__key__ && existingDnis.has(__key__)) {
-        toUpdate.push({ vecino, __row__ })
+      const { __key__, __row__, ...entity } = row
+      entity.municipio_id = municipioId
+      const existingId = __key__ ? existingKeyMap.get(__key__) : undefined
+      if (existingId) {
+        toUpdate.push({ entity, __row__, id: existingId })
       } else {
-        toInsert.push({ vecino, __row__ })
+        // defaults (ej. activo:true en proveedores) SOLO para altas
+        // nuevas — aplicarlo también en updates reactivaría en
+        // silencio algo que el municipio desactivó a propósito.
+        Object.assign(entity, config.defaults ?? {})
+        toInsert.push({ entity, __row__ })
       }
     }
 
     function markDone(n = 1) {
       setProgress(p => ({ ...p, done: Math.min(p.total, p.done + n) }))
     }
-    function recordError(vecino, __row__, message) {
+    function recordError(entity, __row__, message) {
       errors++
-      rowErrors.push({ row: __row__, dni: vecino.dni ?? null, nombre: nombreDe(vecino), message })
+      rowErrors.push({
+        row: __row__,
+        key: config.errorKey ? (config.errorKey(entity) ?? null) : null,
+        nombre: config.getLabel(entity),
+        message,
+      })
     }
 
     // ── Updates ──────────────────────────────────────────────────────
-    // Resolvemos los ids reales en lotes de BATCH_SIZE con .in('dni', ...)
-    // en vez de una query por fila — existingDnis solo tiene los DNI, no
-    // los ids (esa query se mantuvo liviana a propósito).
-    if (toUpdate.length > 0) {
-      const dnisToResolve = [...new Set(toUpdate.map(u => u.vecino.dni))]
-      const idByDni = new Map()
-      for (let i = 0; i < dnisToResolve.length; i += BATCH_SIZE) {
-        const chunk = dnisToResolve.slice(i, i + BATCH_SIZE)
-        const { data, error } = await supabase
-          .from('vecinos').select('id, dni')
-          .eq('municipio_id', municipioId).in('dni', chunk)
-        if (!error) data.forEach(r => idByDni.set(r.dni, r.id))
-        // Si esta consulta falla, esos DNI simplemente no aparecen en el
-        // Map — las filas correspondientes caen al "no encontrado" de
-        // abajo y quedan como error por fila, no se pierden en silencio.
+    for (const { entity, __row__, id } of toUpdate) {
+      try {
+        const { error } = await supabase.from(config.table).update(entity).eq('id', id)
+        if (error) throw error
+        updated++
+        if (config.needsReview?.(entity)) needsReview++
+        newItems.push({ id, ...entity })
+      } catch (e) {
+        recordError(entity, __row__, e.message ?? 'Error desconocido al actualizar.')
       }
-
-      for (const { vecino, __row__ } of toUpdate) {
-        const id = idByDni.get(vecino.dni)
-        if (!id) {
-          recordError(vecino, __row__, 'No se encontró el vecino existente para actualizar (DNI ' + vecino.dni + ').')
-          markDone()
-          continue
-        }
-        try {
-          const { error } = await supabase.from('vecinos').update(vecino).eq('id', id)
-          if (error) throw error
-          updated++
-          if (vecinoNeedsReview(vecino)) needsReview++
-          newVecinos.push({ id, dni: vecino.dni, nombre: vecino.nombre, apellido: vecino.apellido, nombre_completo: vecino.nombre_completo })
-        } catch (e) {
-          recordError(vecino, __row__, e.message ?? 'Error desconocido al actualizar.')
-        }
-        markDone()
-      }
+      markDone()
     }
 
     // ── Inserts en lotes de BATCH_SIZE ──────────────────────────────────
     // Si el lote entero falla, reintentamos sus filas de a una para
     // aislar cuál dato específico rompe, en vez de tirar abajo el lote
     // completo por una sola fila mala.
-    const RETURN_COLS = 'id, dni, nombre, apellido, nombre_completo, telefono, email'
     for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
       const chunk = toInsert.slice(i, i + BATCH_SIZE)
-      const payload = chunk.map(c => c.vecino)
-      const { data, error } = await supabase.from('vecinos').insert(payload).select(RETURN_COLS)
+      const payload = chunk.map(c => c.entity)
+      const { data, error } = await supabase.from(config.table).insert(payload).select(config.returnCols)
 
       if (!error) {
         inserted += data.length
-        data.forEach(d => { if (vecinoNeedsReview(d)) needsReview++ })
-        newVecinos.push(...data)
+        data.forEach(d => { if (config.needsReview?.(d)) needsReview++ })
+        newItems.push(...data)
         markDone(chunk.length)
         continue
       }
 
       // Lote roto — reintentar fila por fila
-      for (const { vecino, __row__ } of chunk) {
+      for (const { entity, __row__ } of chunk) {
         try {
           const { data: row, error: rowErr } = await supabase
-            .from('vecinos').insert(vecino).select(RETURN_COLS).single()
+            .from(config.table).insert(entity).select(config.returnCols).single()
           if (rowErr) throw rowErr
           inserted++
-          if (vecinoNeedsReview(row)) needsReview++
-          newVecinos.push(row)
+          if (config.needsReview?.(row)) needsReview++
+          newItems.push(row)
         } catch (e) {
-          recordError(vecino, __row__, e.message ?? 'Error desconocido al insertar.')
+          recordError(entity, __row__, e.message ?? 'Error desconocido al insertar.')
         }
         markDone()
       }
     }
 
     setImportResult({ inserted, updated, skipped: skippedCount, errors, needsReview, rowErrors })
-    setNewVecinosImported(newVecinos)
+    setNewItemsImported(newItems)
     setImporting(false)
-    // La detección fuzzy NO corre acá. Es información útil pero no
+    // La detección fuzzy NO corre acá (y para proveedores no corre
+    // nunca, ver config.fuzzyEnabled). Es información útil pero no
     // urgente (avisa que dos vecinos podrían ser la misma persona), y
     // es un cálculo O(n²) síncrono con Levenshtein -- correrla acá
     // congelaba la pestaña justo cuando el usuario está esperando el
@@ -927,15 +1083,15 @@ export default function ImportadorVecinos({ onDone }) {
     // sabe que va a esperar. Ver runFuzzyCheck().
     if (inserted + updated > 0) {
       // Resumen agregado — loguear fila por fila sería impráctico
-      // para importaciones de cientos de vecinos. Los errores por fila
+      // para importaciones de cientos de filas. Los errores por fila
       // ya quedan en el CSV descargable, no hace falta duplicarlos acá.
       logAudit({
         accion: inserted > 0 ? 'create' : 'update',
-        entidad: 'vecinos',
-        descripcion: `Importación masiva: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualizaci${updated === 1 ? 'ón' : 'ones'}, ${errors} error${errors === 1 ? '' : 'es'}`,
-        metadata: { inserted, updated, skipped: skippedCount, errors, needsReview },
+        entidad: config.entidad,
+        descripcion: `Importación masiva de ${config.entidadLabelPlural}: ${inserted} alta${inserted === 1 ? '' : 's'}, ${updated} actualizaci${updated === 1 ? 'ón' : 'ones'}, ${errors} error${errors === 1 ? '' : 'es'}`,
+        metadata: { entidad: config.entidad, inserted, updated, skipped: skippedCount, errors, needsReview },
       })
-      onDone?.(newVecinos)
+      onDone?.(newItems)
     }
   }
 
@@ -944,7 +1100,7 @@ export default function ImportadorVecinos({ onDone }) {
   const FUZZY_CONFIRM_THRESHOLD = 500
 
   function handleCheckFuzzy() {
-    if (newVecinosImported.length > FUZZY_CONFIRM_THRESHOLD) {
+    if (newItemsImported.length > FUZZY_CONFIRM_THRESHOLD) {
       setFuzzyState('confirmar')
       return
     }
@@ -957,7 +1113,7 @@ export default function ImportadorVecinos({ onDone }) {
     // que el cálculo síncrono bloquee el hilo -- si no, el "honesto"
     // del spinner es mentira: nunca se vería.
     setTimeout(() => {
-      const pairs = detectFuzzyDuplicates(newVecinosImported)
+      const pairs = detectFuzzyDuplicates(newItemsImported)
       setFuzzyPairs(pairs)
       setFuzzyState('listo')
     }, 50)
@@ -982,9 +1138,31 @@ export default function ImportadorVecinos({ onDone }) {
       <header>
         <h1 className="font-sora text-2xl font-bold text-primary">Importador de datos</h1>
         <p className="mt-1 text-sm text-primary-500">
-          Importá vecinos al padrón desde Excel o CSV. La IA mapea las columnas automáticamente.
+          Importá {config.entidadLabelPlural} desde Excel o CSV. La IA mapea las columnas automáticamente.
         </p>
       </header>
+
+      {/* Selector de entidad — deshabilitado una vez que se arrancó un
+          archivo, para no mezclar un mapeo a mitad de camino con otra
+          entidad (ver handleEntidadChange). */}
+      <div className="flex gap-2">
+        {ENTITY_TABS.map(t => (
+          <button
+            key={t.value}
+            type="button"
+            disabled={step !== 'upload'}
+            onClick={() => handleEntidadChange(t.value)}
+            className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              entidad === t.value
+                ? 'border-[#1D4ED8] bg-[#1D4ED8]/5 text-[#1D4ED8]'
+                : 'border-border bg-white text-primary-500 hover:border-primary-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <div className="card p-6">
 
         {/* Progress tabs */}
@@ -1013,7 +1191,7 @@ export default function ImportadorVecinos({ onDone }) {
         {/* Content */}
         <div className="p-6">
           {step === 'upload' && (
-            <StepUpload onFileLoaded={handleFileLoaded} />
+            <StepUpload config={config} onFileLoaded={handleFileLoaded} />
           )}
 
           {step === 'sheet' && fileData && (
@@ -1031,14 +1209,15 @@ export default function ImportadorVecinos({ onDone }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               No pudimos determinar tu municipio — recargá la página antes de importar.
-              Sin eso, la importación va a fallar fila por fila (vecinos.municipio_id es obligatorio).
+              Sin eso, la importación va a fallar fila por fila ({config.table}.municipio_id es obligatorio).
             </div>
           )}
 
           {step === 'confirm' && municipioId && (
             <StepConfirm
+              config={config}
               mapped={mapped}
-              existingDnis={existingDnis}
+              existingKeyMap={existingKeyMap}
               onImport={handleImport}
               importing={importing}
               importResult={importResult}
@@ -1046,7 +1225,7 @@ export default function ImportadorVecinos({ onDone }) {
               progress={progress}
               fuzzyState={fuzzyState}
               fuzzyPairs={fuzzyPairs}
-              newVecinosCount={newVecinosImported.length}
+              newItemsCount={newItemsImported.length}
               onCheckFuzzy={handleCheckFuzzy}
               onConfirmFuzzy={runFuzzyCheck}
               onCancelFuzzy={handleCancelFuzzy}
