@@ -818,6 +818,18 @@ function StepConfirm({
         )}
       </div>
 
+      {/* Transparencia antes de importar: la actualización reemplaza TODOS
+          los campos del archivo, el nombre incluido — no es un bug, es lo
+          esperado (si el municipio corrige el nombre y reimporta, tiene
+          que actualizarse), pero el staff necesita saberlo ANTES de
+          confirmar, no descubrirlo después mirando el registro. */}
+      {conflictCount > 0 && (
+        <p className="text-xs text-primary-500">
+          Los {conflictCount} que ya existen se actualizan por completo con los datos del
+          archivo — incluido el nombre, si vino distinto.
+        </p>
+      )}
+
       {/* Preview */}
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="px-4 py-2 bg-primary-50 border-b border-border">
