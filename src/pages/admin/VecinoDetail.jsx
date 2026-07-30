@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { mensajesByVecino } from '../../lib/mockData'
 import { useVecino } from '../../hooks/useVecinos'
+import { useSmsLog, toMensajeItemProps } from '../../hooks/useSmsLog'
 import Avatar from '../../components/ui/Avatar'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
@@ -28,6 +28,11 @@ export default function VecinoDetail() {
   const navigate = useNavigate()
   const { vecino: v, isLoading, error } = useVecino(id)
   const [tab, setTab] = useState('datos')
+  // Llamado siempre (antes de los early return de abajo, regla de
+  // hooks) — corre en paralelo a la carga del vecino, no bloquea el
+  // render de la ficha. count de la tab usa smsLogQ.data directamente
+  // (undefined mientras carga → Tabs no muestra el badge todavía).
+  const smsLogQ = useSmsLog({ vecinoId: id })
 
   if (isLoading) {
     return (
@@ -64,15 +69,15 @@ export default function VecinoDetail() {
     )
   }
 
-  // HC y Turnos se autoabastecen vía useParams. SMS sigue con mock
-  // por ahora — se conecta en una iteración posterior.
-  const mensajesV = mensajesByVecino(id)
+  // HC y Turnos se autoabastecen vía useParams. SMS ahora lee sms_log
+  // real (useSmsLog con vecinoId) en vez de mockData.
+  const mensajesV = (smsLogQ.data ?? []).map(toMensajeItemProps)
 
   const tabs = [
     { value: 'datos',    label: 'Datos' },
     { value: 'hc',       label: 'HC' },
     { value: 'turnos',   label: 'Turnos' },
-    { value: 'mensajes', label: 'SMS',    count: mensajesV.length },
+    { value: 'mensajes', label: 'SMS',    count: smsLogQ.data?.length },
   ]
 
   return (
@@ -103,7 +108,13 @@ export default function VecinoDetail() {
         {tab === 'datos'    && <VecinoDatos vecino={v} />}
         {tab === 'hc'       && <VecinoHC />}
         {tab === 'turnos'   && <VecinoTurnos />}
-        {tab === 'mensajes' && <VecinoMensajes mensajes={mensajesV} />}
+        {tab === 'mensajes' && (
+          <VecinoMensajes
+            mensajes={mensajesV}
+            isLoading={smsLogQ.isLoading}
+            error={smsLogQ.error}
+          />
+        )}
       </div>
     </div>
   )

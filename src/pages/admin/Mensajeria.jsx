@@ -2,30 +2,12 @@ import { useMemo, useState } from 'react'
 import {
   useVecinosPorSegmento, useBarriosDeVecinos,
 } from '../../hooks/useVecinosSegmento'
-import { useSmsLog } from '../../hooks/useSmsLog'
+import { useSmsLog, toMensajeItemProps } from '../../hooks/useSmsLog'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import SearchBar from '../../components/ui/SearchBar'
 import Spinner from '../../components/ui/Spinner'
 import MensajeItem from '../../components/sms/MensajeItem'
-
-// sms_log real → shape que espera <MensajeItem>. El contrato de ese
-// componente (direction/fecha/vecino embebido) es compartido con
-// VecinoMensajes.jsx (mock, "iteración posterior" — ver
-// VecinoDetail.jsx), así que se adapta acá en vez de cambiarlo.
-function toMensajeItemProps(row) {
-  return {
-    id:        row.id,
-    vecino_id: row.vecino_id,
-    vecino:    row.vecino,
-    telefono:  row.telefono,
-    canal:     row.canal,
-    direction: row.direccion,
-    mensaje:   row.mensaje,
-    estado:    row.estado,
-    fecha:     row.created_at,
-  }
-}
 
 function nombreDeFila(row) {
   const v = row.vecino
