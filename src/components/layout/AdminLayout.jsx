@@ -731,6 +731,13 @@ function FlatNavLink({ to, label, icon, end }) {
 }
 
 export default function AdminLayout() {
+  // Gatea por RUTA, no por rol: un superadmin con sesión dual (staff +
+  // superadmin) sigue viendo el onboarding en /admin/*, solo se oculta
+  // en /superadmin/* — es el onboarding del TENANT (progreso de alta de
+  // un municipio), no tiene sentido en el panel cross-tenant.
+  const location = useLocation()
+  const esRutaSuperadmin = location.pathname.startsWith('/superadmin')
+
   // Gating dinámico por módulos contratados. Cada item del NAV
   // declara su `modulo` — si no existe en modulos_config (o la
   // tabla todavía está vacía para el municipio), tieneModulo cae
@@ -1007,12 +1014,14 @@ export default function AdminLayout() {
         </div>
       </main>
 
-      <OnboardingChecklist
-        progress={progress}
-        pct={pct}
-        completedCount={completedCount}
-        totalCount={totalCount}
-      />
+      {!esRutaSuperadmin && (
+        <OnboardingChecklist
+          progress={progress}
+          pct={pct}
+          completedCount={completedCount}
+          totalCount={totalCount}
+        />
+      )}
     </>
   )
 }

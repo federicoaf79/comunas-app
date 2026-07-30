@@ -158,7 +158,12 @@ export default function Modulos() {
 
       {municipioId && (
         <>
-          {faltantes.length > 0 && (
+          {/* Indicador SIEMPRE visible mientras no esté cargando, incluido
+              el caso 0 — si solo aparece cuando falta algo, nadie puede
+              distinguir "no falta nada" de "esto no funciona". Se oculta
+              durante loadingFilas para no mostrar "faltan 19" de arranque
+              (filas todavía vacío por el default de useQuery). */}
+          {!loadingFilas && (faltantes.length > 0 ? (
             <div className="flex flex-col gap-3 rounded-lg border border-accent-200 bg-accent-50 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-accent-700">
@@ -172,7 +177,11 @@ export default function Modulos() {
                 Sincronizar módulos faltantes
               </Button>
             </div>
-          )}
+          ) : (
+            <div className="rounded-lg border border-border bg-primary-50/40 p-3 text-sm font-medium text-primary-700">
+              0 módulos faltantes — este municipio tiene las {MODULOS_DISPONIBLES.length} filas del catálogo.
+            </div>
+          ))}
 
           {loadingFilas ? (
             <div className="flex justify-center p-12"><Spinner /></div>
