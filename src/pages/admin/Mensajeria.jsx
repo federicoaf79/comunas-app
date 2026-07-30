@@ -1,13 +1,38 @@
 import { useMemo, useState } from 'react'
-import { mensajes, vecinoById } from '../../lib/mockData'
 import {
   useVecinosPorSegmento, useBarriosDeVecinos,
 } from '../../hooks/useVecinosSegmento'
+import { useSmsLog } from '../../hooks/useSmsLog'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import SearchBar from '../../components/ui/SearchBar'
 import Spinner from '../../components/ui/Spinner'
 import MensajeItem from '../../components/sms/MensajeItem'
+
+// sms_log real → shape que espera <MensajeItem>. El contrato de ese
+// componente (direction/fecha/vecino embebido) es compartido con
+// VecinoMensajes.jsx (mock, "iteración posterior" — ver
+// VecinoDetail.jsx), así que se adapta acá en vez de cambiarlo.
+function toMensajeItemProps(row) {
+  return {
+    id:        row.id,
+    vecino_id: row.vecino_id,
+    vecino:    row.vecino,
+    telefono:  row.telefono,
+    canal:     row.canal,
+    direction: row.direccion,
+    mensaje:   row.mensaje,
+    estado:    row.estado,
+    fecha:     row.created_at,
+  }
+}
+
+function nombreDeFila(row) {
+  const v = row.vecino
+  if (!v) return ''
+  if (v.apellido && v.nombre) return `${v.apellido} ${v.nombre}`
+  return v.nombre_completo || ''
+}
 
 export default function Mensajeria() {
   return (
@@ -29,16 +54,19 @@ function Historial() {
   const [canal, setCanal] = useState('')
   const [q, setQ] = useState('')
 
+  const smsLogQ = useSmsLog()
+  const rows = smsLogQ.data ?? []
+
   const list = useMemo(() => {
     const term = q.trim().toLowerCase()
-    return mensajes.filter(m => {
-      if (canal && m.canal !== canal) return false
+    return rows.filter(r => {
+      if (canal && r.canal !== canal) return false
       if (!term) return true
-      const v = vecinoById(m.vecino_id)
-      const name = v ? `${v.nombre} ${v.apellido}`.toLowerCase() : ''
-      return name.includes(term) || m.mensaje.toLowerCase().includes(term)
+      const name = nombreDeFila(r).toLowerCase()
+      const texto = (r.mensaje ?? '').toLowerCase()
+      return name.includes(term) || texto.includes(term)
     })
-  }, [canal, q])
+  }, [rows, canal, q])
 
   return (
     <div className="card overflow-hidden p-0 lg:col-span-2">
@@ -58,13 +86,27 @@ function Historial() {
           />
         </div>
       </header>
-      {list.length === 0 ? (
+      {smsLogQ.isLoading ? (
+        <div className="flex items-center justify-center px-5 py-10">
+          <Spinner />
+        </div>
+      ) : smsLogQ.error ? (
+        <div className="px-5 py-10 text-center text-sm text-danger">
+          No pudimos cargar el historial: {smsLogQ.error.message}
+        </div>
+      ) : rows.length === 0 ? (
+        // Tabla real todavía vacía (no hay envío real, ver EnvioMasivo
+        // más abajo) — estado explícito, no un vacío sin explicación.
+        <div className="px-5 py-10 text-center text-sm text-primary-400">
+          Todavía no se enviaron mensajes.
+        </div>
+      ) : list.length === 0 ? (
         <div className="px-5 py-10 text-center text-sm text-primary-400">
           No hay mensajes con esos filtros.
         </div>
       ) : (
         <ul className="divide-y divide-border">
-          {list.map(m => <MensajeItem key={m.id} mensaje={m} />)}
+          {list.map(r => <MensajeItem key={r.id} mensaje={toMensajeItemProps(r)} />)}
         </ul>
       )}
     </div>
@@ -180,10 +222,13 @@ function EnvioMasivo() {
     setFiltroDest('')
   }
 
+  // Todavía no envía nada real — depende de Plan-B y del número de
+  // WhatsApp con A2P aprobado (pendiente, ver CLAUDE.md). El texto
+  // tiene que decir eso, no simular un éxito que no ocurrió.
   function handleSend(e) {
     e.preventDefault()
     alert(
-      `Envío simulado por ${canal.toUpperCase()} a ${seleccionados.length} destinatarios:\n\n"${mensaje}"`,
+      `El envío real todavía no está habilitado — falta aprobar el número de WhatsApp (A2P pendiente).\n\nNo se envió nada a los ${seleccionados.length} destinatarios seleccionados.`,
     )
     setMensaje('')
     setSeleccionados([])
