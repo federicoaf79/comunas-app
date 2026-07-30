@@ -150,24 +150,29 @@ export function useAccesosMes() {
 }
 
 export async function createAuditLog({
-  accion, entidad, entidadId, descripcion, metadata,
+  accion, entidad, entidadId, descripcion, metadata, municipioId,
 } = {}) {
   if (!accion) throw new Error('createAuditLog: accion es requerida.')
   const { data: { user } = {} } = await supabase.auth.getUser()
   if (!user) throw new Error('createAuditLog: sin sesión activa.')
-  // Solo necesitamos municipio_id para scopear la fila — el
-  // email/nombre del actor se resuelven en lectura vía join a
-  // `usuarios`, no se desnormalizan en la fila (no hay columna
-  // actor_email en el schema real).
-  let municipio_id = null
-  try {
-    const { data: row } = await supabase
-      .from('usuarios')
-      .select('municipio_id')
-      .eq('id', user.id)
-      .maybeSingle()
-    municipio_id = row?.municipio_id ?? null
-  } catch { /* falla silenciosa — seguimos con lo que tenemos */ }
+  // Por default, municipio_id se infiere de la propia fila del actor en
+  // `usuarios` — correcto para el 100% de las acciones de staff dentro
+  // de su propio municipio. `municipioId` es un override explícito para
+  // el único caso que rompe ese supuesto: un superadmin editando la
+  // configuración de OTRO municipio (ej. /superadmin/modulos) — ahí
+  // inferir del actor guardaría el municipio del superadmin (o null,
+  // si no tiene fila en `usuarios`), nunca el tenant real que se editó.
+  let municipio_id = municipioId ?? null
+  if (!municipio_id) {
+    try {
+      const { data: row } = await supabase
+        .from('usuarios')
+        .select('municipio_id')
+        .eq('id', user.id)
+        .maybeSingle()
+      municipio_id = row?.municipio_id ?? null
+    } catch { /* falla silenciosa — seguimos con lo que tenemos */ }
+  }
   const { error } = await supabase
     .from('audit_log')
     .insert({

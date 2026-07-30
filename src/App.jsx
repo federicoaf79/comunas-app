@@ -74,6 +74,7 @@ import SuperadminDashboard    from './pages/superadmin/SuperadminDashboard'
 import SuperadminMunicipios from './pages/superadmin/Municipios'
 import SuperadminPanelGlobal from './pages/superadmin/PanelGlobal'
 import SuperadminDominios from './pages/superadmin/Dominios'
+import SuperadminModulos from './pages/superadmin/Modulos'
 import Landing from './pages/Landing'
 import { isLandingDomain } from './hooks/useSubdomainTenant'
 
@@ -256,6 +257,7 @@ const router = createBrowserRouter([
                   { path: '/superadmin/municipios', element: <SuperadminMunicipios /> },
                   { path: '/superadmin/panel',      element: <SuperadminPanelGlobal /> },
                   { path: '/superadmin/dominios',   element: <SuperadminDominios /> },
+                  { path: '/superadmin/modulos',    element: <SuperadminModulos /> },
                 ],
               },
             ],

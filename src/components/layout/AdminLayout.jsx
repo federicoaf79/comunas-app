@@ -657,6 +657,18 @@ function SuperadminSection() {
         </svg>
       ),
     },
+    {
+      to: '/superadmin/modulos',
+      label: 'Módulos',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+      ),
+    },
   ]
 
   return (
@@ -853,7 +865,14 @@ export default function AdminLayout() {
       seenTipo.add(t)
       const label = LABEL_BY_TIPO[t] ?? d.nombre
       const basePath = `/admin/dependencia-gestion/${d.id}`
-      const entry = entryParaDep({ tipo: t, label, basePath, dep: d })
+      // moduloParaTipo(t) resuelve el gate on/off para los tipos dinámicos
+      // que SÍ tienen módulo propio en modulos_config (sala_pa, odontologia)
+      // — antes esta llamada nunca pasaba `modulo`, así que apagar esos
+      // módulos no ocultaba nada (fix 2026-07-30). Para el resto de tipos
+      // dinámicos (obras, cementerio, polideportivo, etc., que no son
+      // módulos del catálogo) moduloParaTipo(t) devuelve null y el
+      // comportamiento no cambia.
+      const entry = entryParaDep({ tipo: t, label, basePath, dep: d, modulo: moduloParaTipo(t) })
       if (!entry) continue
       if (TIPOS_INFO_ONLY.has(t) || TIPOS_INFO_VISUAL_EXTRA.has(t)) info.push(entry)
       else                                                          principales.push(entry)

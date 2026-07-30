@@ -7,10 +7,11 @@
 // on/off de módulo contratado — esos siguen atados solo a los
 // `modulo` que cada entrada ya declaraba explícitamente.
 export const MODULO_POR_TIPO = {
-  salud:   'sala_pa',
-  sala:    'sala_pa',
-  caps:    'sala_pa',
-  juzgado: 'juez_paz',
+  salud:       'sala_pa',
+  sala:        'sala_pa',
+  caps:        'sala_pa',
+  juzgado:     'juez_paz',
+  odontologia: 'odontologia',
 }
 
 export function moduloParaTipo(tipo) {
