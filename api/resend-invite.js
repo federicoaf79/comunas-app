@@ -6,35 +6,20 @@ const supabaseAdmin = createClient(
 )
 
 // =============================================================
-// invite-user — alta de staff + mail de invitación con identidad
-// del municipio (no el mail genérico en inglés de Supabase Auth).
+// resend-invite — "Reenviar invitación" en /admin/usuarios, para
+// usuarios inactivos que nunca aceptaron (mail perdido, cayó en spam,
+// el link venció). Sin esto no había forma de recuperar sin borrar y
+// recrear al usuario a mano.
 //
-// Por qué no alcanza con traducir la plantilla de Supabase: las
-// plantillas de Auth son UNA sola para todo el proyecto, no por
-// tenant — no hay forma de que muestren el logo/nombre del
-// municipio que corresponde. Con 20 municipios, todos recibirían
-// el mismo mail genérico.
-//
-// Por eso el mail lo mandamos nosotros (Resend), no Supabase:
-//   1. generateLink({ type: 'invite' }) crea el usuario en
-//      auth.users igual que inviteUserByEmail() hacía antes, pero
-//      SIN disparar el mail automático — devuelve el link para que
-//      lo mandemos nosotros. Es el uso documentado de esta función
-//      en Supabase (existe justamente para integrar un proveedor de
-//      mail propio).
-//   2. Insert en `usuarios` (sin cambios respecto de antes).
-//   3. Se arma el HTML con la identidad del municipio (logo +
-//      nombre + email de contacto) y se manda vía Resend.
-//
-// Si el paso 4 (Resend) falla, se hace ROLLBACK del auth user y de la
-// fila de `usuarios` recién creados (ver rollbackUsuario) — nunca dejar
-// una cuenta a medio crear. Reenviar una invitación después (mail
-// perdido, cayó en spam, el link venció) es api/resend-invite.js, un
-// endpoint aparte porque ahí NO hay nada que insertar ni que
-// rollbackear — el usuario ya existe de antes.
-//
-// El flujo de reset de contraseña NO se toca acá — sigue con la
-// plantilla de Supabase (otro trabajo).
+// A propósito NO reusa el archivo invite-user.js como función
+// compartida (mismo criterio que el resto de api/: cada función es
+// autocontenida) — sí reusa el MECANISMO: generateLink({type:'invite'})
+// para un usuario que YA EXISTE pero sigue sin confirmar reemplaza el
+// token/link anterior en vez de crear un usuario nuevo o duplicar la
+// fila en `usuarios` — es el comportamiento que Supabase espera para
+// reenviar invitaciones. Por eso acá NO hay insert ni rollback: el
+// usuario ya existía antes de este request, un reenvío fallido deja
+// todo exactamente como estaba.
 // =============================================================
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
@@ -48,14 +33,8 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
 }
 
-// HTML de email: tablas + estilos inline, sin flexbox/grid (Outlook
-// no los soporta). Ancho máximo 600px. Logo del municipio arriba —
-// si no hay logo cargado, el nombre en texto (nunca un ícono roto).
-// El pie solo muestra el email de contacto si el municipio lo cargó
-// (configuracion_portal.datos_municipio.email, ya existente y
-// editable desde Config. General — "Email institucional") — nunca
-// un placeholder. Cero mención de COMUNAS/Frey Consulting como
-// soporte: el usuario se contacta con SU municipio.
+// Mismo template que invite-user.js — ver ese archivo para el porqué
+// de cada decisión de diseño (logo opcional, footer condicional, etc.)
 function buildInviteEmailHtml({ municipioNombre, logoUrl, actionLink, emailContacto }) {
   const nombreSafe = escapeHtml(municipioNombre || 'Tu municipio')
   const linkSafe = escapeHtml(actionLink)
@@ -169,80 +148,49 @@ async function sendInviteEmail({ to, municipioNombre, logoUrl, actionLink, email
   }
 }
 
-// Deshace el alta cuando algo DESPUÉS de crear el auth user sale mal —
-// nunca dejar una cuenta a medio crear: sin este rollback, un fallo de
-// mail (confirmado en vivo 2026-07-31: Resend devolvió 403 por el
-// dominio sin verificar) dejaba un usuario fantasma que nunca recibió
-// invitación y bloqueaba reintentar con el mismo email ("user already
-// registered", sin salida desde la UI). Best-effort: si el rollback en
-// sí falla, se loguea pero no tapa el error original que ve el caller.
-async function rollbackUsuario(userId) {
-  const [usuariosRes, authRes] = await Promise.allSettled([
-    supabaseAdmin.from('usuarios').delete().eq('id', userId),
-    supabaseAdmin.auth.admin.deleteUser(userId),
-  ])
-  if (usuariosRes.status === 'rejected' || usuariosRes.value?.error) {
-    console.error('invite-user rollback: no se pudo borrar de usuarios', userId, usuariosRes.reason ?? usuariosRes.value?.error)
-  }
-  if (authRes.status === 'rejected' || authRes.value?.error) {
-    console.error('invite-user rollback: no se pudo borrar de auth.users', userId, authRes.reason ?? authRes.value?.error)
-  }
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { email, nombre, roles, municipio_id, dependencia_id } = req.body
-
-  if (!email || !nombre || !roles || !municipio_id) {
-    return res.status(400).json({ error: 'Faltan datos requeridos' })
+  const { usuario_id } = req.body
+  if (!usuario_id) {
+    return res.status(400).json({ error: 'Falta usuario_id' })
   }
 
-  let userId = null
-
   try {
-    // 1. Generar el link de invitación en Auth SIN que Supabase mande
-    //    el mail — ver comentario de arriba.
+    // 1. Traer el usuario. Si ya está activo, reenviar no tiene sentido
+    //    (ya aceptó la invitación en algún momento).
+    const { data: usuario, error: userErr } = await supabaseAdmin
+      .from('usuarios')
+      .select('id, email, nombre, municipio_id, activo')
+      .eq('id', usuario_id)
+      .maybeSingle()
+    if (userErr) throw userErr
+    if (!usuario) {
+      return res.status(404).json({ error: 'No se encontró el usuario.' })
+    }
+    if (usuario.activo) {
+      return res.status(400).json({ error: 'Este usuario ya aceptó la invitación — no hace falta reenviarla.' })
+    }
+
+    // 2. Nuevo link — ver comentario de arriba del archivo.
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: 'invite',
-        email,
-        options: { data: { nombre } },
+        email: usuario.email,
+        options: { data: { nombre: usuario.nombre } },
       })
-
     if (linkError) throw linkError
-
-    userId = linkData.user.id
     const actionLink = linkData.properties.action_link
 
-    // 2. Insertar perfil en usuarios con service_role
-    const { error: insertError } = await supabaseAdmin
-      .from('usuarios')
-      .insert({
-        id: userId,
-        municipio_id,
-        nombre,
-        email,
-        roles,
-        dependencias_ids: dependencia_id ? [dependencia_id] : [],
-        activo: false
-      })
-
-    if (insertError) throw insertError
-
-    // 3. Identidad del municipio para el mail — logo (identidad_visual)
-    //    + nombre oficial (municipios.nombre) + email de contacto
-    //    (datos_municipio.email, ya editable desde Config. General).
-    //    Si esto falla no aborta el alta (el usuario y el link ya
-    //    existen) — el mail sale sin logo/nombre en vez de romper todo.
+    // 3. Identidad del municipio — igual que invite-user.js, best-effort.
     let municipioNombre = null
     let logoUrl = null
     let emailContacto = null
     try {
       const [muniRes, configRes] = await Promise.all([
-        supabaseAdmin.from('municipios').select('nombre').eq('id', municipio_id).maybeSingle(),
+        supabaseAdmin.from('municipios').select('nombre').eq('id', usuario.municipio_id).maybeSingle(),
         supabaseAdmin.from('configuracion_portal').select('clave, valor')
-          .eq('municipio_id', municipio_id)
+          .eq('municipio_id', usuario.municipio_id)
           .in('clave', ['identidad_visual', 'datos_municipio']),
       ])
       municipioNombre = muniRes.data?.nombre ?? null
@@ -250,35 +198,26 @@ export default async function handler(req, res) {
       logoUrl = porClave.identidad_visual?.logo_url || null
       emailContacto = porClave.datos_municipio?.email || null
     } catch (identidadErr) {
-      console.warn('invite-user: no se pudo resolver identidad del municipio:', identidadErr.message)
+      console.warn('resend-invite: no se pudo resolver identidad del municipio:', identidadErr.message)
     }
 
-    // 4. Mandar el mail vía Resend con la identidad del municipio. Si
-    //    falla, rollback en cascada (ver rollbackUsuario) y un error
-    //    distinguible — "no se pudo enviar el mail" en criollo, nunca
-    //    el JSON técnico de Resend, que a un empleado municipal no le
-    //    dice nada.
+    // 4. Mandar el mail. Sin rollback acá a propósito — el usuario ya
+    //    existía antes de este request, un fallo lo deja tal cual
+    //    estaba (a diferencia del alta nueva en invite-user.js).
     try {
-      await sendInviteEmail({ to: email, municipioNombre, logoUrl, actionLink, emailContacto })
+      await sendInviteEmail({ to: usuario.email, municipioNombre, logoUrl, actionLink, emailContacto })
     } catch (emailErr) {
-      console.error('invite-user: fallo el envío del mail, rollback:', emailErr.message)
-      await rollbackUsuario(userId)
+      console.error('resend-invite: fallo el envío del mail:', emailErr.message)
       return res.status(502).json({
-        error: 'No pudimos enviar el mail de invitación. No se creó ningún usuario — revisá el email e intentá de nuevo.',
+        error: 'No pudimos reenviar el mail de invitación. Probá de nuevo en un momento.',
         code:  'EMAIL_SEND_FAILED',
       })
     }
 
-    return res.status(200).json({ success: true, userId })
+    return res.status(200).json({ success: true })
 
   } catch (err) {
-    console.error('invite-user error:', err)
-    // Si el auth user ya se había creado antes de este error (ej. falló
-    // el insert en `usuarios`), lo limpiamos también — mismo principio:
-    // nunca dejar una cuenta a medio crear que bloquee reintentar.
-    if (userId) {
-      await rollbackUsuario(userId)
-    }
+    console.error('resend-invite error:', err)
     return res.status(500).json({ error: err.message })
   }
 }

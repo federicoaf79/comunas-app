@@ -192,6 +192,23 @@ async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id
   })
 }
 
+// "Reenviar invitación" — para inactivos que nunca aceptaron (mail
+// perdido, cayó en spam, el link venció). api/resend-invite.js reusa
+// generateLink para el mismo usuario en vez de crear uno nuevo.
+async function reenviarInvitacion({ id, nombre, email }) {
+  const response = await fetch('/api/resend-invite', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuario_id: id }),
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error)
+  logAudit({
+    accion: 'update', entidad: 'usuarios', entidadId: id,
+    descripcion: `Invitación reenviada — ${nombre} (${email})`,
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Catálogo de secciones por tipo de dependencia
 //
@@ -308,6 +325,13 @@ export default function Usuarios() {
   const [modalOpen, setModalOpen]       = useState(false)
   const [busyId, setBusyId]             = useState(null)
   const [error, setError]               = useState('')
+  const [okMsg, setOkMsg]               = useState('')
+
+  useEffect(() => {
+    if (!okMsg) return
+    const t = setTimeout(() => setOkMsg(''), 2500)
+    return () => clearTimeout(t)
+  }, [okMsg])
 
   const usuariosQ = useQuery({
     queryKey: ['admin-usuarios', municipioId ?? '__ALL__'],
@@ -347,6 +371,14 @@ export default function Usuarios() {
       setModalOpen(false)
     },
     onError:    (e) => setError(e?.message ?? 'No pudimos crear la invitación.'),
+  })
+
+  const reenviarMut = useMutation({
+    mutationFn: reenviarInvitacion,
+    onMutate:   ({ id }) => { setError(''); setBusyId(id) },
+    onSettled:  () => setBusyId(null),
+    onSuccess:  () => setOkMsg('✓ Invitación reenviada'),
+    onError:    (e) => setError(e?.message ?? 'No pudimos reenviar la invitación.'),
   })
 
   const filtrados = useMemo(() => {
@@ -398,6 +430,9 @@ export default function Usuarios() {
   function handleToggleEmitirVales(u) {
     setError('')
     toggleEmitirValesMut.mutate({ id: u.id, puedeEmitir: !u.puede_emitir_vales })
+  }
+  function handleReenviarInvitacion(u) {
+    reenviarMut.mutate({ id: u.id, nombre: u.nombre, email: u.email })
   }
   async function handleInvitar(payload) {
     setError('')
@@ -459,6 +494,12 @@ export default function Usuarios() {
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
           {error}
+        </div>
+      )}
+
+      {okMsg && (
+        <div className="inline-flex rounded-md border border-ok-100 bg-ok-50 px-3 py-1.5 text-xs font-medium text-ok-700">
+          {okMsg}
         </div>
       )}
 
@@ -579,14 +620,27 @@ export default function Usuarios() {
                   </Td>
                   <Td className="whitespace-nowrap text-right text-xs font-medium">
                     {editable ? (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleActivo(u)}
-                        disabled={busyId === u.id}
-                        className={u.activo ? 'text-danger hover:underline' : 'text-ok-700 hover:underline'}
-                      >
-                        {u.activo ? 'Desactivar' : 'Activar'}
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        {!u.activo && (
+                          <button
+                            type="button"
+                            onClick={() => handleReenviarInvitacion(u)}
+                            disabled={busyId === u.id}
+                            className="text-primary hover:underline"
+                            title="Genera un link nuevo y reenvía el mail — para invitaciones perdidas, en spam o vencidas"
+                          >
+                            Reenviar invitación
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActivo(u)}
+                          disabled={busyId === u.id}
+                          className={u.activo ? 'text-danger hover:underline' : 'text-ok-700 hover:underline'}
+                        >
+                          {u.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-primary-300">—</span>
                     )}
