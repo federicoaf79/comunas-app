@@ -74,10 +74,15 @@ const ROLES = [
 const ROLE_LABEL = Object.fromEntries(ROLES.map(r => [r.value, r.label]))
 
 const FILTRO_ROL_OPTS = ROLES.map(r => ({ value: r.value, label: r.label }))
-const FILTRO_ESTADO_OPTS = [
-  { value: 'activo',   label: 'Activos' },
-  { value: 'inactivo', label: 'Inactivos' },
-]
+// El count de "Inactivos" se arma en runtime (mismo patrón que
+// "Pendientes (N)" en CrmVecinos.jsx) — no puede ser un const estático
+// porque depende de la data cargada.
+function filtroEstadoOpts(inactivosCount) {
+  return [
+    { value: 'activo',   label: 'Activos' },
+    { value: 'inactivo', label: `Inactivos (${inactivosCount})` },
+  ]
+}
 
 function rolesAsignablesPara(operatorRoles) {
   if (operatorRoles?.includes('superadmin')) return ROLES
@@ -353,6 +358,19 @@ export default function Usuarios() {
     })
   }, [usuariosQ.data, filtroRol, filtroEstado])
 
+  // Contador de "pendientes de activación" — mismo patrón que
+  // "Pendientes (N)" en CrmVecinos.jsx. usuarios.activo no distingue
+  // "invitación sin aceptar todavía" de "desactivado a mano" (mismo
+  // booleano para las dos cosas, no hay un campo separado) — el
+  // wording lo deja explícito en vez de prometer más precisión de la
+  // que el dato tiene. Se calcula sobre usuariosQ.data SIN filtrar
+  // (no sobre `filtrados`) para que siga siendo visible aunque el
+  // admin ya tenga aplicado el filtro "Activos".
+  const inactivosCount = useMemo(
+    () => (usuariosQ.data ?? []).filter(u => !u.activo).length,
+    [usuariosQ.data],
+  )
+
   const depsActivas = useMemo(
     () => (dependencias ?? []).filter(d => d.activa !== false),
     [dependencias],
@@ -420,6 +438,15 @@ export default function Usuarios() {
         </Button>
       </header>
 
+      {inactivosCount > 0 && (
+        <div className="inline-flex items-center gap-2 rounded-full bg-accent-50 px-3 py-1.5 text-xs font-medium text-accent-700 ring-1 ring-inset ring-accent-100">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 shrink-0">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          {inactivosCount} usuario{inactivosCount === 1 ? '' : 's'} inactivo{inactivosCount === 1 ? '' : 's'} — incluye invitaciones sin aceptar todavía
+        </div>
+      )}
+
       <Tabs
         tabs={[
           { value: 'lista',    label: 'Lista de usuarios' },
@@ -460,7 +487,7 @@ export default function Usuarios() {
             value={filtroEstado}
             onChange={setFiltroEstado}
             placeholder="Todos los estados"
-            options={FILTRO_ESTADO_OPTS}
+            options={filtroEstadoOpts(inactivosCount)}
             className="min-w-[180px]"
           />
           <p className="self-end text-xs text-primary-400">
