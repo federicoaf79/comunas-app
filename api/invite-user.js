@@ -189,6 +189,49 @@ async function rollbackUsuario(userId) {
   }
 }
 
+// Resuelve el subdominio REAL del tenant desde `dominios_municipio` —
+// NO desde `municipios.slug`. Confirmado en vivo 2026-07-31 que
+// difieren: Real Sayana tiene slug 'real-sayana' (con guión) pero su
+// subdominio real es 'realsayana.comunas.lat' (sin guión). Sin esto,
+// generateLink usaba la Site URL default de Supabase (comunas.lat, la
+// landing comercial) y el link de "crear tu contraseña" mandaba ahí en
+// vez de al subdominio del municipio — confirmado en el mail real.
+//
+// `/portal/reset-password` es la única pantalla de la app que llama
+// `supabase.auth.updateUser({ password })` — no existe un equivalente
+// separado para staff, así que es el destino correcto tanto para
+// invitación como para recovery (la página no distingue el tipo de
+// token, solo necesita una sesión ya autenticada por el hash de la URL,
+// que Supabase-js establece solo al cargar cualquier página).
+//
+// Si el municipio no tiene un subdominio registrado, cae a undefined
+// (generateLink usa la Site URL default) en vez de romper — pero
+// loguea un warning, porque significa que ese tenant quedó mal dado de
+// alta (todo municipio real tiene que tener su fila en
+// dominios_municipio, ver Dominios.jsx/superadmin).
+async function resolveRedirectTo(municipioId) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('dominios_municipio')
+      .select('dominio')
+      .eq('municipio_id', municipioId)
+      .eq('tipo', 'subdominio')
+      .eq('activo', true)
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    if (!data?.dominio) {
+      console.warn(`invite-user: el municipio ${municipioId} no tiene un subdominio activo en dominios_municipio — el link va a caer en la Site URL default. Revisar el alta de este tenant.`)
+      return undefined
+    }
+    const host = String(data.dominio).replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    return `https://${host}/portal/reset-password`
+  } catch (err) {
+    console.warn('invite-user: no se pudo resolver el dominio del tenant, usando Site URL default:', err.message)
+    return undefined
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
@@ -202,12 +245,19 @@ export default async function handler(req, res) {
 
   try {
     // 1. Generar el link de invitación en Auth SIN que Supabase mande
-    //    el mail — ver comentario de arriba.
+    //    el mail — ver comentario de arriba. redirectTo apunta al
+    //    subdominio REAL del tenant (ver resolveRedirectTo) — sin esto
+    //    el link caía en la Site URL default (comunas.lat, la landing
+    //    comercial), confirmado en el mail real 2026-07-31.
+    const redirectTo = await resolveRedirectTo(municipio_id)
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: 'invite',
         email,
-        options: { data: { nombre } },
+        options: {
+          data: { nombre },
+          ...(redirectTo ? { redirectTo } : {}),
+        },
       })
 
     if (linkError) throw linkError

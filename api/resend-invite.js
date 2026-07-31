@@ -124,6 +124,35 @@ function buildInviteEmailHtml({ municipioNombre, logoUrl, actionLink, emailConta
 </html>`
 }
 
+// Mismo criterio que invite-user.js: el subdominio real del tenant NO es
+// municipios.slug (confirmado con Real Sayana: slug "real-sayana" con
+// guión, subdominio real "realsayana.comunas.lat" sin guión) — hay que
+// resolverlo desde dominios_municipio. Si el tenant no tiene un
+// subdominio activo cargado ahí, se cae a la Site URL default de
+// Supabase (con warning: significa que ese tenant quedó mal dado de alta).
+async function resolveRedirectTo(municipioId) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('dominios_municipio')
+      .select('dominio')
+      .eq('municipio_id', municipioId)
+      .eq('tipo', 'subdominio')
+      .eq('activo', true)
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    if (!data?.dominio) {
+      console.warn(`resend-invite: el municipio ${municipioId} no tiene un subdominio activo en dominios_municipio — el link va a caer en la Site URL default. Revisar el alta de este tenant.`)
+      return undefined
+    }
+    const host = String(data.dominio).replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    return `https://${host}/portal/reset-password`
+  } catch (err) {
+    console.warn('resend-invite: no se pudo resolver el dominio del tenant, usando Site URL default:', err.message)
+    return undefined
+  }
+}
+
 async function sendInviteEmail({ to, municipioNombre, logoUrl, actionLink, emailContacto }) {
   if (!RESEND_API_KEY) {
     throw new Error('RESEND_API_KEY no está configurada — el mail de invitación no se puede enviar.')
@@ -173,11 +202,15 @@ export default async function handler(req, res) {
     }
 
     // 2. Nuevo link — ver comentario de arriba del archivo.
+    const redirectTo = await resolveRedirectTo(usuario.municipio_id)
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: 'invite',
         email: usuario.email,
-        options: { data: { nombre: usuario.nombre } },
+        options: {
+          data: { nombre: usuario.nombre },
+          ...(redirectTo ? { redirectTo } : {}),
+        },
       })
     if (linkError) throw linkError
     const actionLink = linkData.properties.action_link
