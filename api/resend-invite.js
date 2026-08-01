@@ -146,7 +146,7 @@ async function resolveRedirectTo(municipioId) {
       return undefined
     }
     const host = String(data.dominio).replace(/^https?:\/\//, '').replace(/\/+$/, '')
-    return `https://${host}/portal/reset-password`
+    return `https://${host}/portal/reset-password?destino=staff`
   } catch (err) {
     console.warn('resend-invite: no se pudo resolver el dominio del tenant, usando Site URL default:', err.message)
     return undefined

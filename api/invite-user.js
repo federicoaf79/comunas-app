@@ -198,11 +198,14 @@ async function rollbackUsuario(userId) {
 // vez de al subdominio del municipio — confirmado en el mail real.
 //
 // `/portal/reset-password` es la única pantalla de la app que llama
-// `supabase.auth.updateUser({ password })` — no existe un equivalente
-// separado para staff, así que es el destino correcto tanto para
-// invitación como para recovery (la página no distingue el tipo de
-// token, solo necesita una sesión ya autenticada por el hash de la URL,
-// que Supabase-js establece solo al cargar cualquier página).
+// `supabase.auth.updateUser({ password })` — no se duplicó esa lógica
+// en una página aparte para staff. `?destino=staff` es la señal que la
+// página lee para saber que quien está creando la contraseña es un
+// usuario invitado (no un vecino recuperando la suya): cambia el texto
+// ("Creá tu contraseña" en vez de "Nueva contraseña") y el destino
+// post-éxito (`/login`, login de staff, en vez de `/portal/acceso`,
+// login de vecino) — sin el param, la página se comporta exactamente
+// como antes (recovery de vecino).
 //
 // Si el municipio no tiene un subdominio registrado, cae a undefined
 // (generateLink usa la Site URL default) en vez de romper — pero
@@ -225,7 +228,7 @@ async function resolveRedirectTo(municipioId) {
       return undefined
     }
     const host = String(data.dominio).replace(/^https?:\/\//, '').replace(/\/+$/, '')
-    return `https://${host}/portal/reset-password`
+    return `https://${host}/portal/reset-password?destino=staff`
   } catch (err) {
     console.warn('invite-user: no se pudo resolver el dominio del tenant, usando Site URL default:', err.message)
     return undefined

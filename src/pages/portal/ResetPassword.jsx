@@ -1,12 +1,24 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 
+// `?destino=staff` llega desde el link de invitación de usuarios
+// (api/invite-user.js / api/resend-invite.js) — distingue "estoy creando
+// mi contraseña por primera vez, invitado como staff" de "soy un vecino
+// recuperando la mía" (comportamiento default, sin el param). Cambia el
+// texto (crear vs. cambiar) y a dónde cae después de tener éxito
+// (/login, puerta de staff, en vez de /portal/acceso, puerta de vecino)
+// — un staff nuevo cayendo en el portal de vecinos no encuentra el panel,
+// y si encima no es vecino, ni siquiera puede entrar ahí.
 export default function ResetPassword() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const esStaff = searchParams.get('destino') === 'staff'
+  const destinoPostExito = esStaff ? '/login' : '/portal/acceso'
+
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -37,7 +49,7 @@ export default function ResetPassword() {
       if (updateError) throw updateError
 
       setSuccess(true)
-      setTimeout(() => navigate('/portal/acceso'), 2000)
+      setTimeout(() => navigate(destinoPostExito), 2000)
     } catch (e) {
       setError(e?.message ?? 'No pudimos actualizar la contraseña')
     } finally {
@@ -48,16 +60,18 @@ export default function ResetPassword() {
   if (success) {
     return (
       <PortalFormPage
-        titulo="Contraseña actualizada"
-        descripcion="Tu contraseña fue cambiada exitosamente."
+        titulo={esStaff ? 'Contraseña creada' : 'Contraseña actualizada'}
+        descripcion={esStaff ? 'Tu contraseña fue creada exitosamente.' : 'Tu contraseña fue cambiada exitosamente.'}
         compact
       >
         <div className="mx-auto max-w-[420px]">
           <div className="card p-5">
             <div className="rounded-md border border-[#1D4ED8] bg-[#1D4ED8]/10 p-3 text-sm text-[#0F1C35]">
-              <p className="font-sora font-semibold">✓ Contraseña actualizada</p>
+              <p className="font-sora font-semibold">
+                {esStaff ? '✓ Contraseña creada' : '✓ Contraseña actualizada'}
+              </p>
               <p className="mt-2 text-xs">
-                Redirigiendo al portal...
+                {esStaff ? 'Redirigiendo al login...' : 'Redirigiendo al portal...'}
               </p>
             </div>
           </div>
@@ -68,8 +82,8 @@ export default function ResetPassword() {
 
   return (
     <PortalFormPage
-      titulo="Nueva contraseña"
-      descripcion="Ingresá tu nueva contraseña."
+      titulo={esStaff ? 'Creá tu contraseña' : 'Nueva contraseña'}
+      descripcion={esStaff ? 'Elegí una contraseña para acceder al panel de gestión.' : 'Ingresá tu nueva contraseña.'}
       compact
     >
       <div className="mx-auto max-w-[420px]">
@@ -106,12 +120,12 @@ export default function ResetPassword() {
               disabled={!password || !confirmPassword}
               className="w-full"
             >
-              Cambiar contraseña
+              {esStaff ? 'Crear contraseña' : 'Cambiar contraseña'}
             </Button>
 
             <button
               type="button"
-              onClick={() => navigate('/portal/acceso')}
+              onClick={() => navigate(destinoPostExito)}
               className="text-center text-xs font-semibold text-[#C9A84C] hover:underline"
             >
               Cancelar
