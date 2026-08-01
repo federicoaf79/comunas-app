@@ -103,7 +103,7 @@ function rolPrincipal(rolesArr) {
 async function fetchUsuarios(municipioId) {
   let q = supabase
     .from('usuarios')
-    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, modulos_acceso, nombre, email, activo, puede_emitir_vales, created_at')
+    .select('id, municipio_id, roles, dependencias_ids, dependencias_acceso, modulos_acceso, nombre, email, activo, puede_emitir_vales, created_at, aprobado_en')
     .order('nombre', { ascending: true })
   if (municipioId) q = q.eq('municipio_id', municipioId)
   const { data, error } = await q
@@ -125,10 +125,21 @@ async function updateUsuarioRol(id, nuevoRol) {
   })
 }
 
-async function toggleUsuarioActivo(id, activo) {
+// aprobadoEnActual viene del row ya cargado en pantalla — al activar,
+// si nunca se aprobó antes (null), queda marcada la primera aprobación
+// real. En una reactivación posterior (aprobado_en ya tiene fecha) no
+// se pisa: la columna responde "¿alguna vez lo aprobaron?", no "¿cuándo
+// fue el último toggle?" — esa distinción es la que separa a alguien
+// recién invitado (nunca aprobado, ver Login.jsx) de alguien que ya
+// trabajó acá y fue desactivado después.
+async function toggleUsuarioActivo(id, activo, aprobadoEnActual) {
+  const patch = { activo }
+  if (activo && !aprobadoEnActual) {
+    patch.aprobado_en = new Date().toISOString()
+  }
   const { data: row, error } = await supabase
     .from('usuarios')
-    .update({ activo })
+    .update(patch)
     .eq('id', id)
     .select('nombre, email')
     .single()
@@ -349,7 +360,7 @@ export default function Usuarios() {
   })
 
   const toggleActivoMut = useMutation({
-    mutationFn: ({ id, activo }) => toggleUsuarioActivo(id, activo),
+    mutationFn: ({ id, activo, aprobadoEnActual }) => toggleUsuarioActivo(id, activo, aprobadoEnActual),
     onMutate:   ({ id }) => setBusyId(id),
     onSettled:  () => setBusyId(null),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
@@ -425,7 +436,7 @@ export default function Usuarios() {
     if (!confirm(u.activo
       ? `¿Desactivar a ${u.nombre}? No podrá ingresar hasta que lo reactivés.`
       : `¿Reactivar a ${u.nombre}?`)) return
-    toggleActivoMut.mutate({ id: u.id, activo: !u.activo })
+    toggleActivoMut.mutate({ id: u.id, activo: !u.activo, aprobadoEnActual: u.aprobado_en })
   }
   function handleToggleEmitirVales(u) {
     setError('')

@@ -49,7 +49,14 @@ export default function ResetPassword() {
       if (updateError) throw updateError
 
       setSuccess(true)
-      setTimeout(() => navigate(destinoPostExito), 2000)
+      // Sin destino=staff (recovery de vecino) el redirect sigue siendo
+      // automático -- pero el caso staff necesita tiempo real para leer
+      // el aviso de "avisale al administrador", no solo confirmar que
+      // cambió la contraseña, así que ahí queda un botón manual en vez
+      // de un setTimeout.
+      if (!esStaff) {
+        setTimeout(() => navigate(destinoPostExito), 2000)
+      }
     } catch (e) {
       setError(e?.message ?? 'No pudimos actualizar la contraseña')
     } finally {
@@ -67,13 +74,25 @@ export default function ResetPassword() {
         <div className="mx-auto max-w-[420px]">
           <div className="card p-5">
             <div className="rounded-md border border-[#1D4ED8] bg-[#1D4ED8]/10 p-3 text-sm text-[#0F1C35]">
-              <p className="font-sora font-semibold">
-                {esStaff ? '✓ Contraseña creada' : '✓ Contraseña actualizada'}
-              </p>
-              <p className="mt-2 text-xs">
-                {esStaff ? 'Redirigiendo al login...' : 'Redirigiendo al portal...'}
-              </p>
+              {esStaff ? (
+                <>
+                  <p className="font-sora font-semibold">¡Listo! Tu contraseña quedó creada.</p>
+                  <p className="mt-2 text-xs">
+                    Avisale al administrador de tu municipio para que habilite tu cuenta y puedas empezar a trabajar.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-sora font-semibold">✓ Contraseña actualizada</p>
+                  <p className="mt-2 text-xs">Redirigiendo al portal...</p>
+                </>
+              )}
             </div>
+            {esStaff && (
+              <Button onClick={() => navigate(destinoPostExito)} className="mt-4 w-full">
+                Ir al login
+              </Button>
+            )}
           </div>
         </div>
       </PortalFormPage>

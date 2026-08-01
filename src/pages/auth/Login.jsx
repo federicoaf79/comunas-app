@@ -43,7 +43,7 @@ export default function Login() {
 
     const { data: u, error: perfilError } = await supabase
       .from('usuarios')
-      .select('roles, activo')
+      .select('roles, activo, aprobado_en')
       .eq('id', userId)
       .maybeSingle()
 
@@ -60,10 +60,19 @@ export default function Login() {
       return
     }
 
+    // aprobado_en distingue "invitación nunca aprobada todavía" de
+    // "estaba activa y la desactivaron" — mismo booleano `activo` para
+    // los dos casos, así que sin esta columna un empleado recién
+    // invitado (que hizo todo bien) leía "deshabilitada", texto que
+    // suena a sanción y contradice lo que el mail de invitación le
+    // prometió ("tu cuenta va a quedar en revisión hasta que un
+    // administrador la habilite").
     if (u.activo === false) {
       await supabase.auth.signOut()
       setLoading(false)
-      setError('Tu cuenta está deshabilitada. Contactá al administrador.')
+      setError(u.aprobado_en
+        ? 'Tu cuenta fue deshabilitada. Contactá al administrador.'
+        : 'Tu cuenta está esperando aprobación. Avisale al administrador de tu municipio para que la habilite.')
       return
     }
 
