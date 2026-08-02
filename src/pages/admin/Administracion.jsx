@@ -838,11 +838,17 @@ function GastosTab({ municipioId, dependencias, canApprove }) {
                 {canApprove && (
                   <Td className="whitespace-nowrap text-right text-xs">
                     {g.estado === 'borrador' && (
-                      <div className="flex justify-end gap-3 font-medium">
-                        <button onClick={() => handleEstado(g.id, 'aprobado')} className="text-ok-700 hover:underline">
+                      <div className="flex justify-end gap-3">
+                        <button
+                          onClick={() => handleEstado(g.id, 'aprobado')}
+                          className="inline-flex h-9 items-center justify-center rounded-md bg-ok px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-ok-600"
+                        >
                           Aprobar
                         </button>
-                        <button onClick={() => handleEstado(g.id, 'rechazado')} className="text-danger hover:underline">
+                        <button
+                          onClick={() => handleEstado(g.id, 'rechazado')}
+                          className="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-medium text-danger transition-colors hover:bg-red-50"
+                        >
                           Rechazar
                         </button>
                       </div>
@@ -1484,14 +1490,14 @@ function SolicitudesTab({ municipioId, dependencias, canApprove }) {
                   {canApprove && (
                     <Td className="whitespace-nowrap text-right text-xs">
                       {o.estado === 'pendiente' && (
-                        <div className="flex justify-end gap-3 font-medium">
+                        <div className="flex justify-end gap-3">
                           <button
                             onClick={() => updateEst.mutate({ id: o.id, estado: 'aprobada' })}
-                            className="text-ok-700 hover:underline"
+                            className="inline-flex h-9 items-center justify-center rounded-md bg-ok px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-ok-600"
                           >Aprobar</button>
                           <button
                             onClick={() => updateEst.mutate({ id: o.id, estado: 'rechazada' })}
-                            className="text-danger hover:underline"
+                            className="inline-flex h-9 items-center justify-center rounded-md px-3 text-xs font-medium text-danger transition-colors hover:bg-red-50"
                           >Rechazar</button>
                         </div>
                       )}
