@@ -1009,7 +1009,11 @@ export default function AdminLayout() {
           height: '100%',
         }}
       >
-        <div className="p-4 lg:p-6">
+        {/* pb extra (además del padding normal) solo cuando el pill de
+            Onboarding se muestra — reserva el espacio que el widget fixed
+            ocupa en la esquina para que el contenido pueda scrollear por
+            encima de él, en vez de quedar tapado permanentemente detrás. */}
+        <div className={`p-4 lg:p-6 ${!esRutaSuperadmin ? 'pb-24' : ''}`}>
           <Outlet />
         </div>
       </main>
