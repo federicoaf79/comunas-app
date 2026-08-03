@@ -789,14 +789,11 @@ function nombreCorto(nombre, max = 12) {
   return n.slice(0, max - 1).trimEnd() + '…'
 }
 
-function nivelDeAcceso(row) {
-  if (!row) return null
-  const g = !!row.puede_gestionar
-  const a = !!row.puede_administrar
-  if (g && a) return 'G+A'
-  if (g)      return 'G'
-  if (a)      return 'A'
-  return null
+// Los dos flags (puede_gestionar/puede_administrar) no se distinguen
+// en ningún punto del código hoy — ver nota en CLAUDE.md, "Riesgos
+// abiertos". La UI los trata como un único "tiene acceso o no".
+function tieneAcceso(row) {
+  return !!(row?.puede_gestionar || row?.puede_administrar)
 }
 
 // Resuelve dep por id. La buscamos en el array completo de
@@ -818,13 +815,10 @@ function ResumenDependenciasUsuario({
     if (isDirector) return []
     const raw = Array.isArray(usuario?.dependencias_acceso) ? usuario.dependencias_acceso : []
     return raw
-      .map(r => {
-        const dep = getDependenciaPorId(r?.dependencia_id, dependencias)
-        if (!dep) return null
-        return { dep, nivel: nivelDeAcceso(r) }
-      })
-      .filter(f => f && f.nivel)
-      .sort((a, b) => (a.dep.nombre ?? '').localeCompare(b.dep.nombre ?? ''))
+      .filter(tieneAcceso)
+      .map(r => getDependenciaPorId(r?.dependencia_id, dependencias))
+      .filter(Boolean)
+      .sort((a, b) => (a.nombre ?? '').localeCompare(b.nombre ?? ''))
   }, [usuario, dependencias, isDirector])
 
   if (isDirector) {
@@ -847,19 +841,16 @@ function ResumenDependenciasUsuario({
 
   return (
     <div className="relative mt-1 flex flex-wrap items-center gap-1.5">
-      {visibles.map(({ dep, nivel }) => (
+      {visibles.map(dep => (
         <span
           key={dep.id}
-          title={`${dep.nombre} · ${nivel}`}
+          title={dep.nombre}
           className="inline-flex max-w-full items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold text-primary-700 ring-1 ring-inset ring-primary-100"
         >
           <span className="text-primary-500" aria-hidden="true">
             <DepIcon tipo={dep.tipo} className="h-3 w-3" />
           </span>
           <span className="truncate">{nombreCorto(dep.nombre)}</span>
-          <span className="rounded bg-white px-1 text-[9px] font-bold text-primary-700 ring-1 ring-inset ring-primary-100">
-            {nivel}
-          </span>
         </span>
       ))}
       {extras > 0 && (
@@ -880,16 +871,13 @@ function ResumenDependenciasUsuario({
             Dependencias asignadas
           </p>
           <ul className="space-y-1.5">
-            {filas.map(({ dep, nivel }) => (
+            {filas.map(dep => (
               <li key={dep.id} className="flex items-center gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary-50 text-primary-500">
                   <DepIcon tipo={dep.tipo} className="h-3.5 w-3.5" />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs font-medium text-primary">
                   {dep.nombre}
-                </span>
-                <span className="rounded-full bg-accent-50 px-2 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-100">
-                  {nivel}
                 </span>
               </li>
             ))}
@@ -966,15 +954,15 @@ function PermisosPorPersona({
   const esDirector = rolPrincipal(selectedUser?.roles) === 'admin_comuna'
   const editable   = !!selectedUser && puedeEditarUsuario(selectedUser)
 
-  // Total global de toggles pendientes (puede_gestionar + puede_administrar
-  // cuentan por separado, sumando dependencias Y módulos). Lo mostramos
-  // junto al botón Guardar.
+  // Total global de checkboxes de "Acceso" pendientes (sumando
+  // dependencias Y módulos). Un toggle escribe los dos flags internos
+  // a la vez, pero para el conteo cuenta como UN cambio — es una sola
+  // casilla en la UI. Lo mostramos junto al botón Guardar.
   function contarPendientes(mapa) {
     let n = 0
     for (const userMap of Object.values(mapa)) {
       for (const rowMap of Object.values(userMap ?? {})) {
-        if ('puede_gestionar'   in (rowMap ?? {})) n++
-        if ('puede_administrar' in (rowMap ?? {})) n++
+        if (rowMap && ('puede_gestionar' in rowMap || 'puede_administrar' in rowMap)) n++
       }
     }
     return n
@@ -998,25 +986,25 @@ function PermisosPorPersona({
     return false
   }
 
-  // Toggle de un checkbox: actualiza solo el estado local. Si el
-  // próximo valor coincide con el saved, eliminamos la key (no es
-  // un cambio real); si la fila queda vacía, eliminamos la fila.
-  function setPendiente(userId, depId, kind, nextValue) {
+  // Toggle del checkbox único "Acceso": escribe los DOS flags internos
+  // (puede_gestionar Y puede_administrar) al mismo valor — ver nota en
+  // CLAUDE.md sobre por qué se colapsó a una sola casilla. Cada flag
+  // se compara contra su propio saved value por separado (pueden venir
+  // desparejados de datos viejos) y solo entra al patch el que
+  // realmente cambia; si los dos terminan iguales al saved, la fila
+  // pendiente se elimina entera.
+  function setPendiente(userId, depId, nextValue) {
     const usuario = (usuarios ?? []).find(u => u.id === userId)
     if (!usuario) return
-    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
-    const savedValue = savedFlag(usuario, depId, kind)
+    const savedGestion = savedFlag(usuario, depId, 'gestion')
+    const savedAdmin   = savedFlag(usuario, depId, 'admin')
 
     setCambiosPendientes(prev => {
       const userMap = { ...(prev[userId] ?? {}) }
-      const depMap  = { ...(userMap[depId] ?? {}) }
-      if (nextValue === savedValue) {
-        delete depMap[flagKey]
-      } else {
-        depMap[flagKey] = nextValue
-      }
-      const tieneFlags = 'puede_gestionar' in depMap || 'puede_administrar' in depMap
-      if (tieneFlags) {
+      const depMap  = {}
+      if (nextValue !== savedGestion) depMap.puede_gestionar   = nextValue
+      if (nextValue !== savedAdmin)   depMap.puede_administrar = nextValue
+      if (Object.keys(depMap).length > 0) {
         userMap[depId] = depMap
       } else {
         delete userMap[depId]
@@ -1031,9 +1019,8 @@ function PermisosPorPersona({
     })
   }
 
-  // Valor "efectivo" de un checkbox: pending si existe, si no el
-  // saved value de la DB. Sirve tanto para el render como para el
-  // chequeo de pending al hacer click.
+  // Valor "efectivo" de un flag interno: pending si existe, si no el
+  // saved value de la DB.
   function effectiveFlag(userId, depId, kind) {
     const usuario = (usuarios ?? []).find(u => u.id === userId)
     if (!usuario) return false
@@ -1046,6 +1033,17 @@ function PermisosPorPersona({
   function isCellPending(userId, depId, kind) {
     const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
     return flagKey in (cambiosPendientes[userId]?.[depId] ?? {})
+  }
+
+  // Checkbox único "Acceso": efectivo/pendiente si CUALQUIERA de los
+  // dos flags internos lo está — así una fila vieja con solo uno de
+  // los dos en true (el estado "Administración sin Gestión" que esta
+  // simplificación vino a eliminar) se sigue mostrando marcada.
+  function effectiveAcceso(userId, depId) {
+    return effectiveFlag(userId, depId, 'gestion') || effectiveFlag(userId, depId, 'admin')
+  }
+  function isAccesoPending(userId, depId) {
+    return isCellPending(userId, depId, 'gestion') || isCellPending(userId, depId, 'admin')
   }
 
   // Combina saved + pending de un usuario en el array final que se
@@ -1080,22 +1078,18 @@ function PermisosPorPersona({
   // ── Equivalentes para modulos_acceso (Parte D) — mismo mecanismo
   //    de arriba (setPendiente/effectiveFlag/isCellPending/
   //    combinedAccesoFor), clave por `modulo` en vez de dependencia_id.
-  function setPendienteModulo(userId, modulo, kind, nextValue) {
+  function setPendienteModulo(userId, modulo, nextValue) {
     const usuario = (usuarios ?? []).find(u => u.id === userId)
     if (!usuario) return
-    const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
-    const savedValue = savedFlagModulo(usuario, modulo, kind)
+    const savedGestion = savedFlagModulo(usuario, modulo, 'gestion')
+    const savedAdmin   = savedFlagModulo(usuario, modulo, 'admin')
 
     setCambiosPendientesModulos(prev => {
       const userMap = { ...(prev[userId] ?? {}) }
-      const modMap  = { ...(userMap[modulo] ?? {}) }
-      if (nextValue === savedValue) {
-        delete modMap[flagKey]
-      } else {
-        modMap[flagKey] = nextValue
-      }
-      const tieneFlags = 'puede_gestionar' in modMap || 'puede_administrar' in modMap
-      if (tieneFlags) {
+      const modMap  = {}
+      if (nextValue !== savedGestion) modMap.puede_gestionar   = nextValue
+      if (nextValue !== savedAdmin)   modMap.puede_administrar = nextValue
+      if (Object.keys(modMap).length > 0) {
         userMap[modulo] = modMap
       } else {
         delete userMap[modulo]
@@ -1122,6 +1116,13 @@ function PermisosPorPersona({
   function isCellPendingModulo(userId, modulo, kind) {
     const flagKey = kind === 'gestion' ? 'puede_gestionar' : 'puede_administrar'
     return flagKey in (cambiosPendientesModulos[userId]?.[modulo] ?? {})
+  }
+
+  function effectiveAccesoModulo(userId, modulo) {
+    return effectiveFlagModulo(userId, modulo, 'gestion') || effectiveFlagModulo(userId, modulo, 'admin')
+  }
+  function isAccesoPendingModulo(userId, modulo) {
+    return isCellPendingModulo(userId, modulo, 'gestion') || isCellPendingModulo(userId, modulo, 'admin')
   }
 
   function combinedModulosAccesoFor(userId) {
@@ -1317,11 +1318,11 @@ function PermisosPorPersona({
           onDeseleccionar={() => setSelectedId(null)}
           onGuardar={handleGuardar}
           onCancelar={handleCancelar}
-          effectiveFlag={effectiveFlag}
-          isCellPending={isCellPending}
+          effectiveAcceso={effectiveAcceso}
+          isAccesoPending={isAccesoPending}
           setPendiente={setPendiente}
-          effectiveFlagModulo={effectiveFlagModulo}
-          isCellPendingModulo={isCellPendingModulo}
+          effectiveAccesoModulo={effectiveAccesoModulo}
+          isAccesoPendingModulo={isAccesoPendingModulo}
           setPendienteModulo={setPendienteModulo}
         />
       )}
@@ -1349,8 +1350,8 @@ function TablaPermisos({
   usuario, dependencias, modulosGestion, esDirector, editable,
   totalCambios, saving,
   onDeseleccionar, onGuardar, onCancelar,
-  effectiveFlag, isCellPending, setPendiente,
-  effectiveFlagModulo, isCellPendingModulo, setPendienteModulo,
+  effectiveAcceso, isAccesoPending, setPendiente,
+  effectiveAccesoModulo, isAccesoPendingModulo, setPendienteModulo,
 }) {
   // Ordeno y agrupo dependencias: CIC → Dependencias → Solo info.
   const filasPorGrupo = useMemo(() => {
@@ -1429,29 +1430,33 @@ function TablaPermisos({
           Cargá al menos uno para configurar permisos.
         </div>
       ) : (
-        // Scroll horizontal en mobile para que la tabla no se rompa.
-        <div className="card overflow-x-auto p-0">
-          <table className="min-w-full divide-y divide-border">
-            <thead className="bg-primary-50/60">
-              <tr>
-                <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-primary-500">
-                  Dependencia
-                </th>
-                <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-primary-500" style={{ width: 140 }}>
-                  Gestión
-                </th>
-                <th className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-primary-500" style={{ width: 160 }}>
-                  Administración
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <>
+          <p className="text-xs text-primary-500">
+            Habilita a esta persona a ver y operar en esta dependencia.
+          </p>
+          {/* Scroll horizontal en mobile para que la tabla no se rompa. */}
+          <div className="card overflow-x-auto p-0">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-primary-50/60">
+                <tr>
+                  <th className="px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-primary-500">
+                    Dependencia
+                  </th>
+                  <th
+                    className="px-4 py-2 text-center text-[10px] font-semibold uppercase tracking-widest text-primary-500"
+                    style={{ width: 160 }}
+                  >
+                    Acceso
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
               {(['cic', 'deps', 'info']).flatMap(g => {
                 const filas = filasPorGrupo[g]
                 if (!filas?.length) return []
                 const rows = [
                   <tr key={`sep-${g}`} className="bg-[#0F1C35]/5">
-                    <td colSpan={3} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
+                    <td colSpan={2} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
                       {GRUPO_LABEL[g]}
                     </td>
                   </tr>,
@@ -1459,16 +1464,14 @@ function TablaPermisos({
                 for (const dep of filas) {
                   const grupo = g
                   const isInfo = grupo === 'info'
-                  const gestion       = effectiveFlag(usuario.id, dep.id, 'gestion')
-                  const admin         = effectiveFlag(usuario.id, dep.id, 'admin')
-                  const pendingGestion = isCellPending(usuario.id, dep.id, 'gestion')
-                  const pendingAdmin   = isCellPending(usuario.id, dep.id, 'admin')
+                  const acceso        = effectiveAcceso(usuario.id, dep.id)
+                  const pendingAcceso  = isAccesoPending(usuario.id, dep.id)
                   rows.push(
                     <tr key={dep.id} className="hover:bg-primary-50/40">
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2.5">
                           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
-                            (gestion || admin)
+                            acceso
                               ? 'bg-accent-50 text-accent-700'
                               : 'bg-primary-50 text-primary-500'
                           }`}>
@@ -1478,29 +1481,17 @@ function TablaPermisos({
                         </div>
                       </td>
                       {isInfo ? (
-                        <>
-                          <td className="px-4 py-2 text-center">
-                            <span className="text-xs italic text-primary-400">Solo informativa</span>
-                          </td>
-                          <td className="px-4 py-2 text-center text-primary-300">—</td>
-                        </>
+                        <td className="px-4 py-2 text-center">
+                          <span className="text-xs italic text-primary-400">Solo informativa</span>
+                        </td>
                       ) : (
-                        <>
-                          <PermisoCell
-                            pending={pendingGestion}
-                            checked={gestion}
-                            disabled={disabled}
-                            ariaLabel={`Gestión en ${dep.nombre}`}
-                            onChange={v => setPendiente(usuario.id, dep.id, 'gestion', v)}
-                          />
-                          <PermisoCell
-                            pending={pendingAdmin}
-                            checked={admin}
-                            disabled={disabled}
-                            ariaLabel={`Administración en ${dep.nombre}`}
-                            onChange={v => setPendiente(usuario.id, dep.id, 'admin', v)}
-                          />
-                        </>
+                        <PermisoCell
+                          pending={pendingAcceso}
+                          checked={acceso}
+                          disabled={disabled}
+                          ariaLabel={`Acceso a ${dep.nombre}`}
+                          onChange={v => setPendiente(usuario.id, dep.id, v)}
+                        />
                       )}
                     </tr>,
                   )
@@ -1514,21 +1505,19 @@ function TablaPermisos({
                   (filtrado ya hecho en Usuarios.jsx antes de pasarlos). */}
               {(modulosGestion ?? []).length > 0 && [
                 <tr key="sep-modulos" className="bg-[#0F1C35]/5">
-                  <td colSpan={3} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
+                  <td colSpan={2} className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-[#C9A84C]">
                     Módulos de gestión
                   </td>
                 </tr>,
                 ...modulosGestion.map(({ modulo, label }) => {
-                  const gestion        = effectiveFlagModulo(usuario.id, modulo, 'gestion')
-                  const admin          = effectiveFlagModulo(usuario.id, modulo, 'admin')
-                  const pendingGestion = isCellPendingModulo(usuario.id, modulo, 'gestion')
-                  const pendingAdmin   = isCellPendingModulo(usuario.id, modulo, 'admin')
+                  const acceso       = effectiveAccesoModulo(usuario.id, modulo)
+                  const pendingAcceso = isAccesoPendingModulo(usuario.id, modulo)
                   return (
                     <tr key={modulo} className="hover:bg-primary-50/40">
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2.5">
                           <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
-                            (gestion || admin)
+                            acceso
                               ? 'bg-accent-50 text-accent-700'
                               : 'bg-primary-50 text-primary-500'
                           }`}>
@@ -1538,18 +1527,11 @@ function TablaPermisos({
                         </div>
                       </td>
                       <PermisoCell
-                        pending={pendingGestion}
-                        checked={gestion}
+                        pending={pendingAcceso}
+                        checked={acceso}
                         disabled={disabled}
-                        ariaLabel={`Gestión en ${label}`}
-                        onChange={v => setPendienteModulo(usuario.id, modulo, 'gestion', v)}
-                      />
-                      <PermisoCell
-                        pending={pendingAdmin}
-                        checked={admin}
-                        disabled={disabled}
-                        ariaLabel={`Administración en ${label}`}
-                        onChange={v => setPendienteModulo(usuario.id, modulo, 'admin', v)}
+                        ariaLabel={`Acceso a ${label}`}
+                        onChange={v => setPendienteModulo(usuario.id, modulo, v)}
                       />
                     </tr>
                   )
@@ -1557,7 +1539,8 @@ function TablaPermisos({
               ]}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </section>
   )

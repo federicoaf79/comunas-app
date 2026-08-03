@@ -28,6 +28,13 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ## ⚠️ Riesgos abiertos
 
+**RESUELTO — matriz "Permisos por persona" colapsada de 2 columnas (Gestión/Administración) a 1 sola ("Acceso"):** confirmado en el código que `puede_gestionar` y `puede_administrar` (`dependencias_acceso`/`modulos_acceso`) no se distinguen en ningún punto de la app hoy — ningún gate real lee uno sin el otro de forma diferente. Ofrecer dos checkboxes que no se distinguen en ninguna parte del código es peor que ofrecer uno: el administrador municipal cree que está configurando algo que no existe (que Gestión es "operar" y Administración es "configurar"), y ese "algo" no está implementado.
+
+- **Fix, sin tocar el modelo de datos:** `Usuarios.jsx` (`PermisosPorPersona`/`TablaPermisos`) — la tabla ahora tiene una sola columna "Acceso" con un solo checkbox por dependencia/módulo, texto de ayuda "Habilita a esta persona a ver y operar en esta dependencia." El checkbox único escribe los DOS flags (`puede_gestionar` Y `puede_administrar`) al mismo valor — `dependencias_acceso`/`modulos_acceso` siguen guardando exactamente el mismo shape `{puede_gestionar, puede_administrar}` que antes. Cuando se implemente la distinción real, no hace falta migrar nada — solo separar de nuevo la UI en dos columnas.
+- **Badges de las tarjetas de arriba** (chips de "Dependencias asignadas" + su popover "+N más" en `ResumenDependenciasUsuario`) — antes mostraban "G"/"A"/"G+A" junto al nombre; ahora muestran solo el nombre de la dependencia, mismo motivo.
+- **La distinción real (Gestión = operar, Administración = configurar) se implementa junto con el sprint de RLS por dependencia** (ver más abajo, "la matriz 'Permisos por persona' no se aplica en RLS") — es cuando se puede hacer bien y en la base, no solo en el cliente.
+- **Hallazgo de paso que esta simplificación elimina — "Administración sin Gestión" era un estado que la UI permitía y que no daba acceso a nada:** con las dos columnas independientes, nada impedía tildar `puede_administrar=true` dejando `puede_gestionar=false` para una dependencia — ese estado no está cableado a ningún gate real (ambos flags dan exactamente el mismo acceso hoy), así que el administrador podía terminar convencido de haberle dado un permiso a alguien que en los hechos no tiene ninguno. Con una sola columna deja de ser posible generar ese estado desde la UI (aunque puede seguir existiendo en filas viejas ya guardadas con esa combinación — el checkbox único las muestra marcadas igual, ya que alcanza con que cualquiera de los dos flags esté en `true`).
+
 **PARCIAL — widget flotante de Onboarding tapaba el último item de Stock crítico en el Dashboard; la denuncia de "aparece 3 veces" NO se pudo reproducir:** reportado 2026-08-02, un día antes de la demo. Confirmado en vivo (sesión real, `admin_portal`) el problema de overlap: el pill fijo `bottom-6 right-6` de `OnboardingChecklist.jsx` se renderiza encima de la última fila visible del panel "Stock crítico" en `/admin` — real y reproducible.
 
 - **Fix aplicado:** `AdminLayout.jsx` agrega `pb-24` al contenedor de contenido (`<div className="p-4 lg:p-6 ...">` que envuelve el `<Outlet/>`) cuando el pill está visible (`!esRutaSuperadmin`, mismo flag que ya gatea el widget) — reserva espacio para poder scrollear el contenido por encima del pill en vez de quedar tapado de forma permanente. Aplica a cualquier pantalla de `/admin/*`, no solo el Dashboard.
@@ -358,6 +365,17 @@ De paso: el comentario de header de `usePatrimonio.js` (líneas 15-33) describe 
 schema viejo que no coincide con `BIEN_COLS`/`MANT_COLS` del mismo archivo — no es
 un bug, pero es la clase de comentario desactualizado que causó los tres módulos
 rotos de esta semana.
+
+---
+
+## 🎯 Pendientes sprint final
+
+**MÓDULO DE AYUDA — no existe hoy.** Verificado 2026-08-02: no hay `Ayuda.jsx`, `FAQ.jsx` ni `Soporte.jsx` en el repo. Lo único que existe es `OnboardingChecklist.jsx`, que es una checklist de **configuración inicial** (10 items: logo, dependencias, primera noticia, autoridades, WhatsApp) — no una guía de uso. Un empleado municipal que no sabe cómo emitir un vale o cargar un gasto no tiene dónde mirar.
+
+- **Decisión de diseño ya tomada:** un módulo de Ayuda con el contenido completo por sección, MÁS un ícono "?" en cada pantalla que abra ese módulo en la parte que corresponde. Se escribe una vez, se accede desde los dos lados.
+- **Escribirlo DESPUÉS del kickoff, con las preguntas reales que haga la gente de Real Sayana** — no un manual genérico anticipado.
+
+**`OnboardingChecklist` — item `wa_conectado` puede quedar estancado sin explicación:** "WhatsApp Business conectado" no se puede completar hasta que esté aprobado el A2P de Twilio (ver "Número producción WA" en pendientes) — el municipio va a ver el progreso trabado en ese ítem sin entender por qué. Pendiente decidir: o se saca del checklist hasta que el A2P esté aprobado, o se marca como "no disponible todavía" (un tercer estado, distinto de pendiente/hecho) en vez de quedar como un pendiente más que nunca se puede tildar.
 
 ---
 
