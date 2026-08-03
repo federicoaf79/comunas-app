@@ -200,38 +200,37 @@ export function useReclamosVecino(vecinoId, client = supabaseAnon, ready = true)
 // dependencia. Para uso en el portal del vecino.
 // ─────────────────────────────────────────────────────────────────
 
-const ATENCION_COLS_PUBLIC = `
-  id, vecino_id, dependencia_id, profesional_id, fecha_hora,
-  motivo, diagnostico, receta,
-  profesional:profesional_id ( id, nombre ),
-  dependencia:dependencia_id ( id, nombre )
-`
-
-async function fetchAtencionesVecino(vecinoId, clientType) {
-  console.log('[fetchAtencionesVecino] CALLED', { vecinoId, clientType })
-  if (!vecinoId) return []
-  const client = clientType === 'auth' ? supabase : supabaseAnon
-  const { data, error } = await client
-    .from('atenciones')
-    .select(ATENCION_COLS_PUBLIC)
-    .eq('vecino_id', vecinoId)
-    .order('fecha_hora', { ascending: false })
-    .limit(100)
-  if (error) {
-    console.error('[fetchAtencionesVecino] ERROR', error)
-    throw error
-  }
-  console.log('[fetchAtencionesVecino] SUCCESS', { rowCount: data?.length })
+// La HC completa (asientos del profesional) ya NO se trae con un
+// SELECT directo a `atenciones` -- se lee vía la RPC
+// historia_clinica_vecino() (SECURITY DEFINER, identidad por
+// current_vecino_id()), que devuelve solo los campos pensados para
+// que el paciente los vea (nunca anamnesis/examen_fisico/receta) y
+// solo atenciones finalizadas -- whitelist de estado
+// ('atendido'/'cerrada'/'derivada'), nunca 'borrador'. Ver
+// supabase/migrations/20260803_mi_historia_clinica_rpc.sql.
+//
+// El nombre real en prod es `historia_clinica_vecino`, no
+// `mi_historia_clinica` como decía la primera versión de este
+// archivo/la migración -- confirmado 2026-08-03 llamando la RPC en
+// vivo (PGRST202 sugirió el nombre correcto). Este archivo quedó
+// alineado al nombre que ya existe en la base, no al revés.
+//
+// La RPC exige sesión autenticada real (revocada para anon) -- por
+// eso `fetchAtencionesVecino` ya no elige entre supabase/supabaseAnon
+// según `clientType`: solo tiene sentido llamarla con el cliente
+// autenticado, y el hook queda deshabilitado si no lo es.
+async function fetchAtencionesVecino() {
+  const { data, error } = await supabase.rpc('historia_clinica_vecino')
+  if (error) throw error
   return data ?? []
 }
 
 export function useAtencionesVecino(vecinoId, client = supabaseAnon, ready = true) {
   const clientType = client === supabase ? 'auth' : 'anon'
-  const enabled = !!vecinoId && ready
-  console.log('[useAtencionesVecino] HOOK CALLED', { vecinoId, clientType, ready, enabled })
+  const enabled = !!vecinoId && ready && clientType === 'auth'
   return useQuery({
     queryKey: ['vecino', 'atenciones', vecinoId ?? '__none__', clientType],
-    queryFn:  () => fetchAtencionesVecino(vecinoId, clientType),
+    queryFn:  fetchAtencionesVecino,
     enabled,
   })
 }

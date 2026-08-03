@@ -183,7 +183,7 @@ async function actualizarEmailVecino(vecinoId, email) {
   if (error) throw error
 }
 
-async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id }) {
+async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id, vecino_id }) {
   const response = await fetch('/api/invite-user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -192,7 +192,8 @@ async function invitarUsuario({ email, nombre, rol, dependencia_id, municipio_id
       nombre,
       roles: [rol],
       municipio_id,
-      dependencia_id
+      dependencia_id,
+      vecino_id,
     })
   })
 
@@ -459,7 +460,10 @@ export default function Usuarios() {
     if (vecino && !vecino.email && rest.email) {
       await actualizarEmailVecino(vecino.id, rest.email)
     }
-    await invitarMut.mutateAsync({ ...rest, municipio_id: municipioId })
+    // vecino_id viaja a la API para que vincule vecinos.user_id al
+    // auth user recién creado — modo manual (vecino === null) no manda
+    // nada, a propósito: no hay fila de padrón que vincular.
+    await invitarMut.mutateAsync({ ...rest, municipio_id: municipioId, vecino_id: vecino?.id ?? null })
   }
 
   if (!canManageUsers) {

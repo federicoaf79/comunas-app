@@ -176,16 +176,32 @@ async function sendInviteEmail({ to, municipioNombre, logoUrl, actionLink, email
 // invitación y bloqueaba reintentar con el mismo email ("user already
 // registered", sin salida desde la UI). Best-effort: si el rollback en
 // sí falla, se loguea pero no tapa el error original que ve el caller.
-async function rollbackUsuario(userId) {
-  const [usuariosRes, authRes] = await Promise.allSettled([
+//
+// `vecinoId` es opcional: se pasa solo cuando el UPDATE que vincula
+// `vecinos.user_id` ya se había ejecutado con éxito antes de que algo
+// posterior (el envío del mail) fallara. Sin desvincularlo acá, el
+// rollback dejaría la fila del vecino apuntando a un `user_id` de un
+// auth user que se acaba de borrar — peor que el NULL original, no
+// solo "sin vínculo" sino con un vínculo roto.
+async function rollbackUsuario(userId, vecinoId = null) {
+  const tareas = [
     supabaseAdmin.from('usuarios').delete().eq('id', userId),
     supabaseAdmin.auth.admin.deleteUser(userId),
-  ])
+  ]
+  if (vecinoId) {
+    tareas.push(supabaseAdmin.from('vecinos').update({ user_id: null }).eq('id', vecinoId))
+  }
+
+  const [usuariosRes, authRes, vecinoRes] = await Promise.allSettled(tareas)
+
   if (usuariosRes.status === 'rejected' || usuariosRes.value?.error) {
     console.error('invite-user rollback: no se pudo borrar de usuarios', userId, usuariosRes.reason ?? usuariosRes.value?.error)
   }
   if (authRes.status === 'rejected' || authRes.value?.error) {
     console.error('invite-user rollback: no se pudo borrar de auth.users', userId, authRes.reason ?? authRes.value?.error)
+  }
+  if (vecinoId && (vecinoRes.status === 'rejected' || vecinoRes.value?.error)) {
+    console.error('invite-user rollback: no se pudo desvincular vecinos.user_id', vecinoId, vecinoRes.reason ?? vecinoRes.value?.error)
   }
 }
 
@@ -238,13 +254,16 @@ async function resolveRedirectTo(municipioId) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { email, nombre, roles, municipio_id, dependencia_id } = req.body
+  const { email, nombre, roles, municipio_id, dependencia_id, vecino_id } = req.body
 
   if (!email || !nombre || !roles || !municipio_id) {
     return res.status(400).json({ error: 'Faltan datos requeridos' })
   }
 
   let userId = null
+  // true solo cuando el UPDATE de abajo ya confirmó el vínculo — el
+  // catch/rollback lo usa para saber si hay algo que desvincular.
+  let vecinoVinculado = false
 
   try {
     // 1. Generar el link de invitación en Auth SIN que Supabase mande
@@ -283,6 +302,26 @@ export default async function handler(req, res) {
 
     if (insertError) throw insertError
 
+    // 2.5. Vincular el vecino elegido del padrón (si lo hay) al auth
+    //    user recién creado. Sin esto, `current_vecino_id()` (que
+    //    resuelve por vecinos.user_id = auth.uid()) nunca encuentra a
+    //    esta persona y el portal del vecino le queda inaccesible pese
+    //    a tener credenciales válidas — el bug real que dejó a Luis
+    //    Nicolás Álvarez sin poder entrar hasta que se lo vinculó a
+    //    mano por SQL. Mismo principio que el email de
+    //    actualizarEmailVecino() en Usuarios.jsx: si esto falla, no
+    //    seguimos — reproduciría exactamente ese mismo bug en cada
+    //    alta futura.
+    if (vecino_id) {
+      const { error: vecinoError } = await supabaseAdmin
+        .from('vecinos')
+        .update({ user_id: userId })
+        .eq('id', vecino_id)
+
+      if (vecinoError) throw vecinoError
+      vecinoVinculado = true
+    }
+
     // 3. Identidad del municipio para el mail — logo (identidad_visual)
     //    + nombre oficial (municipios.nombre) + email de contacto
     //    (datos_municipio.email, ya editable desde Config. General).
@@ -315,7 +354,7 @@ export default async function handler(req, res) {
       await sendInviteEmail({ to: email, municipioNombre, logoUrl, actionLink, emailContacto })
     } catch (emailErr) {
       console.error('invite-user: fallo el envío del mail, rollback:', emailErr.message)
-      await rollbackUsuario(userId)
+      await rollbackUsuario(userId, vecinoVinculado ? vecino_id : null)
       return res.status(502).json({
         error: 'No pudimos enviar el mail de invitación. No se creó ningún usuario — revisá el email e intentá de nuevo.',
         code:  'EMAIL_SEND_FAILED',
@@ -327,10 +366,11 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error('invite-user error:', err)
     // Si el auth user ya se había creado antes de este error (ej. falló
-    // el insert en `usuarios`), lo limpiamos también — mismo principio:
-    // nunca dejar una cuenta a medio crear que bloquee reintentar.
+    // el insert en `usuarios`, o el UPDATE de vecinos), lo limpiamos
+    // también — mismo principio: nunca dejar una cuenta a medio crear
+    // que bloquee reintentar.
     if (userId) {
-      await rollbackUsuario(userId)
+      await rollbackUsuario(userId, vecinoVinculado ? vecino_id : null)
     }
     return res.status(500).json({ error: err.message })
   }

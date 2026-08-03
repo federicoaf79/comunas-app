@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useVecino } from '../../context/VecinoContext'
 import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamosVecino, useOrdenesDerivacionVecino, fetchDocumentoSignedUrl } from '../../hooks/useVecinoData'
@@ -337,7 +337,7 @@ function SaludTab({ vecino, atenciones, isLoading, error, derivaciones, derivaci
 
     const grupos = atenciones.reduce((acc, a) => {
       const depId = a.dependencia_id || '__sin_dep__'
-      const depNombre = a.dependencia?.nombre || 'Sin dependencia'
+      const depNombre = a.dependencia_nombre || 'Sin dependencia'
       if (!acc[depId]) {
         acc[depId] = { id: depId, nombre: depNombre, atenciones: [] }
       }
@@ -415,9 +415,11 @@ function SaludTab({ vecino, atenciones, isLoading, error, derivaciones, derivaci
                 <div key={d.id} className={'card p-4' + (yaUsada ? '' : ' border-accent-200')}>
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-primary">
-                        {d.especialidad_destino || 'Especialidad no especificada'}
-                      </p>
+                      {d.especialidad_destino && (
+                        <p className="text-sm font-semibold text-primary">
+                          {d.especialidad_destino}
+                        </p>
+                      )}
                       {depNombre && <p className="mt-0.5 text-xs text-primary-400">{depNombre}</p>}
                     </div>
                     <span
@@ -515,26 +517,40 @@ function SaludTab({ vecino, atenciones, isLoading, error, derivaciones, derivaci
                           {a.motivo || 'Consulta médica'}
                         </p>
                         <p className="mt-1 text-xs text-primary-500">
-                          {dateTimeOf(a.fecha_hora)} · {a.profesional?.nombre || 'Profesional no especificado'}
+                          {dateTimeOf(a.fecha_hora)}
+                          {a.profesional_nombre ? ` · ${a.profesional_nombre}` : ''}
+                          {a.profesional_especialidad?.trim() ? ` (${a.profesional_especialidad.trim()})` : ''}
                         </p>
                       </div>
                     </div>
 
-                    {(a.diagnostico || a.receta) && (
+                    {(a.diagnostico?.trim() || a.tratamiento?.trim() || a.indicaciones?.trim()) && (
                       <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-                        {a.diagnostico && (
+                        {a.diagnostico?.trim() && (
                           <div>
                             <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Diagnóstico</p>
                             <p className="mt-1 text-primary-700">{a.diagnostico}</p>
                           </div>
                         )}
-                        {a.receta && (
+                        {a.tratamiento?.trim() && (
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Receta</p>
-                            <p className="mt-1 text-primary-700">{a.receta}</p>
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Tratamiento</p>
+                            <p className="mt-1 text-primary-700">{a.tratamiento}</p>
+                          </div>
+                        )}
+                        {a.indicaciones?.trim() && (
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Indicaciones</p>
+                            <p className="mt-1 text-primary-700">{a.indicaciones}</p>
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {a.proxima_consulta && (
+                      <p className="mt-2 text-xs text-primary-500">
+                        Próxima consulta sugerida: {dateOf(a.proxima_consulta)}
+                      </p>
                     )}
 
                     {/* Documentos adjuntos */}
@@ -1314,25 +1330,6 @@ export default function VecinoDashboard() {
     setSearchParams({ tab: newTab })
   }
 
-  // DEBUG: Log inicial del componente y cuando cambia el tab
-  useEffect(() => {
-    console.log('[VecinoDashboard] TAB CHANGED', {
-      tab,
-      searchParamsRaw: searchParams.toString(),
-      tabFromParams: searchParams.get('tab'),
-    })
-  }, [tab, searchParams])
-
-  console.log('[VecinoDashboard] RENDER', {
-    vecinoSession,
-    hasSession: !!vecinoSession,
-    vecinoId: vecinoSession?.id,
-    authMode: vecinoSession?.auth_mode,
-    authLoading,
-    tab,
-    searchParamsToString: searchParams.toString(),
-  })
-
   // Los hooks van siempre antes del early return — los queries
   // están enabled solo si hay sesión, así que no disparan red
   // cuando el guard todavía no redirigió.
@@ -1351,15 +1348,6 @@ export default function VecinoDashboard() {
   const reclamosQ = useReclamosVecino(vecinoSession?.id, supabase, ready)
   const reservasQ = useReservasVecino(vecinoSession?.id)
   const solicitudesQ = useSolicitudesVecino(vecinoSession?.id, { enabled: ready })
-
-  // DEBUG: Log estado de queries
-  console.log('[VecinoDashboard] QUERIES', {
-    turnos: { isLoading: turnosQ.isLoading, error: turnosQ.error, dataLength: turnosQ.data?.length },
-    atenciones: { isLoading: atencionesQ.isLoading, error: atencionesQ.error, dataLength: atencionesQ.data?.length },
-    reclamos: { isLoading: reclamosQ.isLoading, error: reclamosQ.error, dataLength: reclamosQ.data?.length },
-    reservas: { isLoading: reservasQ.isLoading, error: reservasQ.error, dataLength: reservasQ.data?.length },
-    solicitudes: { isLoading: solicitudesQ.isLoading, error: solicitudesQ.error, dataLength: solicitudesQ.data?.length }
-  })
 
   function handleSignOut() {
     clearVecinoSession()
