@@ -3,8 +3,10 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
+import { traducirErrorAuth } from '../../lib/authErrors'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import FormError from '../../components/ui/FormError'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -27,7 +29,7 @@ export default function Login() {
     const { data, error: signInError } = await signIn({ email, password })
     if (signInError) {
       setLoading(false)
-      setError(signInError.message)
+      setError(traducirErrorAuth(signInError.message))
       return
     }
 
@@ -140,7 +142,7 @@ export default function Login() {
             onChange={e => setPassword(e.target.value)}
             required
           />
-          {error && <p className="text-xs text-danger">{error}</p>}
+          <FormError>{error}</FormError>
           <Button type="submit" loading={loading} className="w-full">
             Ingresar
           </Button>

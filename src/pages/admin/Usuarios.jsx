@@ -18,6 +18,7 @@ import Select from '../../components/ui/Select'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Tabs from '../../components/ui/Tabs'
+import FormError from '../../components/ui/FormError'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import UsuarioInvitarModal from '../../components/admin/UsuarioInvitarModal'
 import { dateOf } from '../../lib/datetime'
@@ -515,11 +516,7 @@ export default function Usuarios() {
         onChange={setView}
       />
 
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
-          {error}
-        </div>
-      )}
+      <FormError>{error}</FormError>
 
       {okMsg && (
         <div className="inline-flex rounded-md border border-ok-100 bg-ok-50 px-3 py-1.5 text-xs font-medium text-ok-700">

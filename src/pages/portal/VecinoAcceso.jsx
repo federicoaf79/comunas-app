@@ -3,9 +3,25 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
+import { traducirErrorAuth } from '../../lib/authErrors'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import FormError from '../../components/ui/FormError'
+
+// Además de los errores genéricos de Supabase Auth (traducirErrorAuth),
+// el registro puede chocar con errores propios de la tabla `vecinos`
+// (DNI duplicado, RLS) — nunca mostrar ese texto crudo de Postgres.
+function traducirErrorRegistro(message) {
+  if (!message) return null
+  if (/duplicate key/i.test(message)) {
+    return 'Ya existe un vecino registrado con este DNI. Iniciá sesión con tu cuenta o contactá a la comisión municipal.'
+  }
+  if (/row-level security/i.test(message)) {
+    return 'No pudimos completar tu registro. Contactá a la comisión municipal para que revise tu cuenta.'
+  }
+  return traducirErrorAuth(message)
+}
 
 // Banner contextual basado en la ruta de origen (mismo patrón que
 // src/pages/auth/Acceso.jsx, portado acá porque VecinoGuard redirige
@@ -138,7 +154,7 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
       // Navegamos directamente — VecinoGuard/VecinoDashboard manejan el loading.
       navigate(redirectTo, { replace: true })
     } catch (e) {
-      setError(e?.message ?? 'Error al iniciar sesión. Verificá tus datos.')
+      setError(traducirErrorAuth(e?.message) ?? 'Error al iniciar sesión. Verificá tus datos.')
     } finally {
       setSubmitting(false)
     }
@@ -178,11 +194,7 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
         ¿Olvidaste tu contraseña?
       </button>
 
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
-          {error}
-        </div>
-      )}
+      <FormError>{error}</FormError>
 
       <Button
         type="submit"
@@ -230,7 +242,7 @@ function RecoveryForm({ onBack }) {
 
       setSuccess(true)
     } catch (e) {
-      setError(e?.message ?? 'No pudimos enviar el email de recuperación')
+      setError(traducirErrorAuth(e?.message) ?? 'No pudimos enviar el email de recuperación')
     } finally {
       setSubmitting(false)
     }
@@ -281,11 +293,7 @@ function RecoveryForm({ onBack }) {
         placeholder="tu@email.com"
       />
 
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
-          {error}
-        </div>
-      )}
+      <FormError>{error}</FormError>
 
       <Button
         type="submit"
@@ -423,7 +431,7 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         navigate(redirectTo, { replace: true })
       }
     } catch (e) {
-      setError(e?.message ?? 'Error al crear cuenta. Probá de nuevo.')
+      setError(traducirErrorRegistro(e?.message) ?? 'Error al crear cuenta. Probá de nuevo.')
     } finally {
       setSubmitting(false)
     }
@@ -504,11 +512,7 @@ function RegistroTab({ setVecinoSession, navigate, redirectTo }) {
         placeholder="Juan Pérez"
       />
 
-      {error && (
-        <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
-          {error}
-        </div>
-      )}
+      <FormError>{error}</FormError>
 
       <Button
         type="submit"

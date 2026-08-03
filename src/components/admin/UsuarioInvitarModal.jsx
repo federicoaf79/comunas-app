@@ -3,6 +3,7 @@ import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
+import FormError from '../ui/FormError'
 import VecinoBuscador, { vecinoLabel } from './VecinoBuscador'
 
 // =============================================================
@@ -205,11 +206,7 @@ export default function UsuarioInvitarModal({
             options={depsOpts}
           />
         )}
-        {error && (
-          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-xs text-danger">
-            {error}
-          </div>
-        )}
+        <FormError>{error}</FormError>
         <p className="text-xs text-primary-400">
           El usuario se crea como inactivo. Tiene que aceptar la invitación
           (ver email) antes de poder ingresar.

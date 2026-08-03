@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { traducirErrorAuth } from '../../lib/authErrors'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import FormError from '../../components/ui/FormError'
 
 // `?destino=staff` llega desde el link de invitación de usuarios
 // (api/invite-user.js / api/resend-invite.js) — distingue "estoy creando
@@ -58,7 +60,7 @@ export default function ResetPassword() {
         setTimeout(() => navigate(destinoPostExito), 2000)
       }
     } catch (e) {
-      setError(e?.message ?? 'No pudimos actualizar la contraseña')
+      setError(traducirErrorAuth(e?.message) ?? 'No pudimos actualizar la contraseña')
     } finally {
       setSubmitting(false)
     }
@@ -127,11 +129,7 @@ export default function ResetPassword() {
               placeholder="Repetir contraseña"
             />
 
-            {error && (
-              <div className="rounded-md border border-red-100 bg-red-50 p-2 text-xs text-danger">
-                {error}
-              </div>
-            )}
+            <FormError>{error}</FormError>
 
             <Button
               type="submit"
