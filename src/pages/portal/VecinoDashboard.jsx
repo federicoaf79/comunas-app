@@ -1438,8 +1438,8 @@ function VinculoMeGestionanCard({ vinculo, onRevocar, revocando }) {
   )
 }
 
-function FamiliaTab() {
-  const { data, isLoading, error } = useVinculosFamiliares()
+function FamiliaTab({ vecino }) {
+  const { data, isLoading, error } = useVinculosFamiliares(vecino?.id)
   const gestiono     = data?.gestiono ?? []
   const meGestionan  = data?.me_gestionan ?? []
 
@@ -1706,8 +1706,8 @@ export default function VecinoDashboard() {
   const reservasQ = useReservasVecino(vecinoSession?.id)
   const solicitudesQ = useSolicitudesVecino(vecinoSession?.id, { enabled: ready })
 
-  function handleSignOut() {
-    clearVecinoSession()
+  async function handleSignOut() {
+    await clearVecinoSession()
     navigate('/portal', { replace: true })
   }
 
@@ -1757,7 +1757,7 @@ export default function VecinoDashboard() {
             error={reservasQ.error}
           />
         )}
-        {tab === 'familia' && <FamiliaTab />}
+        {tab === 'familia' && <FamiliaTab vecino={vecinoSession} />}
         {tab === 'desarrollo' && (
           <DesarrolloTab
             vecino={vecinoSession}

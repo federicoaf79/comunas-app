@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
 // =============================================================
@@ -41,6 +42,7 @@ function saveSession(vecino) {
 }
 
 export function VecinoProvider({ children }) {
+  const qc = useQueryClient()
   const [vecinoSession, setSessionState] = useState(() => loadSession())
   const [authLoading, setAuthLoading] = useState(true)
   const useEffectCounter = useRef(0)
@@ -102,6 +104,15 @@ export function VecinoProvider({ children }) {
     saveSession(null)
     setSessionState(null)
 
+    // Fix central del bug de sesión arrastrada: sin esto, las queries
+    // ya resueltas en memoria (ej. ['vecino','vales',...], ['vecino',
+    // 'vinculos-familiares',...]) siguen sirviendo los datos de ESTE
+    // vecino hasta que cada una decida refetchear. Corre SIEMPRE, sea
+    // sesión de Auth o "acceso rápido" (DNI+teléfono) — las dos dejan
+    // datos de vecino cacheados por igual, y "acceso rápido" no dispara
+    // ningún signOut de Supabase que pueda limpiarlos por otro lado.
+    qc.clear()
+
     // Si es sesión de Auth, hacer signOut (asíncrono)
     if (vecinoSession?.auth_mode === 'supabase') {
       try {
@@ -112,7 +123,7 @@ export function VecinoProvider({ children }) {
         console.warn('[VecinoContext] Error en signOut:', e)
       }
     }
-  }, [vecinoSession])
+  }, [vecinoSession, qc])
 
   // Sincronización entre pestañas
   useEffect(() => {
@@ -133,6 +144,10 @@ export function VecinoProvider({ children }) {
         if (event === 'SIGNED_OUT') {
           saveSession(null)
           setSessionState(null)
+          // Defensa de fondo — mismo criterio que AuthContext: cubre un
+          // SIGNED_OUT que no pasó por clearVecinoSession() (expiración
+          // de token, u otra pestaña cerrando sesión).
+          qc.clear()
           return
         }
 
@@ -174,7 +189,7 @@ export function VecinoProvider({ children }) {
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [qc])
 
   const value = useMemo(() => ({
     vecinoSession,

@@ -9,7 +9,7 @@ import Button from '../../components/ui/Button'
 import FormError from '../../components/ui/FormError'
 
 export default function Login() {
-  const { signIn } = useAuth()
+  const { signIn, signOut } = useAuth()
   const { identidad } = useDatosMunicipio()
   const logoUrl = identidad?.logo_url || null
   const navigate = useNavigate()
@@ -56,7 +56,7 @@ export default function Login() {
     }
 
     if (!u) {
-      await supabase.auth.signOut()
+      await signOut()
       setLoading(false)
       setError('Tu cuenta aún no fue habilitada en el sistema. Contactá al administrador de tu comuna.')
       return
@@ -70,7 +70,7 @@ export default function Login() {
     // prometió ("tu cuenta va a quedar en revisión hasta que un
     // administrador la habilite").
     if (u.activo === false) {
-      await supabase.auth.signOut()
+      await signOut()
       setLoading(false)
       setError(u.aprobado_en
         ? 'Tu cuenta fue deshabilitada. Contactá al administrador.'
@@ -80,7 +80,7 @@ export default function Login() {
 
     const route = homeRouteFor(u.roles)
     if (!route) {
-      await supabase.auth.signOut()
+      await signOut()
       setLoading(false)
       setError('Tu cuenta no tiene un rol asignado. Contactá al administrador.')
       return

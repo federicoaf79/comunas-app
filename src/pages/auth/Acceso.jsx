@@ -425,7 +425,7 @@ function StepSinPerfilVecino({ onBack }) {
 export default function Acceso() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { signIn, perfil, loading: authLoading } = useAuth()
+  const { signIn, perfil, loading: authLoading, signOut } = useAuth()
   const { setVecinoSession, isVecinoLogued } = useVecino()
 
   const [step, setStep] = useState(1)
@@ -567,18 +567,18 @@ export default function Acceso() {
         return
       }
       if (!u) {
-        await supabase.auth.signOut()
+        await signOut()
         setError('Tu cuenta aún no fue habilitada en el sistema.')
         return
       }
       if (u.activo === false) {
-        await supabase.auth.signOut()
+        await signOut()
         setError('Tu cuenta está deshabilitada. Contactá al administrador.')
         return
       }
       const route = homeRouteFor(u.roles)
       if (!route) {
-        await supabase.auth.signOut()
+        await signOut()
         setError('Tu cuenta no tiene un rol asignado.')
         return
       }

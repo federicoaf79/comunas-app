@@ -28,6 +28,15 @@ CRM/ERP municipal SaaS para comisiones de Santiago del Estero, Argentina. Centra
 
 ## ⚠️ Riesgos abiertos
 
+**RESUELTO — bug de "sesión arrastrada": datos de la cuenta anterior visibles tras cambiar de usuario en la misma pestaña, sin reload completo:** el síntoma ya estaba anotado como "nota de proceso" (más abajo, sesiones de navegador que dejan `sb-*` viejos en `localStorage`) pero nunca se había atacado la causa real del lado de React Query. Causa: ningún camino de logout llamaba `queryClient.clear()` — el cache de queries en memoria (`['vecinos', ...]`, `['gastos', ...]`, `['vecino','vales',...]`, etc.) sobrevivía al cambio de usuario, así que el próximo login en la misma pestaña podía renderizar, aunque sea por un instante o hasta el primer refetch, datos de la cuenta anterior.
+
+- **Fix central:** `AuthContext.signOut()` y `VecinoContext.clearVecinoSession()` llaman `queryClient.clear()` — son los DOS puntos de entrada reales de logout (staff y vecino respectivamente); todo botón "Salir"/"Cerrar sesión" de la app pasa por uno de los dos. `Login.jsx` y `Acceso.jsx` (los `supabase.auth.signOut()` sueltos que se ejecutaban al rechazar una cuenta sin rol/inactiva) se reescribieron para llamar al `signOut()` del contexto en vez de al cliente de Supabase directo — quedan cubiertos por el mismo `clear()` sin duplicar la llamada.
+- **Defensa de fondo:** el listener `onAuthStateChange` de ambos contextos también llama `queryClient.clear()` en su rama `SIGNED_OUT` — cubre un cierre de sesión que no pasó por los métodos de arriba (expiración de token, otra pestaña cerrando sesión).
+- **`clearVecinoSession()`/`signOut()` de UI ahora se esperan (`await`) antes de navegar** (`VecinoDashboard.jsx`, `ReservarPolideportivo.jsx`, `SolicitarServicioDesarrollo.jsx`, `NuevoReclamoPortal.jsx`) — antes el `clearVecinoSession()` se llamaba sin `await` y se navegaba de inmediato; con `queryClient.clear()` adentro, hay una ventana real (aunque chica) en la que el nuevo componente podía montarse y disparar queries antes de que el cache viejo terminara de limpiarse.
+- **Defensa de fondo #2 — query keys con `vecinoId`:** un query cacheado bajo una key genérica (ej. `['vecino','vinculos-familiares']`, sin id) puede devolver datos del vecino anterior aunque `clear()` fallara por algún motivo; una key con id (`['vecino','vinculos-familiares', vecinoId]`) no puede confundirse entre cuentas. Auditado el resto de hooks del portal (`useVecinoData.js`, `useValesVecino.js`, `useProveedorVecino.js`, `useReservasDeportivas.js`, `useSolicitudesDesarrollo.js`, `useReclamos.js`) — todos ya incluían `vecinoId`/`dni`+`telefono` en la key. El único que no lo hacía era `useVinculosFamiliares.js` (`mis_vinculos_familiares` resuelve identidad 100% server-side vía `current_vecino_id()`, así que nunca hubo un `vecinoId` a mano al escribir la key) — corregido agregando `vecino?.id` a la key (solo como discriminador de cache, nunca se lo manda a la RPC).
+- Ver también la regla nueva en "Zonas frágiles" sobre `onAuthStateChange` — el `setTimeout` que evita el deadlock con `signInWithPassword()` ya estaba bien implementado en los dos contextos antes de este fix, no se tocó.
+- **Pendiente de verificar en vivo:** login como Enrique → logout → login como Ana, confirmando que ninguna pantalla del portal muestra un dato de Enrique.
+
 **CONFIRMADO — `atenciones_profesional_id_fkey` es `NOT VALID`, por eso nunca frenó los ids de la tabla equivocada:** encontrado 2026-08-03 al armar `historia_clinica_vecino()` — `atenciones.profesional_id` declara FK contra `usuarios(id)`, pero hay filas cargadas con ids de `profesionales(id)`. Confirmado en prod (2026-08-03):
   ```sql
   select convalidated from pg_constraint
@@ -607,6 +616,8 @@ Sección "Profesionales que atienden" entre Servicios y Contacto:
 - `SalaPrimerosAuxilios.jsx` — `tabRequested` solo evalúa agenda/administracion
 - `useDependenciaPublica.js` — filtra `.eq('activa', true)`
 - `AdminLayout.jsx` — UN SOLO bloque dependencias
+- **`onAuthStateChange` (`AuthContext.jsx` y `VecinoContext.jsx`) — NUNCA `await` directo dentro del callback.** El callback de Supabase corre de forma síncrona como parte de `signInWithPassword()`/`signOut()` — si adentro se hace `await` a una query (ej. `fetchPerfil`), se genera un deadlock: Supabase espera a que el callback termine para resolver la promesa de login, pero la query espera a un cliente que Supabase todavía no liberó. Ambos contextos ya envuelven el trabajo async del caso `SIGNED_IN` en `setTimeout(async () => {...}, 0)` para salir de esa cadena síncrona — no sacar el `setTimeout` "para simplificar", es lo que evita el deadlock.
+- **`queryClient.clear()` en TODO camino de logout — no agregar un logout nuevo sin llamarlo.** Ver RESUELTO "bug de sesión arrastrada" más abajo.
 - `expandirEventos()` — regex `[\u0300-\u036f]` NO corromper
 
 ---

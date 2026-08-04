@@ -31,8 +31,8 @@ export default function ReservarPolideportivo() {
   const navigate = useNavigate()
   const { vecinoSession, clearVecinoSession, municipioId } = useVecino()
 
-  function handleSignOut() {
-    clearVecinoSession()
+  async function handleSignOut() {
+    await clearVecinoSession()
     navigate('/portal', { replace: true })
   }
 

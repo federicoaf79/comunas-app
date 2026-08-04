@@ -23,8 +23,8 @@ export default function NuevoReclamoPortal() {
   const navigate = useNavigate()
   const createMut = useCreateReclamo()
 
-  function handleSignOut() {
-    clearVecinoSession()
+  async function handleSignOut() {
+    await clearVecinoSession()
     navigate('/portal', { replace: true })
   }
 

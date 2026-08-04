@@ -26,11 +26,17 @@ async function fetchVinculosFamiliares() {
   return data ?? { gestiono: [], me_gestionan: [] }
 }
 
-export function useVinculosFamiliares(ready = true) {
+export function useVinculosFamiliares(vecinoId, ready = true) {
   return useQuery({
-    queryKey: ['vecino', 'vinculos-familiares'],
+    // vecinoId no viaja a la RPC (resuelve identidad por
+    // current_vecino_id() del lado del server, como el resto del
+    // módulo) -- va en la key SOLO para que el cache de React Query no
+    // pueda confundir los vínculos de un vecino con los del anterior
+    // si la sesión cambia sin un reload completo de página. Mismo
+    // criterio que ['vecino','vales', vecinoId] en useValesVecino.js.
+    queryKey: ['vecino', 'vinculos-familiares', vecinoId ?? '__none__'],
     queryFn:  fetchVinculosFamiliares,
-    enabled:  ready,
+    enabled:  !!vecinoId && ready,
   })
 }
 

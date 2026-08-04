@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -51,6 +52,7 @@ function clearCachedPerfil() {
 }
 
 export function AuthProvider({ children }) {
+  const qc = useQueryClient()
   const [user, setUser]       = useState(null)
   const [perfil, setPerfil]   = useState(null)
   const [loading, setLoading] = useState(true)
@@ -187,6 +189,11 @@ export function AuthProvider({ children }) {
           clearCachedPerfil()
           setUser(null)
           setPerfil(null)
+          // Defensa de fondo: cubre también el caso de un SIGNED_OUT
+          // que no pasó por signOut() (expiración de token, sign-out
+          // disparado desde otra pestaña) — el cache de React Query no
+          // debe sobrevivir a NINGÚN cierre de sesión, intencional o no.
+          qc.clear()
           if (!intentionalSignOut.current) setSessionExpired(true)
           intentionalSignOut.current = false
           setLoading(false)
@@ -242,7 +249,7 @@ export function AuthProvider({ children }) {
       cancelled = true
       subscription.unsubscribe()
     }
-  }, [fetchPerfil])
+  }, [fetchPerfil, qc])
 
   const signIn = useCallback(async ({ email, password }) => {
     const result = await supabase.auth.signInWithPassword({ email, password })
@@ -291,8 +298,16 @@ export function AuthProvider({ children }) {
     // Limpiar cache de "usuarios sin perfil" al hacer signOut
     // (podría ser un usuario diferente en el próximo login)
     noPerfilCache.current.clear()
+    // Fix central del bug de sesión arrastrada: sin esto, cualquier
+    // query de React Query ya resuelta en memoria (ej. ['vecinos', ...],
+    // ['gastos', ...]) sigue sirviendo los datos de ESTA cuenta al
+    // instante en que el próximo usuario loguea en la misma pestaña,
+    // hasta que cada query individual decida refetchear. clear() vacía
+    // el cache entero de una sola vez, antes de que exista la
+    // posibilidad de que otro usuario lo lea.
+    qc.clear()
     await supabase.auth.signOut()
-  }, [])
+  }, [qc])
 
   const refreshPerfil = useCallback(async () => {
     if (user?.id) {
