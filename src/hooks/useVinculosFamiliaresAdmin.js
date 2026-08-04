@@ -5,16 +5,17 @@ import { createAuditLog } from './useAuditLog'
 // =============================================================
 // useVinculosFamiliaresAdmin — bandeja de aprobación del ERP.
 //
-// ⚠️ SIN VERIFICAR EN VIVO: no hay ninguna RPC de listado para staff
-// en la especificación que dio el cliente (mis_vinculos_familiares()
-// es vecino-only, resuelve por current_vecino_id()). Para la bandeja
-// leo la tabla directo -- asumí que se llama `vinculos_familiares`
-// (singular "vinculo", igual que el nombre de las RPCs
-// solicitar_vinculo_familiar/aprobar_vinculo_familiar), NO
-// `vecinos_familiares` como se llamaba en la migración vieja que
-// nunca corrió. Si el nombre real es otro, esta query va a fallar
-// con 42P01 apenas se pruebe -- visible de inmediato, no en silencio.
-// Mismo supuesto para las columnas del select de abajo.
+// La tabla `vinculos_familiares` (verificada en vivo 2026-08-04,
+// mis_vinculos_familiares/solicitar_vinculo_familiar corriendo contra
+// prod) -- no `vecinos_familiares`, que era el nombre de la migración
+// vieja que nunca corrió. Para la bandeja se lee la tabla directo
+// porque no hay RPC de listado para staff (mis_vinculos_familiares()
+// es vecino-only, resuelve por current_vecino_id()).
+//
+// aprobar_vinculo_familiar/rechazar_vinculo_familiar -- nombres de
+// parámetro verificados contra la firma real en prod (pg_get_functiondef,
+// 2026-08-04): p_vinculo_id, p_puede_ver_hc, p_motivo, todos con
+// prefijo p_, mismo criterio que abrir_vale/canjear_vale.
 // =============================================================
 
 const VINCULO_ADMIN_COLS = `
@@ -47,8 +48,8 @@ export function useVinculosFamiliaresPendientes(municipioId) {
 
 async function aprobarVinculo({ vinculoId, puedeVerHc, titularNombre, familiarNombre }) {
   const { data, error } = await supabase.rpc('aprobar_vinculo_familiar', {
-    vinculo_id:   vinculoId,
-    puede_ver_hc: puedeVerHc,
+    p_vinculo_id:   vinculoId,
+    p_puede_ver_hc: puedeVerHc,
   })
   if (error) throw error
   await createAuditLog({
@@ -68,8 +69,8 @@ export function useAprobarVinculoFamiliar() {
 
 async function rechazarVinculo({ vinculoId, motivo, titularNombre, familiarNombre }) {
   const { data, error } = await supabase.rpc('rechazar_vinculo_familiar', {
-    vinculo_id: vinculoId,
-    motivo,
+    p_vinculo_id: vinculoId,
+    p_motivo: motivo,
   })
   if (error) throw error
   await createAuditLog({

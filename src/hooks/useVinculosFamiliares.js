@@ -10,14 +10,14 @@ import { supabase } from '../lib/supabase'
 // hook siempre usa el cliente autenticado `supabase`, nunca
 // supabaseAnon (mismo criterio que useValesVecino.js).
 //
-// OJO -- nombres de parámetro SIN VERIFICAR EN VIVO todavía: no tuve
-// sesión de browser disponible para confirmarlos contra prod antes de
-// escribir esto. Uso los nombres tal como los pasó el cliente
-// (parentesco, familiar_dni, vinculo_id, etc., sin prefijo p_, a
-// diferencia de abrir_vale/canjear_vale que sí lo usan). Si Postgres
-// espera otro nombre, PostgREST devuelve un error explícito
-// (function not found / parámetro inesperado) -- no falla en
-// silencio, se detecta apenas se pruebe.
+// Nombres de parámetro verificados contra la firma real en prod
+// (2026-08-04, pg_get_functiondef) -- todos con prefijo p_, mismo
+// criterio que abrir_vale/canjear_vale/preview_vale. La primera
+// versión de este archivo NO tenía el prefijo y falló en vivo con
+// "Could not find the function ... in the schema cache" al probar
+// solicitar_vinculo_familiar -- por eso, de acá en más, verificar la
+// firma ANTES de escribir el hook, no dejarlo para que falle en la
+// verificación en vivo.
 // =============================================================
 
 async function fetchVinculosFamiliares() {
@@ -36,11 +36,11 @@ export function useVinculosFamiliares(ready = true) {
 
 async function solicitarVinculoFamiliar({ parentesco, familiar_dni, familiar_nombre, familiar_fecha_nac, dj_version }) {
   const { data, error } = await supabase.rpc('solicitar_vinculo_familiar', {
-    parentesco,
-    familiar_dni,
-    familiar_nombre,
-    familiar_fecha_nac,
-    dj_version,
+    p_parentesco: parentesco,
+    p_familiar_dni: familiar_dni,
+    p_familiar_nombre: familiar_nombre,
+    p_familiar_fecha_nac: familiar_fecha_nac,
+    p_dj_version: dj_version,
   })
   if (error) throw error
   return data
@@ -55,7 +55,7 @@ export function useSolicitarVinculoFamiliar() {
 }
 
 async function revocarVinculoFamiliar(vinculoId) {
-  const { data, error } = await supabase.rpc('revocar_vinculo_familiar', { vinculo_id: vinculoId })
+  const { data, error } = await supabase.rpc('revocar_vinculo_familiar', { p_vinculo_id: vinculoId })
   if (error) throw error
   return data
 }
@@ -70,7 +70,7 @@ export function useRevocarVinculoFamiliar() {
 
 async function fetchHistoriaClinicaFamiliar(familiarId) {
   if (!familiarId) return []
-  const { data, error } = await supabase.rpc('historia_clinica_familiar', { familiar_id: familiarId })
+  const { data, error } = await supabase.rpc('historia_clinica_familiar', { p_familiar_id: familiarId })
   if (error) throw error
   return data ?? []
 }
