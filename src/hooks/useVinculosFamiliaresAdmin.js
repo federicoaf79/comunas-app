@@ -5,12 +5,17 @@ import { createAuditLog } from './useAuditLog'
 // =============================================================
 // useVinculosFamiliaresAdmin — bandeja de aprobación del ERP.
 //
-// La tabla `vinculos_familiares` (verificada en vivo 2026-08-04,
-// mis_vinculos_familiares/solicitar_vinculo_familiar corriendo contra
-// prod) -- no `vecinos_familiares`, que era el nombre de la migración
-// vieja que nunca corrió. Para la bandeja se lee la tabla directo
-// porque no hay RPC de listado para staff (mis_vinculos_familiares()
-// es vecino-only, resuelve por current_vecino_id()).
+// La tabla se llama `vecinos_familiares` (confirmado por el cliente
+// 2026-08-04) -- NO `vinculos_familiares`. Ese nombre sí existe, pero
+// solo como parte de las RPCs (mis_vinculos_familiares,
+// solicitar_vinculo_familiar, etc.) -- namespace de funciones,
+// distinto del nombre real de la tabla. La primera versión de este
+// archivo asumió que ambos coincidían y rompió en vivo con 404
+// ("could not find the table 'vinculos_familiares'"). Tiene dos
+// policies reales: vf_vecino_select (titular_id/familiar_id =
+// current_vecino_id()) y vf_staff_all (is_superadmin() OR (is_staff()
+// AND municipio_id = current_usuario_municipio())) -- el SELECT
+// directo del staff SÍ funciona, no hace falta RPC de listado.
 //
 // aprobar_vinculo_familiar/rechazar_vinculo_familiar -- nombres de
 // parámetro verificados contra la firma real en prod (pg_get_functiondef,
@@ -29,7 +34,7 @@ const VINCULO_ADMIN_COLS = `
 async function fetchVinculosPendientes(municipioId) {
   if (!municipioId) return []
   const { data, error } = await supabase
-    .from('vinculos_familiares')
+    .from('vecinos_familiares')
     .select(VINCULO_ADMIN_COLS)
     .eq('municipio_id', municipioId)
     .in('estado', ['pendiente', 'revision_mayoria_edad'])
@@ -43,6 +48,10 @@ export function useVinculosFamiliaresPendientes(municipioId) {
     queryKey: ['admin', 'vinculos-familiares-pendientes', municipioId ?? '__none__'],
     queryFn:  () => fetchVinculosPendientes(municipioId),
     enabled:  !!municipioId,
+    // Sin reintentos: un fallo se muestra como error de inmediato, no
+    // queda un estado ambiguo a medio camino entre "cargando" y
+    // "vacío" mientras React Query reintenta en el fondo.
+    retry: false,
   })
 }
 
@@ -53,7 +62,7 @@ async function aprobarVinculo({ vinculoId, puedeVerHc, titularNombre, familiarNo
   })
   if (error) throw error
   await createAuditLog({
-    accion: 'update', entidad: 'vinculos_familiares', entidadId: vinculoId,
+    accion: 'update', entidad: 'vecinos_familiares', entidadId: vinculoId,
     descripcion: `Vínculo familiar aprobado — ${titularNombre ?? vinculoId} → ${familiarNombre ?? ''} (HC: ${puedeVerHc ? 'sí' : 'no'})`,
   }).catch(e => console.warn('[useVinculosFamiliaresAdmin] audit log:', e.message))
   return data
@@ -74,7 +83,7 @@ async function rechazarVinculo({ vinculoId, motivo, titularNombre, familiarNombr
   })
   if (error) throw error
   await createAuditLog({
-    accion: 'update', entidad: 'vinculos_familiares', entidadId: vinculoId,
+    accion: 'update', entidad: 'vecinos_familiares', entidadId: vinculoId,
     descripcion: `Vínculo familiar rechazado — ${titularNombre ?? vinculoId} → ${familiarNombre ?? ''} (motivo: ${motivo})`,
   }).catch(e => console.warn('[useVinculosFamiliaresAdmin] audit log:', e.message))
   return data
