@@ -211,8 +211,8 @@ function ReservasTab({ depSum, canApprove }) {
                   {r.forma_pago === 'especie' ? (
                     <span className="inline-flex flex-col items-end">
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-700">Donación</span>
-                      <span className="max-w-[160px] truncate text-xs font-normal text-primary-500" title={r.donacion_descripcion ?? ''}>
-                        {r.donacion_descripcion || '—'}
+                      <span className="max-w-[160px] truncate text-xs font-normal text-primary-500" title={r.pago_especie_detalle ?? ''}>
+                        {r.pago_especie_detalle || '—'}
                       </span>
                     </span>
                   ) : r.forma_pago === 'exento' ? (

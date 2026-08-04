@@ -23,7 +23,7 @@ const HORARIO_OPTS = [
 // ⚠️ Valores SIN VERIFICAR contra un CHECK real: el cliente pidió estas
 // 4 opciones por label, no dio el string exacto de cada value (a
 // diferencia de estado_civil/parentesco, donde sí lo dio). Uso
-// snake_case simple porque las columnas `forma_pago`/`donacion_descripcion`
+// snake_case simple porque las columnas `forma_pago`/`pago_especie_detalle`
 // se aplicaron sin el CHECK que yo había propuesto originalmente (ese
 // solo cubría 'dinero'/'especie' — quedó obsoleto con este cambio) y
 // las reservas viejas quedaron con forma_pago NULL, no con un default.
@@ -49,7 +49,7 @@ function emptyForm() {
     motivo:   '',
     costo:    '',
     forma_pago: 'efectivo',
-    donacion_descripcion: '',
+    pago_especie_detalle: '',
   }
 }
 
@@ -70,7 +70,7 @@ export default function SumReservaFormModal({
     !!form.fecha &&
     !!form.horario &&
     !!form.motivo.trim() &&
-    (form.forma_pago !== 'especie' || !!form.donacion_descripcion.trim())
+    (form.forma_pago !== 'especie' || !!form.pago_especie_detalle.trim())
 
   async function handleSave() {
     setError('')
@@ -94,7 +94,7 @@ export default function SumReservaFormModal({
         // Exento: no se cobra nada y no hay donación que registrar.
         costo:          (esEspecie || esExento) ? 0 : (form.costo === '' ? 0 : Number(form.costo)),
         forma_pago:     form.forma_pago,
-        donacion_descripcion: esEspecie ? form.donacion_descripcion.trim() : null,
+        pago_especie_detalle: esEspecie ? form.pago_especie_detalle.trim() : null,
         estado:         'pendiente',
       }
       await onSave(payload)
@@ -170,8 +170,8 @@ export default function SumReservaFormModal({
               ¿Qué va a donar? <span className="text-danger">*</span>
             </label>
             <textarea
-              value={form.donacion_descripcion}
-              onChange={e => set('donacion_descripcion', e.target.value)}
+              value={form.pago_especie_detalle}
+              onChange={e => set('pago_especie_detalle', e.target.value)}
               rows={2}
               className="input-field resize-none"
               placeholder="Ej: 5 bolsas de cemento para la plaza del barrio"
