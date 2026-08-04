@@ -7,6 +7,7 @@ import { usePublicProfesionales } from '../../hooks/useProfesionales'
 import { useModulosConfigPublico } from '../../hooks/useModulos'
 import { moduloParaTipo } from '../../lib/moduloPorTipo'
 import Spinner from '../../components/ui/Spinner'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 
 // =============================================================
 // DependenciaPublica — landing pública de una dependencia.
@@ -19,7 +20,8 @@ import Spinner from '../../components/ui/Spinner'
 //   3) Cómo contactarnos (horario, tel, email, WhatsApp, canal)
 //   4) Dónde encontrarnos (dirección + Google Maps embed)
 //   5) Fotos (si hay)
-//   6) Botones "Sacar turno" + "Volver al portal" arriba y abajo
+//   6) Botón "Sacar turno" (volver al portal vive arriba de la página,
+//      un solo lugar — ver PortalBackLink)
 //   7) Banner gold para admin si la dep está vacía
 // =============================================================
 
@@ -185,20 +187,6 @@ function Lightbox({ src, onClose }) {
   )
 }
 
-function BackLink({ extra = '' }) {
-  return (
-    <Link
-      to="/portal"
-      className={`inline-flex items-center gap-2 rounded-lg border-2 border-primary/30 bg-white px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-white active:scale-95 ${extra}`}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-      </svg>
-      Volver al portal
-    </Link>
-  )
-}
-
 export default function DependenciaPublica() {
   const { tipo } = useParams()
   const { data: municipioId } = usePortalMunicipioId()
@@ -258,20 +246,11 @@ export default function DependenciaPublica() {
               </p>
             </div>
           </Link>
-          <Link
-            to="/portal"
-            className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-            </svg>
-            <span className="hidden sm:inline">Volver al portal</span>
-            <span className="sm:hidden">Volver</span>
-          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
         {isLoading ? (
           <div className="card flex items-center justify-center p-12">
             <Spinner size="lg" />
@@ -284,7 +263,6 @@ export default function DependenciaPublica() {
             <p className="mt-2 text-sm text-primary-500">
               Es posible que el enlace haya cambiado o que la dependencia esté inactiva.
             </p>
-            <BackLink extra="mt-6" />
           </div>
         ) : (
           <>
@@ -344,7 +322,6 @@ export default function DependenciaPublica() {
                         </svg>
                       </Link>
                     )}
-                    <BackLink />
                   </div>
                 </div>
               </div>
@@ -590,8 +567,7 @@ export default function DependenciaPublica() {
             )}
 
             {/* ===== 6. Botones inferiores ===== */}
-            <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-              <BackLink />
+            <div className="mt-10 flex flex-wrap items-center justify-end gap-3">
               {aceptaTurnos && (
                 <Link
                   to={

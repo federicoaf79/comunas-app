@@ -1084,9 +1084,9 @@ function BolsonFormModal({ municipioId, onClose }) {
             label="Cantidad (opcional)"
             type="number"
             min="0"
-            step="0.01"
+            step="1"
             value={form.cantidad}
-            onChange={e => set('cantidad', e.target.value)}
+            onChange={e => set('cantidad', e.target.value.replace(/[^\d]/g, ''))}
             placeholder="Ej: 4"
           />
           <Input

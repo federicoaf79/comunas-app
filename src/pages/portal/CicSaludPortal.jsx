@@ -4,6 +4,7 @@ import { usePublicProfesionales } from '../../hooks/useProfesionales'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import Spinner from '../../components/ui/Spinner'
 import Button from '../../components/ui/Button'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 
 export default function CicSaludPortal() {
   const navigate = useNavigate()
@@ -88,20 +89,26 @@ export default function CicSaludPortal() {
 
   if (loadingDeps || isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F5F4EF]">
-        <Spinner size="lg" />
+      <div className="flex min-h-screen flex-col bg-[#F5F4EF]">
+        <div className="p-4"><PortalBackLink to="/portal" className="text-primary hover:bg-primary-50 hover:text-primary-700" /></div>
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size="lg" />
+        </div>
       </div>
     )
   }
 
   if (!depCicSalud) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F5F4EF]">
-        <div className="text-center">
-          <p className="text-[#0F1C35]">CIC — Servicios de Salud no disponible</p>
-          <p className="mt-2 text-sm text-[#0F1C35] opacity-70">
-            {!municipioId ? 'No se pudo identificar el municipio' : 'La dependencia no está activa'}
-          </p>
+      <div className="flex min-h-screen flex-col bg-[#F5F4EF]">
+        <div className="p-4"><PortalBackLink to="/portal" className="text-primary hover:bg-primary-50 hover:text-primary-700" /></div>
+        <div className="flex flex-1 items-center justify-center">
+          <div className="text-center">
+            <p className="text-[#0F1C35]">CIC — Servicios de Salud no disponible</p>
+            <p className="mt-2 text-sm text-[#0F1C35] opacity-70">
+              {!municipioId ? 'No se pudo identificar el municipio' : 'La dependencia no está activa'}
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -110,6 +117,7 @@ export default function CicSaludPortal() {
   return (
     <div className="min-h-screen bg-[#F5F4EF] py-8">
       <div className="container mx-auto max-w-5xl px-4">
+        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
         <header className="mb-8 text-center">
           <h1 className="font-sora text-3xl font-bold text-[#0F1C35]">
             CIC — Servicios de Salud

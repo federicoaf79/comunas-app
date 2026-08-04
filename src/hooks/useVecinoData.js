@@ -19,19 +19,29 @@ const TURNO_COLS = `
 `
 
 // Combina fecha + hora_inicio en un timestamp ISO para compatibilidad
-// con componentes que esperan fecha_hora (e.g. VecinoDashboard)
+// con componentes que esperan fecha_hora (e.g. VecinoDashboard).
+//
+// `hora_inicio` ya viene de Postgres como "HH:MM:SS" -- agregarle otro
+// ":00" (como hacía la versión anterior) arma un ISO inválido tipo
+// "...T09:00:00:00-03:00" que dateOf()/timeOf() no pueden parsear y
+// termina mostrándose crudo en pantalla.
+//
+// Turnos sin horario fijo (Agencia de Desarrollo, Polideportivo por
+// franja) tienen `hora_inicio` null -- eso es un dato válido, no un
+// error. Sin este caso, fecha_hora quedaba `undefined` y hasta la
+// FECHA (que sí existe) se mostraba como "—". Mismo criterio que
+// turnoFechaHora() en DependenciaGestion.jsx: separar fecha de hora,
+// nunca asumir que si falta la hora falta todo. Acá se rellena con
+// mediodía solo para que dateOf()/timeOf() tengan un ISO válido que
+// parsear -- los componentes de "Mis turnos" chequean
+// `turno.hora_inicio` aparte antes de mostrar la hora, así que ese
+// mediodía nunca llega a la pantalla.
 function normalizarTurno(t) {
   if (!t) return t
-  // Si ya tiene fecha_hora, devolverlo tal cual
   if (t.fecha_hora) return t
-  // Combinar fecha + hora_inicio → fecha_hora
-  if (t.fecha && t.hora_inicio) {
-    return {
-      ...t,
-      fecha_hora: `${t.fecha}T${t.hora_inicio}:00${ARG_OFFSET}`
-    }
-  }
-  return t
+  if (!t.fecha) return t
+  const hora = t.hora_inicio ? t.hora_inicio : '12:00:00'
+  return { ...t, fecha_hora: `${t.fecha}T${hora}${ARG_OFFSET}` }
 }
 
 const ARG_OFFSET = '-03:00' // Timezone Argentina
@@ -39,13 +49,8 @@ const ARG_OFFSET = '-03:00' // Timezone Argentina
 // Mis turnos — todos los turnos del vecino (futuros + históricos),
 // orden DESC por fecha + hora_inicio. El componente decide cómo agruparlos.
 async function fetchTurnosByVecino(vecinoId, clientType) {
-  console.log('[fetchTurnosByVecino] CALLED', { vecinoId, clientType })
-  if (!vecinoId) {
-    console.log('[fetchTurnosByVecino] NO vecinoId, returning []')
-    return []
-  }
+  if (!vecinoId) return []
   const client = clientType === 'auth' ? supabase : supabaseAnon
-  console.log('[fetchTurnosByVecino] FETCHING from DB...')
   const { data, error } = await client
     .from('turnos_agenda')
     .select(TURNO_COLS)
@@ -53,11 +58,7 @@ async function fetchTurnosByVecino(vecinoId, clientType) {
     .order('fecha', { ascending: false })
     .order('hora_inicio', { ascending: false })
     .limit(50)
-  if (error) {
-    console.error('[fetchTurnosByVecino] ERROR', error)
-    throw error
-  }
-  console.log('[fetchTurnosByVecino] SUCCESS', { rowCount: data?.length })
+  if (error) throw error
   // Normalizar turnos para que tengan fecha_hora
   return (data ?? []).map(normalizarTurno)
 }
@@ -67,7 +68,6 @@ export function useTurnosVecino(vecinoId, client = supabaseAnon, ready = true) {
   // Usamos un string estable como parte de la queryKey
   const clientType = client === supabase ? 'auth' : 'anon'
   const enabled = !!vecinoId && ready
-  console.log('[useTurnosVecino] HOOK CALLED', { vecinoId, clientType, ready, enabled })
   return useQuery({
     queryKey: ['vecino', 'turnos', vecinoId ?? '__none__', clientType],
     queryFn:  () => fetchTurnosByVecino(vecinoId, clientType),

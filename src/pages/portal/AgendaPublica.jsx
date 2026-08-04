@@ -7,6 +7,7 @@ import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
 import { todayArgYMD } from '../../lib/datetime'
 import Spinner from '../../components/ui/Spinner'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 
 const TIPO_ICON_SVG = {
   medico: (
@@ -221,16 +222,11 @@ export default function AgendaPublica() {
               <p className="text-[10px] font-medium uppercase tracking-wide text-white/60">Agenda pública</p>
             </div>
           </Link>
-          <Link to="/portal" className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white hover:bg-white/10">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6"/>
-            </svg>
-            Volver
-          </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        <PortalBackLink to="/portal" className="mb-4 text-primary hover:bg-primary-50 hover:text-primary-700" />
         {/* Banner turno creado */}
         {turnoOk && (
           <div className="mb-5 rounded-2xl border border-[#1D4ED8]/30 bg-[#1D4ED8]/5 p-5 text-center">

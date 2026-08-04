@@ -5,6 +5,7 @@ import { supabaseAnon } from '../../lib/supabaseAnon'
 import { dateOf } from '../../lib/datetime'
 import { bgColorForCategoria } from '../../lib/noticiasCategoria'
 import Spinner from '../../components/ui/Spinner'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
@@ -58,15 +59,6 @@ function PortalSimpleHeader() {
             </p>
           </div>
         </Link>
-        <Link
-          to="/portal#noticias"
-          className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-          </svg>
-          Volver
-        </Link>
       </div>
     </header>
   )
@@ -95,6 +87,7 @@ export default function NoticiaDetalle() {
       <PortalSimpleHeader />
 
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+        <PortalBackLink to="/portal/noticias" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
         {isLoading && (
           <div className="flex items-center justify-center rounded-xl border border-border bg-white p-16">
             <Spinner size="lg" />
@@ -115,28 +108,11 @@ export default function NoticiaDetalle() {
             <p className="mt-2 text-sm text-primary-500">
               La noticia que buscás no existe o fue dada de baja.
             </p>
-            <Link
-              to="/portal#noticias"
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary-600"
-            >
-              ← Volver a noticias
-            </Link>
           </div>
         )}
 
         {!isLoading && !error && noticia && (
           <article>
-            {/* Volver — arriba */}
-            <Link
-              to="/portal/noticias"
-              className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary-500 hover:text-primary"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-              </svg>
-              Volver a noticias
-            </Link>
-
             {/* Hero image full width — arriba del título */}
             {noticia.imagen_url ? (
               <img
@@ -195,19 +171,6 @@ export default function NoticiaDetalle() {
                 Esta noticia aún no tiene contenido.
               </p>
             )}
-
-            {/* Volver — al final */}
-            <div className="mt-12 border-t border-border pt-6">
-              <Link
-                to="/portal/noticias"
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-white px-5 py-2.5 text-sm font-semibold text-primary-700 transition-colors hover:bg-primary-50"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-                </svg>
-                Volver a noticias
-              </Link>
-            </div>
           </article>
         )}
       </main>

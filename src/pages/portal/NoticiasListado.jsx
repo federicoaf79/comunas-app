@@ -4,6 +4,7 @@ import { useNoticiasPublicas } from '../../hooks/useNoticiasPublicas'
 import Spinner       from '../../components/ui/Spinner'
 import SearchBar     from '../../components/ui/SearchBar'
 import NoticiaCardSmall from '../../components/portal/NoticiaCardSmall'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 const PAGE_SIZE = 12
@@ -47,16 +48,6 @@ function PortalSimpleHeader() {
               Portal Ciudadano
             </p>
           </div>
-        </Link>
-        <Link
-          to="/portal"
-          className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-          </svg>
-          <span className="hidden sm:inline">Volver al portal</span>
-          <span className="sm:hidden">Volver</span>
         </Link>
       </div>
     </header>
@@ -152,6 +143,7 @@ export default function NoticiasListado() {
       <PortalSimpleHeader />
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
         {/* Encabezado */}
         <header className="mb-8 sm:mb-10">
           <p className="text-xs font-bold uppercase tracking-widest text-accent-700">

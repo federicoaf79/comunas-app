@@ -12,6 +12,7 @@ import { msRestantes, formatearCountdown } from '../../lib/valeEstado'
 import Spinner from '../../components/ui/Spinner'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 import { dateTimeOf } from '../../lib/datetime'
 
 // =============================================================
@@ -491,12 +492,7 @@ export default function Proveedor() {
     return (
       <div className="min-h-screen bg-background px-4 py-8">
         <div className="mx-auto max-w-2xl">
-          <button
-            onClick={() => navigate('/portal')}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-accent-700"
-          >
-            ← Volver al inicio
-          </button>
+          <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
           <div className="rounded-xl border border-accent-200 bg-accent-50 p-6 sm:p-8">
             <div className="mx-auto max-w-lg text-center">
               <div className="mb-4 text-5xl">🔒</div>
@@ -519,8 +515,11 @@ export default function Proveedor() {
 
   if (accesosQ.isLoading || dispositivoQ.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Spinner size="lg" />
+      <div className="flex min-h-screen flex-col bg-background">
+        <div className="p-4"><PortalBackLink to="/portal/mi-cuenta?tab=vales" className="text-primary hover:bg-primary-50 hover:text-primary-700" /></div>
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size="lg" />
+        </div>
       </div>
     )
   }
@@ -533,12 +532,7 @@ export default function Proveedor() {
     return (
       <div className="min-h-screen bg-background px-4 py-8">
         <div className="mx-auto max-w-2xl">
-          <button
-            onClick={() => navigate('/portal/mi-cuenta')}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-accent-700"
-          >
-            ← Volver a mi cuenta
-          </button>
+          <PortalBackLink to="/portal/mi-cuenta?tab=vales" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
           <div className="rounded-xl border border-[#DDE0EC] bg-white p-8 text-center">
             <p className="text-sm text-primary-500">No tenés acceso a ningún comercio.</p>
           </div>
@@ -554,12 +548,7 @@ export default function Proveedor() {
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="mx-auto max-w-2xl">
-        <button
-          onClick={() => navigate('/portal/mi-cuenta')}
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-accent-700"
-        >
-          ← Volver a mi cuenta
-        </button>
+        <PortalBackLink to="/portal/mi-cuenta?tab=vales" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
 
         {!dispositivo ? (
           <VincularView accesos={accesos} deviceId={deviceId} vecino={vecino} onVinculado={() => dispositivoQ.refetch()} />

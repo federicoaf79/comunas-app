@@ -14,6 +14,7 @@ import {
 } from '../../hooks/useReservasDeportivas'
 import { useDependenciaPublica } from '../../hooks/useDependenciaPublica'
 import DashboardHeader from '../../components/portal/DashboardHeader'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 import Button from '../../components/ui/Button'
 import Spinner from '../../components/ui/Spinner'
 import Select from '../../components/ui/Select'
@@ -39,6 +40,7 @@ export default function ReservarPolideportivo() {
   if (vecinoSession.auth_mode !== 'supabase') {
     return (
       <div className="container mx-auto max-w-2xl py-6 sm:py-10">
+        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
         <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
           <div className="mx-auto max-w-lg text-center">
             <div className="mb-4 text-5xl">🔒</div>
@@ -178,20 +180,16 @@ export default function ReservarPolideportivo() {
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Reservar cancha" menuItems={TABS} />
+      <DashboardHeader
+        vecino={vecinoSession}
+        onSignOut={handleSignOut}
+        subtitle="Reservar cancha"
+        menuItems={TABS}
+        volverTo="/portal/mi-cuenta?tab=reservas"
+      />
 
       <div className="container mx-auto max-w-3xl py-6 sm:py-10">
         <div className="mb-6">
-          <button
-            type="button"
-            onClick={() => navigate('/portal/mi-cuenta?tab=reservas')}
-            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-ok"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver a mis reservas
-          </button>
           <h1 className="font-sora text-2xl font-bold text-primary sm:text-3xl">
             Reservar Cancha
           </h1>

@@ -15,22 +15,24 @@ import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
 const ESTADO_LABEL = {
-  pendiente:  'Pendiente',
-  confirmado: 'Confirmado',
-  en_curso:   'En curso',
-  completado: 'Completado',
-  cancelado:  'Cancelado',
-  reservado:  'Pendiente',
-  atendido:   'Atendido',
+  pendiente:            'Pendiente',
+  pendiente_validacion: 'Pendiente de validación',
+  confirmado:           'Confirmado',
+  en_curso:             'En curso',
+  completado:           'Completado',
+  cancelado:            'Cancelado',
+  reservado:            'Pendiente',
+  atendido:             'Atendido',
 }
 const ESTADO_CLASS = {
-  pendiente:  'estado-pendiente',
-  confirmado: 'estado-confirmado',
-  en_curso:   'estado-en-curso',
-  completado: 'estado-completado',
-  cancelado:  'estado-cancelado',
-  reservado:  'estado-pendiente',
-  atendido:   'estado-atendido',
+  pendiente:            'estado-pendiente',
+  pendiente_validacion: 'estado-pendiente',
+  confirmado:           'estado-confirmado',
+  en_curso:             'estado-en-curso',
+  completado:           'estado-completado',
+  cancelado:            'estado-cancelado',
+  reservado:            'estado-pendiente',
+  atendido:             'estado-atendido',
 }
 
 const VINCULO_LABEL = {
@@ -112,10 +114,10 @@ function ProximoTurnoCard({ turno }) {
             Próximo turno
           </p>
           <p className="mt-2 font-sora text-2xl font-bold text-primary sm:text-3xl">
-            {dateOf(turno.fecha_hora)}
+            {turno.fecha ? dateOf(turno.fecha_hora) : 'Fecha a confirmar'}
           </p>
           <p className="mt-1 text-sm font-medium text-primary-700 sm:text-base">
-            {timeOf(turno.fecha_hora)} hs · {dep}
+            {turno.hora_inicio ? `${timeOf(turno.fecha_hora)} hs · ${dep}` : dep}
           </p>
         </div>
         {turno.numero_turno && (
@@ -151,7 +153,9 @@ function TurnoRow({ turno }) {
     <li className="flex flex-wrap items-start justify-between gap-3 p-4">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-primary sm:text-base">
-          {dateTimeOf(turno.fecha_hora)}
+          {!turno.fecha
+            ? 'Fecha a confirmar'
+            : (turno.hora_inicio ? dateTimeOf(turno.fecha_hora) : dateOf(turno.fecha_hora))}
         </p>
         <p className="mt-0.5 text-xs text-primary-500 sm:text-sm">{dep}</p>
         {isFamiliar && (

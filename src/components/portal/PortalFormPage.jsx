@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useLogoMunicipio } from '../../hooks/useLogoMunicipio'
+import PortalBackLink from './PortalBackLink'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
@@ -36,7 +37,7 @@ function Escudo({ className = 'h-9 w-9' }) {
 // estrecha la columna a max-w-lg y se baja el peso del header —
 // pensado para formularios que tienen muchos campos y necesitan
 // caber en pantalla sin scroll horizontal a 100% de zoom.
-export default function PortalFormPage({ titulo, descripcion, children, compact = false }) {
+export default function PortalFormPage({ titulo, descripcion, children, compact = false, volverTo = '/portal' }) {
   // Logo institucional — hook compartido (mismo que PortalPublico
   // Header y AppShell). Query directa con supabasePublic, sin pasar
   // por el bundle/useDatosMunicipio que venían fallando.
@@ -70,20 +71,11 @@ export default function PortalFormPage({ titulo, descripcion, children, compact 
               </p>
             </div>
           </Link>
-          <Link
-            to="/portal"
-            className="inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M11 18l-6-6 6-6" />
-            </svg>
-            <span className="hidden sm:inline">Volver al portal</span>
-            <span className="sm:hidden">Volver</span>
-          </Link>
         </div>
       </header>
 
       <main className={`mx-auto ${mainWidth} px-4 ${mainPad} sm:px-6`}>
+        <PortalBackLink to={volverTo} className="mt-4 text-primary hover:bg-primary-50 hover:text-primary-700" />
         <header className={headerSpace}>
           <h1 className={`font-sora ${tituloSize} font-bold leading-tight text-primary`}>
             {titulo}

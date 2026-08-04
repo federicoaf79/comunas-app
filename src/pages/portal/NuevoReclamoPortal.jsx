@@ -5,6 +5,7 @@ import { useCreateReclamo } from '../../hooks/useReclamos'
 import { TABS } from './VecinoDashboard'
 import { supabase } from '../../lib/supabase'
 import DashboardHeader from '../../components/portal/DashboardHeader'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 import Spinner from '../../components/ui/Spinner'
 
 const TIPOS_RECLAMO = [
@@ -41,12 +42,7 @@ export default function NuevoReclamoPortal() {
     return (
       <div className="min-h-screen bg-[#F5F4EF] py-8 px-4">
         <div className="mx-auto max-w-2xl">
-          <button
-            onClick={() => navigate('/portal')}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-[#0F1C35] transition-colors hover:text-[#C9A84C]"
-          >
-            ← Volver al inicio
-          </button>
+          <PortalBackLink to="/portal" className="mb-6 text-[#0F1C35] hover:bg-primary-50 hover:text-primary-700" />
 
           <div className="rounded-xl border border-[#C9A84C]/30 bg-[#C9A84C]/10 p-6 sm:p-8">
             <div className="mx-auto max-w-lg text-center">
@@ -187,21 +183,16 @@ export default function NuevoReclamoPortal() {
   return (
     <div className="min-h-screen bg-[#F5F4EF]">
       {/* Header consistente con VecinoDashboard */}
-      <DashboardHeader vecino={vecinoSession} onSignOut={handleSignOut} subtitle="Nuevo reclamo" menuItems={TABS} />
+      <DashboardHeader
+        vecino={vecinoSession}
+        onSignOut={handleSignOut}
+        subtitle="Nuevo reclamo"
+        menuItems={TABS}
+        volverTo="/portal/mi-cuenta?tab=reclamos"
+      />
 
       <div className="mx-auto max-w-2xl px-4 py-8">
-        {/* Breadcrumb */}
         <div className="mb-6">
-          <button
-            type="button"
-            onClick={() => navigate('/portal/mi-cuenta?tab=reclamos')}
-            className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-primary hover:text-[#1D4ED8]"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver a mis reclamos
-          </button>
           <h1 className="font-sora text-2xl font-bold text-primary">Nuevo reclamo</h1>
           <p className="mt-1 text-sm text-primary-600">
             Reportá escombros, ramas o residuos de gran tamaño en la vía pública

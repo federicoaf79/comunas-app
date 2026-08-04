@@ -7,6 +7,7 @@ import { estadoEfectivo, msRestantes, formatearCountdown, VALE_UI } from '../../
 import Spinner from '../../components/ui/Spinner'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
+import PortalBackLink from '../../components/portal/PortalBackLink'
 import { dateOf } from '../../lib/datetime'
 
 // =============================================================
@@ -208,12 +209,7 @@ export default function MisVales() {
     return (
       <div className="min-h-screen bg-background px-4 py-8">
         <div className="mx-auto max-w-2xl">
-          <button
-            onClick={() => navigate('/portal')}
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-accent-700"
-          >
-            ← Volver al inicio
-          </button>
+          <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
           <div className="rounded-xl border border-accent-200 bg-accent-50 p-6 sm:p-8">
             <div className="mx-auto max-w-lg text-center">
               <div className="mb-4 text-5xl">🔒</div>
@@ -239,8 +235,11 @@ export default function MisVales() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Spinner size="lg" />
+      <div className="flex min-h-screen flex-col bg-background">
+        <div className="p-4"><PortalBackLink to="/portal/mi-cuenta?tab=vales" className="text-primary hover:bg-primary-50 hover:text-primary-700" /></div>
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner size="lg" />
+        </div>
       </div>
     )
   }
@@ -248,12 +247,7 @@ export default function MisVales() {
   return (
     <div className="min-h-screen bg-background px-4 py-8">
       <div className="mx-auto max-w-2xl">
-        <button
-          onClick={() => navigate('/portal/mi-cuenta')}
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-primary transition-colors hover:text-accent-700"
-        >
-          ← Volver a mi cuenta
-        </button>
+        <PortalBackLink to="/portal/mi-cuenta?tab=vales" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
 
         <h1 className="font-sora text-xl font-bold text-primary sm:text-2xl">Mis vales</h1>
         <p className="mt-1 text-sm text-primary-500">

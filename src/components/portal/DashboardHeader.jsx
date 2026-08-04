@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import PortalBackLink from './PortalBackLink'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
@@ -47,13 +48,20 @@ function Escudo({ className = 'h-9 w-9' }) {
  * @param {Function} onSignOut - Callback para cerrar sesión
  * @param {string} [subtitle='Mi cuenta'] - Subtítulo debajo del nombre del municipio
  * @param {Array} [menuItems] - Array de { key, label, short } para menú hamburguesa en mobile
+ * @param {string} [volverTo] - Si se pasa, muestra "Volver" arriba a la izquierda
+ *   apuntando a esa ruta (la pantalla anterior lógica -- un tab de "Mi
+ *   cuenta", no siempre el home). `/portal/mi-cuenta` en sí no pasa
+ *   esto: es la raíz del área privada, no tiene a dónde "volver".
  */
-export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuenta', menuItems }) {
+export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuenta', menuItems, volverTo }) {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
     <header className="border-b border-primary-900 bg-primary text-white">
       <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-4">
+        {volverTo && (
+          <PortalBackLink to={volverTo} className="mb-2 text-white/80 hover:bg-white/10 hover:text-white" />
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           {/* Mobile: menú ☰ a la izquierda del logo */}
           <div className="flex items-center gap-2">
@@ -95,7 +103,10 @@ export default function DashboardHeader({ vecino, onSignOut, subtitle = 'Mi cuen
             que en mobile, si no entra, el DNI/barrio caigan abajo). */}
         <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="font-sora text-xl font-bold leading-tight sm:text-2xl">
-            Hola, {primerNombreLindo(vecino?.nombre) || 'vecino'}
+            {/* nombre_completo es la fuente de verdad -- vecinos.nombre es
+                una columna de primer-nombre separada que puede quedar
+                desactualizada (ver CLAUDE.md, bug "Hola, Demo"). */}
+            Hola, {primerNombreLindo(vecino?.nombre_completo || vecino?.nombre) || 'vecino'}
           </h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-white/70">
             {vecino?.dni && <span>DNI {vecino.dni}</span>}
