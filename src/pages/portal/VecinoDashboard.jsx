@@ -5,10 +5,17 @@ import { useTurnosVecino, useAtencionesVecino, useDocumentosAtencion, useReclamo
 import { useAccesosProveedorVecino } from '../../hooks/useProveedorVecino'
 import { useReservasVecino } from '../../hooks/useReservasDeportivas'
 import { useSolicitudesVecino } from '../../hooks/useSolicitudesDesarrollo'
+import {
+  useVinculosFamiliares, useSolicitarVinculoFamiliar, useRevocarVinculoFamiliar,
+  useHistoriaClinicaFamiliar, DJ_VERSION_ACTUAL, DJ_TEXTO_PLACEHOLDER, DJ_LINK_HREF, DJ_LINK_LABEL,
+} from '../../hooks/useVinculosFamiliares'
 import { supabase } from '../../lib/supabase'
 import DashboardHeader from '../../components/portal/DashboardHeader'
 import Spinner from '../../components/ui/Spinner'
 import Modal   from '../../components/ui/Modal'
+import Input   from '../../components/ui/Input'
+import Select  from '../../components/ui/Select'
+import Button  from '../../components/ui/Button'
 import FotoFirmada from '../../components/ui/FotoFirmada'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
 
@@ -35,14 +42,39 @@ const ESTADO_CLASS = {
   atendido:             'estado-atendido',
 }
 
+// Los 7 valores exactos que acepta el CHECK constraint de la tabla
+// real -- sin tilde, sin variantes. 'tutelado' es el que pidió el
+// cliente para personas mayores a cargo (sin corte por edad, a
+// diferencia de 'hijo'). No agregar valores nuevos acá sin agregarlos
+// primero al CHECK de la base -- el insert rebota con un error crudo
+// de Postgres si no coincide exacto.
 const VINCULO_LABEL = {
-  hijo:    'Hijo / Hija',
-  conyuge: 'Cónyuge / Pareja',
-  padre:   'Padre / Madre',
-  hermano: 'Hermano / Hermana',
-  abuelo:  'Abuelo / Abuela',
-  nieto:   'Nieto / Nieta',
-  otro:    'Otro familiar',
+  hijo:     'Hijo/a',
+  padre:    'Padre',
+  madre:    'Madre',
+  conyuge:  'Cónyuge',
+  hermano:  'Hermano/a',
+  tutelado: 'Persona a mi cargo',
+  otro:     'Otro',
+}
+const PARENTESCO_OPTS = Object.entries(VINCULO_LABEL).map(([value, label]) => ({ value, label }))
+
+// Estados de vínculo familiar (tabla nueva, no confundir con
+// ESTADO_LABEL de turnos). ⚠️ 'aprobado'/'rechazado' son un supuesto
+// razonable a partir de los nombres de las RPCs (aprobar_vinculo_familiar/
+// rechazar_vinculo_familiar) -- sin confirmar en vivo todavía contra
+// los valores reales que graba la base.
+const VINCULO_ESTADO_LABEL = {
+  pendiente:             'Pendiente de aprobación',
+  aprobado:              'Aprobado',
+  rechazado:             'Rechazado',
+  revision_mayoria_edad: 'En revisión por mayoría de edad',
+}
+const VINCULO_ESTADO_CLASS = {
+  pendiente:             'estado-pendiente',
+  aprobado:              'estado-confirmado',
+  rechazado:             'estado-cancelado',
+  revision_mayoria_edad: 'estado-pendiente',
 }
 
 export const TABS = [
@@ -1117,22 +1149,326 @@ function ReservasTab({ vecino, reservas, isLoading, error }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// F) Mi familia — turnos sacados para familiares
+// F) Mi familia — vínculos familiares (solicitar/gestionar/revocar),
+//    con aprobación municipal y acceso a HC como permiso aparte.
 // ─────────────────────────────────────────────────────────────────
 
-function FamiliaTab({ turnos, isLoading, error }) {
-  const familiares = useMemo(
-    () => turnos.filter(t => t.metadata?.para_familiar),
-    [turnos],
-  )
+// Modal "Ver historia clínica" de un familiar — misma forma de tarjeta
+// que SaludTab, pero fuente de datos distinta (historia_clinica_familiar
+// en vez de historia_clinica_vecino) y sin las secciones de datos
+// vitales/derivaciones/documentos, que son del propio vecino.
+function HistoriaClinicaFamiliarModal({ familiarId, familiarNombre, onClose }) {
+  const { data: atenciones = [], isLoading, error } = useHistoriaClinicaFamiliar(familiarId)
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi familia</h2>
-        <p className="text-sm text-primary-500">
-          Turnos que sacaste para otros miembros de tu familia.
+    <Modal open onClose={onClose} size="lg" title={`Historia clínica — ${familiarNombre}`}>
+      {isLoading && (
+        <div className="flex items-center justify-center p-8">
+          <Spinner size="lg" />
+        </div>
+      )}
+      {error && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          No pudimos cargar la historia clínica. Probá de nuevo.
+        </div>
+      )}
+      {!isLoading && !error && atenciones.length === 0 && (
+        <p className="p-4 text-center text-sm text-primary-500">
+          Todavía no tiene atenciones registradas.
         </p>
+      )}
+      {!isLoading && !error && atenciones.length > 0 && (
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+          {atenciones.map(a => (
+            <div key={a.id} className="card p-4">
+              <p className="text-sm font-semibold text-primary">{a.motivo || 'Consulta médica'}</p>
+              <p className="mt-1 text-xs text-primary-500">
+                {dateTimeOf(a.fecha_hora)}
+                {a.profesional_nombre ? ` · ${a.profesional_nombre}` : ''}
+                {a.profesional_especialidad?.trim() ? ` (${a.profesional_especialidad.trim()})` : ''}
+                {a.dependencia_nombre ? ` · ${a.dependencia_nombre}` : ''}
+              </p>
+              {(a.diagnostico?.trim() || a.tratamiento?.trim() || a.indicaciones?.trim()) && (
+                <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+                  {a.diagnostico?.trim() && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Diagnóstico</p>
+                      <p className="mt-0.5 text-primary-700">{a.diagnostico}</p>
+                    </div>
+                  )}
+                  {a.tratamiento?.trim() && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Tratamiento</p>
+                      <p className="mt-0.5 text-primary-700">{a.tratamiento}</p>
+                    </div>
+                  )}
+                  {a.indicaciones?.trim() && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-primary-400">Indicaciones</p>
+                      <p className="mt-0.5 text-primary-700">{a.indicaciones}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+// Modal "Solicitar vínculo" — DNI obligatorio (es la identidad),
+// parentesco, nombre + fecha de nacimiento por si la persona todavía
+// no está en el padrón, y la declaración jurada (checkbox obligatorio,
+// texto placeholder hasta que el cliente mande el definitivo).
+function SolicitarVinculoModal({ onClose }) {
+  const [form, setForm] = useState({
+    familiar_dni: '', parentesco: '', familiar_nombre: '', familiar_fecha_nac: '',
+  })
+  const [djAceptada, setDjAceptada] = useState(false)
+  const [error, setError] = useState('')
+  const solicitarMut = useSolicitarVinculoFamiliar()
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const canSubmit =
+    !!form.familiar_dni.trim() &&
+    !!form.parentesco &&
+    !!form.familiar_nombre.trim() &&
+    !!form.familiar_fecha_nac &&
+    djAceptada
+
+  async function handleSubmit() {
+    if (!canSubmit) return
+    setError('')
+    try {
+      await solicitarMut.mutateAsync({
+        parentesco:         form.parentesco,
+        familiar_dni:       form.familiar_dni.trim(),
+        familiar_nombre:    form.familiar_nombre.trim(),
+        familiar_fecha_nac: form.familiar_fecha_nac,
+        dj_version:         DJ_VERSION_ACTUAL,
+      })
+      onClose()
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos enviar la solicitud. Probá de nuevo.')
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Solicitar vínculo familiar"
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={solicitarMut.isPending}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} loading={solicitarMut.isPending} disabled={!canSubmit}>
+            Enviar solicitud
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-primary-500">
+          El vínculo queda pendiente hasta que la Comisión Municipal lo apruebe.
+        </p>
+
+        <Input
+          label="DNI del familiar"
+          value={form.familiar_dni}
+          onChange={e => set('familiar_dni', e.target.value.replace(/[^\d]/g, ''))}
+          inputMode="numeric"
+          required
+          placeholder="32145678"
+        />
+        <Select
+          label="Parentesco"
+          value={form.parentesco}
+          onChange={v => set('parentesco', v)}
+          placeholder="Seleccionar..."
+          options={PARENTESCO_OPTS}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Nombre completo"
+            value={form.familiar_nombre}
+            onChange={e => set('familiar_nombre', e.target.value)}
+            required
+            placeholder="Apellido, Nombre"
+          />
+          <Input
+            label="Fecha de nacimiento"
+            type="date"
+            value={form.familiar_fecha_nac}
+            onChange={e => set('familiar_fecha_nac', e.target.value)}
+            required
+          />
+        </div>
+        <p className="text-xs text-primary-400">
+          Si esta persona no está cargada en el padrón, el vínculo va a quedar pendiente
+          hasta que el municipio la dé de alta en el CRM Vecinal.
+        </p>
+
+        <div className="rounded-lg border border-border bg-primary-50/40 p-4">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={djAceptada}
+              onChange={e => setDjAceptada(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#C9A84C]"
+            />
+            <span className="text-sm text-primary-700">
+              {DJ_TEXTO_PLACEHOLDER}{' '}
+              <a href={DJ_LINK_HREF} target="_blank" rel="noreferrer" className="font-semibold text-primary underline">
+                {DJ_LINK_LABEL}
+              </a>
+            </span>
+          </label>
+        </div>
+
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+            {error}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+// Tarjeta de un vínculo donde YO soy el titular ("Gestiono a").
+function VinculoGestionoCard({ vinculo, onRevocar, onVerHc, revocando }) {
+  const nombre     = vinculo.familiar_nombre ?? vinculo.nombre ?? 'Familiar'
+  const dni        = vinculo.familiar_dni ?? vinculo.dni ?? null
+  const parentesco = VINCULO_LABEL[vinculo.parentesco] ?? vinculo.parentesco ?? 'Familiar'
+  const estado     = vinculo.estado
+  const puedeVerHc = !!(vinculo.puede_ver_hc ?? vinculo.acceso_hc)
+  const familiarId = vinculo.familiar_id ?? vinculo.vecino_id ?? null
+
+  return (
+    <div className="card p-4 space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-primary sm:text-base">{nombre}</p>
+          <p className="mt-0.5 text-xs text-primary-500">
+            {parentesco}{dni ? ` · DNI ${dni}` : ''}
+          </p>
+        </div>
+        <span className={VINCULO_ESTADO_CLASS[estado] ?? 'estado-pendiente'}>
+          {VINCULO_ESTADO_LABEL[estado] ?? estado}
+        </span>
+      </div>
+
+      {estado === 'rechazado' && (vinculo.motivo_rechazo || vinculo.motivo) && (
+        <p className="text-xs text-danger">
+          Motivo: {vinculo.motivo_rechazo || vinculo.motivo}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-2 pt-1">
+        {estado === 'aprobado' && puedeVerHc && familiarId && (
+          <button
+            type="button"
+            onClick={() => onVerHc({ id: familiarId, nombre })}
+            className="text-xs font-semibold text-primary hover:text-accent-700"
+          >
+            Ver historia clínica →
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onRevocar(vinculo.id ?? vinculo.vinculo_id)}
+          disabled={revocando}
+          className="text-xs font-semibold text-danger hover:underline disabled:opacity-50"
+        >
+          Revocar vínculo
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// Tarjeta de un vínculo donde OTRO me gestiona a mí ("Me gestionan").
+function VinculoMeGestionanCard({ vinculo, onRevocar, revocando }) {
+  const nombre     = vinculo.titular_nombre ?? vinculo.nombre ?? 'Vecino'
+  const dni        = vinculo.titular_dni ?? vinculo.dni ?? null
+  const parentesco = VINCULO_LABEL[vinculo.parentesco] ?? vinculo.parentesco ?? 'Familiar'
+  const estado     = vinculo.estado
+  const puedeVerHc = !!(vinculo.puede_ver_hc ?? vinculo.acceso_hc)
+
+  return (
+    <div className="card p-4 space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-primary sm:text-base">{nombre}</p>
+          <p className="mt-0.5 text-xs text-primary-500">
+            {parentesco}{dni ? ` · DNI ${dni}` : ''}
+          </p>
+        </div>
+        <span className={VINCULO_ESTADO_CLASS[estado] ?? 'estado-pendiente'}>
+          {VINCULO_ESTADO_LABEL[estado] ?? estado}
+        </span>
+      </div>
+
+      {estado === 'aprobado' && (
+        <p className="text-xs text-primary-500">
+          {puedeVerHc ? 'Puede ver tu historia clínica.' : 'No puede ver tu historia clínica — solo gestiona turnos.'}
+        </p>
+      )}
+      {estado === 'rechazado' && (vinculo.motivo_rechazo || vinculo.motivo) && (
+        <p className="text-xs text-danger">
+          Motivo: {vinculo.motivo_rechazo || vinculo.motivo}
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onRevocar(vinculo.id ?? vinculo.vinculo_id)}
+        disabled={revocando}
+        className="text-xs font-semibold text-danger hover:underline disabled:opacity-50"
+      >
+        Revocar acceso
+      </button>
+    </div>
+  )
+}
+
+function FamiliaTab() {
+  const { data, isLoading, error } = useVinculosFamiliares()
+  const gestiono     = data?.gestiono ?? []
+  const meGestionan  = data?.me_gestionan ?? []
+
+  const [modalSolicitar, setModalSolicitar] = useState(false)
+  const [hcFamiliar, setHcFamiliar] = useState(null) // { id, nombre } | null
+  const [revocarError, setRevocarError] = useState('')
+
+  const revocarMut = useRevocarVinculoFamiliar()
+
+  async function handleRevocar(vinculoId) {
+    if (!vinculoId) return
+    setRevocarError('')
+    try {
+      await revocarMut.mutateAsync(vinculoId)
+    } catch (e) {
+      setRevocarError(e?.message ?? 'No pudimos revocar el vínculo. Probá de nuevo.')
+    }
+  }
+
+  return (
+    <section className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-sora text-lg font-bold text-primary sm:text-xl">Mi familia</h2>
+          <p className="text-sm text-primary-500">
+            Gestioná vínculos familiares para operar turnos y, si el municipio lo autoriza, ver su historia clínica.
+          </p>
+        </div>
+        <Button onClick={() => setModalSolicitar(true)}>+ Solicitar vínculo</Button>
       </div>
 
       {isLoading && (
@@ -1142,53 +1478,70 @@ function FamiliaTab({ turnos, isLoading, error }) {
       )}
       {error && (
         <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
-          No pudimos cargar tu información. Probá de nuevo.
+          No pudimos cargar tus vínculos familiares. Probá de nuevo.
+        </div>
+      )}
+      {revocarError && (
+        <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">
+          {revocarError}
         </div>
       )}
 
-      {!isLoading && !error && familiares.length === 0 && (
-        <div className="card p-8 text-center">
-          <p className="text-sm text-primary-500">
-            Todavía no sacaste turnos para familiares.
-          </p>
-          <Link to="/portal/turno" className="btn-accent mt-4 inline-flex">
-            + Sacar turno para un familiar
-          </Link>
-        </div>
+      {!isLoading && !error && (
+        <>
+          <div>
+            <h3 className="font-sora text-base font-bold text-primary">Gestiono a</h3>
+            {gestiono.length === 0 ? (
+              <p className="mt-2 text-sm text-primary-500">
+                Todavía no solicitaste ningún vínculo familiar.
+              </p>
+            ) : (
+              <div className="mt-2 space-y-3">
+                {gestiono.map(v => (
+                  <VinculoGestionoCard
+                    key={v.id ?? v.vinculo_id}
+                    vinculo={v}
+                    onRevocar={handleRevocar}
+                    onVerHc={setHcFamiliar}
+                    revocando={revocarMut.isPending}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h3 className="font-sora text-base font-bold text-primary">Me gestionan</h3>
+            <p className="mt-0.5 text-xs text-primary-500">
+              Personas que pidieron gestionar tus turnos (y, si lo autorizaste, tu historia clínica).
+            </p>
+            {meGestionan.length === 0 ? (
+              <p className="mt-2 text-sm text-primary-500">
+                Nadie tiene acceso a tus datos por vínculo familiar.
+              </p>
+            ) : (
+              <div className="mt-2 space-y-3">
+                {meGestionan.map(v => (
+                  <VinculoMeGestionanCard
+                    key={v.id ?? v.vinculo_id}
+                    vinculo={v}
+                    onRevocar={handleRevocar}
+                    revocando={revocarMut.isPending}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {!isLoading && !error && familiares.length > 0 && (
-        <div className="card overflow-hidden p-0">
-          <ul className="divide-y divide-border">
-            {familiares.map(t => {
-              const meta = t.metadata
-              const vinculo = VINCULO_LABEL[meta.vinculo] ?? meta.vinculo ?? 'Familiar'
-              const dep = t.dependencia?.nombre ?? '—'
-              return (
-                <li key={t.id} className="space-y-2 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-primary sm:text-base">
-                        {meta.familiar_nombre || 'Familiar'}
-                      </p>
-                      <p className="mt-0.5 text-xs text-primary-500 sm:text-sm">
-                        {vinculo}
-                        {meta.familiar_edad ? ` · ${meta.familiar_edad} años` : ''}
-                        {meta.familiar_dni ? ` · DNI ${meta.familiar_dni}` : ''}
-                      </p>
-                    </div>
-                    <span className={ESTADO_CLASS[t.estado] ?? 'estado-pendiente'}>
-                      {ESTADO_LABEL[t.estado] ?? t.estado}
-                    </span>
-                  </div>
-                  <p className="text-xs text-primary-400">
-                    {dateTimeOf(t.fecha_hora)} · {dep}
-                  </p>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
+      {modalSolicitar && <SolicitarVinculoModal onClose={() => setModalSolicitar(false)} />}
+      {hcFamiliar && (
+        <HistoriaClinicaFamiliarModal
+          familiarId={hcFamiliar.id}
+          familiarNombre={hcFamiliar.nombre}
+          onClose={() => setHcFamiliar(null)}
+        />
       )}
     </section>
   )
@@ -1404,13 +1757,7 @@ export default function VecinoDashboard() {
             error={reservasQ.error}
           />
         )}
-        {tab === 'familia'  && (
-          <FamiliaTab
-            turnos={turnosQ.data ?? []}
-            isLoading={turnosQ.isLoading}
-            error={turnosQ.error}
-          />
-        )}
+        {tab === 'familia' && <FamiliaTab />}
         {tab === 'desarrollo' && (
           <DesarrolloTab
             vecino={vecinoSession}

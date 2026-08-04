@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { barrios } from '../../lib/mockData'
 import { useVecinos } from '../../hooks/useVecinos'
+import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
+import { useVinculosFamiliaresPendientes } from '../../hooks/useVinculosFamiliaresAdmin'
 import SearchBar from '../../components/ui/SearchBar'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import Avatar from '../../components/ui/Avatar'
 import Button from '../../components/ui/Button'
+import Tabs from '../../components/ui/Tabs'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 import VecinoFormModal from '../../components/crm/VecinoFormModal'
+import VinculosFamiliaresBandeja from '../../components/crm/VinculosFamiliaresBandeja'
 
 // "Apellido, Nombre" si están separados; nombre_completo si no.
 function displayName(v) {
@@ -48,6 +52,8 @@ function ZonaBadge({ zona }) {
 
 export default function CrmVecinos() {
   const navigate = useNavigate()
+  const { municipioId } = useEffectiveMunicipioId()
+  const [view, setView]         = useState('padron') // 'padron' | 'vinculos'
   const [q, setQ]               = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [barrio, setBarrio]     = useState('')
@@ -55,6 +61,9 @@ export default function CrmVecinos() {
   const [portalEstado, setPortalEstado] = useState('')
   const [datosIncompletos, setDatosIncompletos] = useState('')
   const [open, setOpen]         = useState(false)
+
+  const vinculosPendientesQ = useVinculosFamiliaresPendientes(municipioId)
+  const vinculosPendientesCount = vinculosPendientesQ.data?.length ?? 0
 
   // Debounce de la búsqueda — evita una query por tecla.
   useEffect(() => {
@@ -88,9 +97,24 @@ export default function CrmVecinos() {
             {isFetching && !isLoading && <span className="ml-2 text-primary-300">(actualizando...)</span>}
           </p>
         </div>
-        <Button onClick={() => setOpen(true)}>+ Nuevo vecino</Button>
+        {view === 'padron' && (
+          <Button onClick={() => setOpen(true)}>+ Nuevo vecino</Button>
+        )}
       </header>
 
+      <Tabs
+        tabs={[
+          { value: 'padron',   label: 'Padrón' },
+          { value: 'vinculos', label: 'Vínculos familiares', count: vinculosPendientesCount || undefined },
+        ]}
+        value={view}
+        onChange={setView}
+      />
+
+      {view === 'vinculos' && <VinculosFamiliaresBandeja municipioId={municipioId} />}
+
+      {view === 'padron' && (
+      <>
       <div className="flex flex-wrap gap-3">
         <SearchBar
           value={q}
@@ -248,6 +272,8 @@ export default function CrmVecinos() {
             ))}
           </tbody>
         </Table>
+      )}
+      </>
       )}
 
       <VecinoFormModal
