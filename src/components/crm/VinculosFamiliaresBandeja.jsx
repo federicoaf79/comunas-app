@@ -16,7 +16,7 @@ const PARENTESCO_LABEL = {
   madre:    'Madre',
   conyuge:  'Cónyuge',
   hermano:  'Hermano/a',
-  tutelado: 'Persona a cargo',
+  tutelado: 'Persona a mi cargo',
   otro:     'Otro',
 }
 
