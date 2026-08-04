@@ -26,6 +26,7 @@ const COLS = 'id, nombre_completo, apellido, nombre, dni, barrio, telefono, zona
 const DETAIL_COLS = `
   id, municipio_id, dni, nombre_completo, apellido, nombre, telefono,
   email, barrio, direccion, fecha_nac, sexo, localidad, zona,
+  estado_civil,
   grupo_sanguineo, alergias, sin_alergias_conocidas,
   contacto_emergencia_nombre, contacto_emergencia_telefono
 `

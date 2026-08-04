@@ -9,11 +9,14 @@ import {
   useSumReservas, useCreateSumReserva, useUpdateSumReservaEstado,
 } from '../../hooks/useSumReservas'
 import { currentMonthYYYYMM } from '../../hooks/useAdministracion'
+import { useConfigClaveAdmin, useUpsertConfigClave } from '../../hooks/useConfigPortal'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
+import Button from '../../components/ui/Button'
+import Modal from '../../components/ui/Modal'
 import Spinner from '../../components/ui/Spinner'
 import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
-import SumReservaFormModal from '../../components/admin/SumReservaFormModal'
+import SumReservaFormModal, { FORMA_PAGO_LABEL } from '../../components/admin/SumReservaFormModal'
 import AdministracionTab from '../../components/admin/AdministracionTab'
 import DepLandingTab from '../../components/admin/DepLandingTab'
 import DepBotIATab from '../../components/admin/DepBotIATab'
@@ -205,7 +208,26 @@ function ReservasTab({ depSum, canApprove }) {
                   <span className="line-clamp-2">{r.motivo || '—'}</span>
                 </Td>
                 <Td className="whitespace-nowrap text-right font-semibold">
-                  {fmtMoney.format(r.costo ?? 0)}
+                  {r.forma_pago === 'especie' ? (
+                    <span className="inline-flex flex-col items-end">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-accent-700">Donación</span>
+                      <span className="max-w-[160px] truncate text-xs font-normal text-primary-500" title={r.donacion_descripcion ?? ''}>
+                        {r.donacion_descripcion || '—'}
+                      </span>
+                    </span>
+                  ) : r.forma_pago === 'exento' ? (
+                    <span className="text-xs font-semibold uppercase tracking-wide text-primary-500">Exento</span>
+                  ) : (
+                    <span className="inline-flex flex-col items-end">
+                      <span>{fmtMoney.format(r.costo ?? 0)}</span>
+                      {/* Reservas creadas antes de esta columna tienen
+                          forma_pago NULL — se muestran como "No
+                          declarada", nunca como si fueran en efectivo. */}
+                      <span className="text-[10px] font-normal text-primary-400">
+                        {FORMA_PAGO_LABEL[r.forma_pago] ?? 'No declarada'}
+                      </span>
+                    </span>
+                  )}
                 </Td>
                 <Td>
                   <span className={ESTADO_CLASS[r.estado] ?? 'estado-pendiente'}>
@@ -461,22 +483,134 @@ function CalendarioTab() {
 // TAB 3 · Tarifas y condiciones
 // ─────────────────────────────────────────────────────────────────
 
-const TARIFAS = [
-  { tipo: 'Eventos sociales (cumpleaños, reuniones)', precio: 15000 },
-  { tipo: 'Eventos deportivos',                       precio:  8000 },
+// Clave de configuracion_portal donde viven las tarifas — reemplaza
+// el const TARIFAS hardcodeado de antes. Mismo shape exacto, así que
+// un municipio sin fila todavía (defaultValue de useConfigClaveAdmin)
+// ve lo mismo que se veía siempre, sin migración de datos necesaria.
+const SUM_TARIFAS_CLAVE = 'sum_tarifas'
+
+const TARIFAS_DEFAULT = [
+  { tipo: 'Eventos sociales (cumpleaños, reuniones)', precio: 15000, nota: null },
+  { tipo: 'Eventos deportivos',                       precio:  8000, nota: null },
   { tipo: 'Eventos institucionales / ONG',            precio:     0, nota: 'Sin costo' },
   { tipo: 'Día completo (cualquier categoría)',       precio: null,  nota: '+50% sobre tarifa base' },
 ]
 
-function TarifasTab() {
+function EditarTarifasModal({ tarifas, municipioId, onClose }) {
+  const [rows, setRows] = useState(() => tarifas.map(t => ({
+    tipo: t.tipo ?? '', precio: t.precio ?? '', nota: t.nota ?? '',
+  })))
+  const [error, setError] = useState('')
+  const upsert = useUpsertConfigClave(SUM_TARIFAS_CLAVE, { municipioIdOverride: municipioId })
+
+  function setRow(i, field, value) {
+    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
+  }
+  function addRow() {
+    setRows(rs => [...rs, { tipo: '', precio: '', nota: '' }])
+  }
+  function removeRow(i) {
+    setRows(rs => rs.filter((_, idx) => idx !== i))
+  }
+
+  async function handleSave() {
+    setError('')
+    const limpio = rows
+      .filter(r => r.tipo.trim())
+      .map(r => ({
+        tipo:   r.tipo.trim(),
+        precio: r.precio === '' || r.precio === null ? null : Number(r.precio),
+        nota:   r.nota?.trim() || null,
+      }))
+    if (limpio.length === 0) { setError('Cargá al menos una tarifa.'); return }
+    try {
+      await upsert.mutateAsync(limpio)
+      onClose()
+    } catch (e) {
+      setError(e?.message ?? 'No pudimos guardar las tarifas.')
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Editar tarifas"
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={upsert.isPending}>Cancelar</Button>
+          <Button onClick={handleSave} loading={upsert.isPending}>Guardar cambios</Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {rows.map((r, i) => (
+          <div key={i} className="flex flex-wrap items-end gap-2 border-b border-border pb-3 last:border-b-0">
+            <Input
+              label={i === 0 ? 'Tipo de evento' : undefined}
+              value={r.tipo}
+              onChange={e => setRow(i, 'tipo', e.target.value)}
+              className="min-w-[220px] flex-1"
+            />
+            <Input
+              label={i === 0 ? 'Precio ($)' : undefined}
+              type="number"
+              value={r.precio}
+              onChange={e => setRow(i, 'precio', e.target.value)}
+              placeholder="0"
+              className="w-32"
+            />
+            <Input
+              label={i === 0 ? 'Nota (opcional)' : undefined}
+              value={r.nota}
+              onChange={e => setRow(i, 'nota', e.target.value)}
+              placeholder="Ej: +50% sobre tarifa base"
+              className="min-w-[200px] flex-1"
+            />
+            <button
+              type="button"
+              onClick={() => removeRow(i)}
+              className="mb-2 text-xs font-semibold text-danger hover:underline"
+            >
+              Quitar
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={addRow} className="text-xs font-semibold text-primary hover:underline">
+          + Agregar tarifa
+        </button>
+        <p className="text-xs text-primary-400">
+          Dejá "Precio" vacío para que se muestre solo la nota (ej. "+50% sobre tarifa base").
+          Un precio de 0 se muestra como "Sin costo".
+        </p>
+        {error && (
+          <div className="rounded-md border border-red-100 bg-red-50 p-3 text-sm text-danger">{error}</div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function TarifasTab({ municipioId, puedeAdministrar }) {
+  const { data: tarifas = TARIFAS_DEFAULT } = useConfigClaveAdmin(
+    SUM_TARIFAS_CLAVE, TARIFAS_DEFAULT, { municipioIdOverride: municipioId },
+  )
+  const [editando, setEditando] = useState(false)
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-primary">Tarifas vigentes</h2>
-        <p className="mt-1 text-sm text-primary-500">
-          Valores de referencia. La administración puede ajustar el costo
-          al cargar la reserva según el caso.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-primary">Tarifas vigentes</h2>
+          <p className="mt-1 text-sm text-primary-500">
+            Valores de referencia. La administración puede ajustar el costo
+            al cargar la reserva según el caso.
+          </p>
+        </div>
+        {puedeAdministrar && (
+          <Button variant="secondary" onClick={() => setEditando(true)}>Editar tarifas</Button>
+        )}
       </div>
 
       <Table>
@@ -487,7 +621,7 @@ function TarifasTab() {
           </Tr>
         </THead>
         <tbody>
-          {TARIFAS.map(t => (
+          {tarifas.map(t => (
             <Tr key={t.tipo}>
               <Td className="font-medium text-primary">{t.tipo}</Td>
               <Td className="whitespace-nowrap text-right font-semibold text-primary-700">
@@ -524,6 +658,14 @@ function TarifasTab() {
           <li>Las reservas pueden cancelarse hasta 48 horas antes sin cargo.</li>
         </ul>
       </div>
+
+      {editando && (
+        <EditarTarifasModal
+          tarifas={tarifas}
+          municipioId={municipioId}
+          onClose={() => setEditando(false)}
+        />
+      )}
     </div>
   )
 }
@@ -625,7 +767,7 @@ export default function SUM() {
             )}
           {depSum && <ReservasSemanalTab />}
           {depSum && <CalendarioTab />}
-          <TarifasTab />
+          <TarifasTab municipioId={municipioId} puedeAdministrar={puedeAdministrar} />
         </div>
       )}
 

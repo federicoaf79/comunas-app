@@ -18,6 +18,7 @@ import Select  from '../../components/ui/Select'
 import Button  from '../../components/ui/Button'
 import FotoFirmada from '../../components/ui/FotoFirmada'
 import { dateOf, dateTimeOf, timeOf } from '../../lib/datetime'
+import { ESTADO_CIVIL_LABEL } from '../../lib/estadoCivil'
 
 const MUNICIPIO_NOMBRE = 'Comisión Municipal Real Sayana'
 
@@ -637,6 +638,10 @@ function DatosTab({ vecino }) {
             value={vecino.fecha_nac ? dateOf(vecino.fecha_nac) : null}
           />
           <DatoRow label="Sexo" value={vecino.sexo} />
+          <DatoRow
+            label="Estado civil"
+            value={vecino.estado_civil ? ESTADO_CIVIL_LABEL[vecino.estado_civil] ?? vecino.estado_civil : null}
+          />
         </div>
       </div>
 

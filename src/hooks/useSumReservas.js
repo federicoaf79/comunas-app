@@ -14,12 +14,19 @@ function logAudit(args) {
 //
 // Schema REAL en producción:
 //   sum_reservas (id, municipio_id, dependencia_id, solicitante,
-//     motivo, fecha, horario, estado, costo, created_at)
+//     motivo, fecha, horario, estado, costo, forma_pago,
+//     donacion_descripcion, created_at)
 //
 // `solicitante` es texto plano (no hay FK a vecinos) y `horario`
 // es una única columna que guarda la franja completa (mañana /
 // tarde / noche / día completo). No existen vecino_id,
 // hora_inicio, hora_fin, cant_personas ni notas_admin.
+//
+// `forma_pago` ('dinero' | 'especie') + `donacion_descripcion`
+// (qué donó, solo cuando forma_pago='especie') -- agregadas para que
+// el vecino pueda cubrir el uso del SUM con una donación en vez de
+// plata. Columnas nuevas, ALTER TABLE pendiente de confirmación del
+// cliente antes de asumir que ya corrió en prod.
 //
 // Estados: pendiente | aprobada | rechazada | cancelada | realizada
 // =============================================================
@@ -29,7 +36,7 @@ const TIMEOUT_MS = 8000
 // Columnas reales de sum_reservas — ÚNICA fuente de verdad para
 // todas las queries del hook (SELECT, ORDER BY, INSERT whitelist).
 const RESERVA_COLS =
-  'id, municipio_id, dependencia_id, solicitante, motivo, fecha, horario, estado, costo, created_at'
+  'id, municipio_id, dependencia_id, solicitante, motivo, fecha, horario, estado, costo, forma_pago, donacion_descripcion, created_at'
 
 // Subset insertable — id y created_at los completa la DB. Cualquier
 // payload que llegue al hook se filtra contra esta whitelist antes
@@ -37,7 +44,7 @@ const RESERVA_COLS =
 // caller envía campos extra (vecino_id, hora_inicio, etc).
 const INSERTABLE_COLS = [
   'municipio_id', 'dependencia_id', 'solicitante', 'motivo',
-  'fecha', 'horario', 'estado', 'costo',
+  'fecha', 'horario', 'estado', 'costo', 'forma_pago', 'donacion_descripcion',
 ]
 
 function pickInsertable(data) {

@@ -103,7 +103,7 @@ export async function refetchVecinoById(vecinoId) {
   if (!vecinoId) return null
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, estado_civil, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
     .eq('id', vecinoId)
     .maybeSingle()
   if (error) {
@@ -131,7 +131,7 @@ export async function findVecinoByDniTelefono({ dni, telefono }) {
 
   const { data, error } = await supabaseAnon
     .from('vecinos')
-    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
+    .select('id, dni, nombre, apellido, nombre_completo, telefono, email, fecha_nac, sexo, direccion, localidad, barrio, municipio_id, estado_civil, grupo_sanguineo, alergias, sin_alergias_conocidas, contacto_emergencia_nombre, contacto_emergencia_telefono')
     .eq('dni', dniClean)
     .limit(5)
   if (error) throw error

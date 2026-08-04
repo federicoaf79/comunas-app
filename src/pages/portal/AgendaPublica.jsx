@@ -95,17 +95,18 @@ export default function AgendaPublica() {
     if (vista === 'dia') {
       return { fechaDesde: fechaSelec, fechaHasta: fechaSelec, diasVista: [fechaSelec] }
     }
-    // Semana: lunes a viernes
+    // Semana: lunes a domingo — antes cortaba en viernes, dejando
+    // sábado y domingo siempre afuera de la vista semanal.
     const d = new Date(fechaSelec + 'T12:00:00')
     const dow = d.getDay() === 0 ? 7 : d.getDay()
     const lunes = new Date(d); lunes.setDate(d.getDate() - dow + 1)
-    const viernes = new Date(lunes); viernes.setDate(lunes.getDate() + 4)
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6)
     const dias = []
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const dd = new Date(lunes); dd.setDate(lunes.getDate() + i)
       dias.push(fmtDate(dd))
     }
-    return { fechaDesde: fmtDate(lunes), fechaHasta: fmtDate(viernes), diasVista: dias }
+    return { fechaDesde: fmtDate(lunes), fechaHasta: fmtDate(domingo), diasVista: dias }
   }, [vista, fechaSelec])
 
   const { data: eventos = [], isLoading } = useAgendaPublica(municipioId, fechaDesde, fechaHasta)
@@ -143,7 +144,7 @@ export default function AgendaPublica() {
       return new Date(fechaSelec + 'T12:00:00').toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
     }
     const d = new Date(diasVista[0] + 'T12:00:00')
-    const h = new Date(diasVista[4] + 'T12:00:00')
+    const h = new Date(diasVista[diasVista.length - 1] + 'T12:00:00')
     return `${d.toLocaleDateString('es-AR', { day:'numeric', month:'long' })} – ${h.toLocaleDateString('es-AR', { day:'numeric', month:'long', year:'numeric' })}`
   }
 
@@ -157,6 +158,15 @@ export default function AgendaPublica() {
       const slotFin = slotInicio + 60
       return evInicio < slotFin && evFin > slotInicio
     })
+  }
+
+  // Todos los eventos de un día, ordenados por hora — usado en la
+  // vista de celular (lista apilada), donde no tiene sentido mostrar
+  // una grilla de 7 columnas angostas.
+  function eventosDelDia(fecha) {
+    return eventosFiltrados
+      .filter(ev => ev.fecha === fecha)
+      .sort((a, b) => horaToMinutos(a.hora_inicio) - horaToMinutos(b.hora_inicio))
   }
 
   async function handleUploadOrden(e) {
@@ -335,67 +345,125 @@ export default function AgendaPublica() {
             {isLoading ? (
               <div className="flex justify-center py-10"><Spinner size="lg" /></div>
             ) : (
-              <div className="overflow-x-auto rounded-2xl border border-border bg-white shadow-card">
-                <table className="min-w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-primary-50">
-                      <th className="w-16 px-3 py-2 text-left text-[10px] font-semibold uppercase text-primary-400">Hora</th>
-                      {diasVista.map(fecha => {
-                        const d = new Date(fecha + 'T12:00:00')
-                        const esHoy = fecha === hoy
-                        return (
-                          <th key={fecha} className={`px-2 py-2 text-center ${esHoy ? 'text-[#1D4ED8] font-bold' : 'text-primary font-semibold'}`}>
-                            <div className="capitalize">{d.toLocaleDateString('es-AR', { weekday:'short' })}</div>
-                            <div className={`text-[11px] ${esHoy ? 'text-[#1D4ED8]' : 'text-primary-400'}`}>{d.getDate()}</div>
-                          </th>
-                        )
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {horas.map(hora => (
-                      <tr key={hora} className="hover:bg-primary-50/20 transition-colors">
-                        <td className="px-3 py-1.5 text-[10px] font-mono text-primary-400 align-top">{hora}</td>
+              <>
+                {/* Grilla — siempre visible en "Día" (1 columna, ya
+                    entra en cualquier pantalla); en "Semana" (7
+                    columnas) queda solo para desktop, `table-fixed`
+                    reparte el ancho entre los días en vez de forzar un
+                    mínimo por columna que antes disparaba scroll
+                    lateral ya en tablet. */}
+                <div className={`overflow-x-auto rounded-2xl border border-border bg-white shadow-card ${vista === 'semana' ? 'hidden md:block' : ''}`}>
+                  <table className="w-full table-fixed text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-primary-50">
+                        <th className="w-14 px-2 py-2 text-left text-[10px] font-semibold uppercase text-primary-400">Hora</th>
                         {diasVista.map(fecha => {
-                          const evs = eventosEnSlot(fecha, hora)
-                          const pasado = fecha < hoy || (fecha === hoy && parseInt(hora) < new Date().getHours())
+                          const d = new Date(fecha + 'T12:00:00')
+                          const esHoy = fecha === hoy
                           return (
-                            <td key={fecha} className="px-1 py-1 align-top min-w-[80px]">
-                              {evs.length > 0 && (
-                                <div className="space-y-0.5">
-                                  {evs.map(ev => {
-                                    const color = TIPO_COLOR[ev.tipo] ?? '#64748B'
-                                    const esInicio = ev.hora_inicio.slice(0,5) === hora.slice(0,5)
-                                    if (!esInicio) return null
-                                    return (
-                                      <button key={ev.id} type="button"
-                                        onClick={() => { setModalEvento(ev); setFormTurno({ motivo:'', orden:null }); setOrdenPreview(null); setError('') }}
-                                        className="w-full rounded-lg px-2 py-1.5 text-left transition-all hover:shadow-sm hover:opacity-90"
-                                        style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
-                                        <div className="flex items-center gap-1 mb-0.5">
-                                          <span style={{ color }} className="shrink-0">{TIPO_ICON_SVG[ev.tipo]}</span>
-                                          <span className="text-[10px] font-bold truncate" style={{ color }}>{ev.titulo}</span>
-                                        </div>
-                                        <p className="text-[9px] text-primary-400">{formatHora(ev.hora_inicio)} – {formatHora(ev.hora_fin)}</p>
-                                        {ev.profesional && (
-                                          <p className="text-[9px] text-primary-400 truncate">{ev.profesional.nombre}</p>
-                                        )}
-                                        {ev.profesional?.requiere_orden && (
-                                          <p className="text-[9px] mt-0.5" style={{ color }}>📋 orden requerida</p>
-                                        )}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </td>
+                            <th key={fecha} className={`px-1 py-2 text-center ${esHoy ? 'text-[#1D4ED8] font-bold' : 'text-primary font-semibold'}`}>
+                              <div className="capitalize truncate">{d.toLocaleDateString('es-AR', { weekday:'short' })}</div>
+                              <div className={`text-[11px] ${esHoy ? 'text-[#1D4ED8]' : 'text-primary-400'}`}>{d.getDate()}</div>
+                            </th>
                           )
                         })}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {horas.map(hora => (
+                        <tr key={hora} className="hover:bg-primary-50/20 transition-colors">
+                          <td className="px-2 py-1.5 text-[10px] font-mono text-primary-400 align-top">{hora}</td>
+                          {diasVista.map(fecha => {
+                            const evs = eventosEnSlot(fecha, hora)
+                            return (
+                              <td key={fecha} className="px-1 py-1 align-top">
+                                {evs.length > 0 && (
+                                  <div className="space-y-0.5">
+                                    {evs.map(ev => {
+                                      const color = TIPO_COLOR[ev.tipo] ?? '#64748B'
+                                      const esInicio = ev.hora_inicio.slice(0,5) === hora.slice(0,5)
+                                      if (!esInicio) return null
+                                      return (
+                                        <button key={ev.id} type="button"
+                                          onClick={() => { setModalEvento(ev); setFormTurno({ motivo:'', orden:null }); setOrdenPreview(null); setError('') }}
+                                          className="w-full rounded-lg px-2 py-1.5 text-left transition-all hover:shadow-sm hover:opacity-90"
+                                          style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
+                                          <div className="flex items-center gap-1 mb-0.5">
+                                            <span style={{ color }} className="shrink-0">{TIPO_ICON_SVG[ev.tipo]}</span>
+                                            <span className="text-[10px] font-bold truncate" style={{ color }}>{ev.titulo}</span>
+                                          </div>
+                                          <p className="text-[9px] text-primary-400">{formatHora(ev.hora_inicio)} – {formatHora(ev.hora_fin)}</p>
+                                          {ev.profesional && (
+                                            <p className="text-[9px] text-primary-400 truncate">{ev.profesional.nombre}</p>
+                                          )}
+                                          {ev.profesional?.requiere_orden && (
+                                            <p className="text-[9px] mt-0.5" style={{ color }}>📋 orden requerida</p>
+                                          )}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Vista de celular — lista apilada por día. Una grilla
+                    de 7 columnas angostas no entra en un teléfono sin
+                    scroll lateral incómodo; acá cada día es una sección
+                    con sus eventos en orden, sin necesidad de scrollear
+                    horizontalmente. */}
+                {vista === 'semana' && (
+                  <div className="md:hidden space-y-3">
+                    {diasVista.map(fecha => {
+                      const evs = eventosDelDia(fecha)
+                      const d = new Date(fecha + 'T12:00:00')
+                      const esHoy = fecha === hoy
+                      return (
+                        <div key={fecha} className="overflow-hidden rounded-2xl border border-border bg-white shadow-card">
+                          <div className={`border-b border-border px-4 py-2 ${esHoy ? 'bg-[#1D4ED8]/5' : 'bg-primary-50'}`}>
+                            <p className={`text-sm font-semibold capitalize ${esHoy ? 'text-[#1D4ED8]' : 'text-primary'}`}>
+                              {d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </p>
+                          </div>
+                          <div className="space-y-2 p-3">
+                            {evs.length === 0 ? (
+                              <p className="py-2 text-center text-xs text-primary-400">Sin actividades</p>
+                            ) : (
+                              evs.map(ev => {
+                                const color = TIPO_COLOR[ev.tipo] ?? '#64748B'
+                                return (
+                                  <button key={ev.id} type="button"
+                                    onClick={() => { setModalEvento(ev); setFormTurno({ motivo:'', orden:null }); setOrdenPreview(null); setError('') }}
+                                    className="w-full rounded-lg px-3 py-2 text-left transition-all hover:shadow-sm hover:opacity-90"
+                                    style={{ background: `${color}12`, border: `1.5px solid ${color}40` }}>
+                                    <div className="mb-0.5 flex items-center gap-1.5">
+                                      <span style={{ color }} className="shrink-0">{TIPO_ICON_SVG[ev.tipo]}</span>
+                                      <span className="text-xs font-bold" style={{ color }}>{ev.titulo}</span>
+                                    </div>
+                                    <p className="text-[11px] text-primary-400">{formatHora(ev.hora_inicio)} – {formatHora(ev.hora_fin)}</p>
+                                    {ev.profesional && (
+                                      <p className="text-[11px] text-primary-400">{ev.profesional.nombre}</p>
+                                    )}
+                                    {ev.profesional?.requiere_orden && (
+                                      <p className="mt-0.5 text-[11px]" style={{ color }}>📋 orden requerida</p>
+                                    )}
+                                  </button>
+                                )
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

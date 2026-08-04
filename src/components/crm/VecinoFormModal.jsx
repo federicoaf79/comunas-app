@@ -4,10 +4,11 @@ import Input from '../ui/Input'
 import Select from '../ui/Select'
 import Button from '../ui/Button'
 import { barrios } from '../../lib/mockData'
+import { ESTADO_CIVIL_OPTS } from '../../lib/estadoCivil'
 
 const EMPTY = {
   apellido: '', nombre: '', dni: '', telefono: '', email: '',
-  zona: 'urbano', barrio: '', direccion: '',
+  zona: 'urbano', barrio: '', direccion: '', estado_civil: '',
 }
 
 const ZONA_OPTS = [
@@ -35,6 +36,7 @@ export default function VecinoFormModal({ open, onClose, onSubmit, vecino = null
         zona:      vecino.zona || 'urbano',
         barrio:    vecino.barrio ?? '',
         direccion: vecino.direccion ?? '',
+        estado_civil: vecino.estado_civil ?? '',
       } : EMPTY)
       setError('')
       setSaving(false)
@@ -52,7 +54,10 @@ export default function VecinoFormModal({ open, onClose, onSubmit, vecino = null
       // CRM (ver comentario en CrmVecinos.jsx) y que HistoriaClinicaForm.jsx
       // ya calcula bien antes de insertar.
       const nombre_completo = [apellido, nombre].filter(Boolean).join(', ') || apellido || nombre
-      await onSubmit?.({ ...form, apellido, nombre, nombre_completo })
+      // '' → null: la columna es nullable, pero su CHECK solo acepta
+      // los 6 valores reales — un string vacío lo violaría.
+      const estado_civil = form.estado_civil || null
+      await onSubmit?.({ ...form, apellido, nombre, nombre_completo, estado_civil })
       onClose()
     } catch (e) {
       setError(e?.message ?? 'No se pudo guardar el vecino.')
@@ -98,6 +103,13 @@ export default function VecinoFormModal({ open, onClose, onSubmit, vecino = null
           onChange={v => set('barrio', v)}
           placeholder="Seleccionar..."
           options={barrios.map(b => ({ value: b, label: b }))}
+        />
+        <Select
+          label="Estado civil"
+          value={form.estado_civil}
+          onChange={v => set('estado_civil', v)}
+          placeholder="Sin especificar"
+          options={ESTADO_CIVIL_OPTS}
         />
         <div className="md:col-span-2">
           <Input label="Dirección" value={form.direccion} onChange={e => set('direccion', e.target.value)} />
