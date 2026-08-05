@@ -10,19 +10,23 @@ function logAudit(args) {
 
 // =============================================================
 // useExpedientes — expedientes administrados por Juez de Paz.
-// Schema: expedientes_juzgado (ver migration 20260512).
+// Schema real (verificado en prod 2026-08-05, vía introspección REST):
+// id, municipio_id, dependencia_id, numero, tipo, estado, vecino_id,
+// descripcion, notas, fecha_inicio, fecha_cierre, created_at,
+// created_by. Sin caratula, prioridad, contraparte, responsable_id,
+// fecha_apertura, proxima_audiencia, observaciones, metadatos ni
+// updated_at -- la migration 20260512 nunca reflejó lo que quedó
+// aplicado en prod (mismo patrón que hc_documentos/seguros).
 // Estados: abierto | en_proceso | cerrado | derivado
 // =============================================================
 
 const TIMEOUT_MS = 8000
 
 const COLS = `
-  id, municipio_id, dependencia_id, numero, tipo, caratula,
-  estado, prioridad, vecino_id, contraparte, responsable_id,
-  fecha_apertura, fecha_cierre, proxima_audiencia,
-  observaciones, metadatos, created_at, updated_at,
-  vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono ),
-  responsable:responsable_id ( id, nombre, apellido )
+  id, municipio_id, dependencia_id, numero, tipo,
+  estado, vecino_id, descripcion, notas,
+  fecha_inicio, fecha_cierre, created_at, created_by,
+  vecino:vecino_id ( id, dni, nombre, apellido, nombre_completo, telefono )
 `
 
 function withTimeout() {
@@ -37,7 +41,7 @@ export async function fetchExpedientes({ municipioId, dependenciaId, estado, tip
     let q = supabase
       .from('expedientes_juzgado')
       .select(COLS)
-      .order('fecha_apertura', { ascending: false })
+      .order('fecha_inicio', { ascending: false })
       .abortSignal(signal)
     if (municipioId)   q = q.eq('municipio_id', municipioId)
     if (dependenciaId) q = q.eq('dependencia_id', dependenciaId)
@@ -79,8 +83,7 @@ export async function createExpediente(data) {
     .from('expedientes_juzgado')
     .insert({
       ...data,
-      estado:    data.estado    ?? 'abierto',
-      prioridad: data.prioridad ?? 'normal',
+      estado: data.estado ?? 'abierto',
     })
     .select(COLS)
     .single()
@@ -90,7 +93,7 @@ export async function createExpediente(data) {
   }
   logAudit({
     accion: 'create', entidad: 'expedientes_juzgado', entidadId: row.id,
-    descripcion: `Expediente abierto — ${row.caratula ?? row.numero ?? row.id}`,
+    descripcion: `Expediente abierto — ${row.numero ?? row.descripcion ?? row.id}`,
   })
   return row
 }
@@ -98,7 +101,7 @@ export async function createExpediente(data) {
 export async function updateExpediente(id, patch) {
   const { data: row, error } = await supabase
     .from('expedientes_juzgado')
-    .update({ ...patch, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id)
     .select(COLS)
     .single()
@@ -108,7 +111,7 @@ export async function updateExpediente(id, patch) {
   }
   logAudit({
     accion: 'update', entidad: 'expedientes_juzgado', entidadId: id,
-    descripcion: `Expediente actualizado — ${row.caratula ?? row.numero ?? id}`,
+    descripcion: `Expediente actualizado — ${row.numero ?? row.descripcion ?? id}`,
   })
   return row
 }

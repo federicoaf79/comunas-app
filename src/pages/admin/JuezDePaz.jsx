@@ -416,8 +416,7 @@ function ExpedientesTab({ depJuez, municipioId, canCreate }) {
     if (!needle) return expedientes
     return expedientes.filter(e =>
       (e.numero ?? '').toLowerCase().includes(needle)
-      || (e.caratula ?? '').toLowerCase().includes(needle)
-      || (e.contraparte ?? '').toLowerCase().includes(needle)
+      || (e.descripcion ?? '').toLowerCase().includes(needle)
       || (vecinoNombreExp(e.vecino) ?? '').toLowerCase().includes(needle),
     )
   }, [expedientes, q])
@@ -484,7 +483,7 @@ function ExpedientesTab({ depJuez, municipioId, canCreate }) {
             label="Buscar"
             value={q}
             onChange={e => setQ(e.target.value)}
-            placeholder="Número, carátula, parte…"
+            placeholder="Número, descripción, parte…"
           />
           <Select
             label="Estado"
@@ -526,7 +525,7 @@ function ExpedientesTab({ depJuez, municipioId, canCreate }) {
               <Tr>
                 <Th>N°</Th>
                 <Th>Tipo</Th>
-                <Th>Carátula</Th>
+                <Th>Descripción</Th>
                 <Th>Parte</Th>
                 <Th>Apertura</Th>
                 <Th>Estado</Th>
@@ -535,14 +534,14 @@ function ExpedientesTab({ depJuez, municipioId, canCreate }) {
             </THead>
             <tbody>
               {expsFiltrados.map(e => {
-                const parte = vecinoNombreExp(e.vecino) ?? e.contraparte ?? '—'
+                const parte = vecinoNombreExp(e.vecino) ?? '—'
                 return (
                   <Tr key={e.id}>
                     <Td className="font-mono text-xs">{e.numero}</Td>
                     <Td>{EXP_TIPO_LABEL[e.tipo] ?? e.tipo}</Td>
-                    <Td className="max-w-[280px] truncate" title={e.caratula}>{e.caratula}</Td>
+                    <Td className="max-w-[280px] truncate" title={e.descripcion}>{e.descripcion}</Td>
                     <Td>{parte}</Td>
-                    <Td className="whitespace-nowrap text-xs">{shortDateOf(e.fecha_apertura)}</Td>
+                    <Td className="whitespace-nowrap text-xs">{shortDateOf(e.fecha_inicio)}</Td>
                     <Td>
                       <span className={EXP_ESTADO_CLASS[e.estado] ?? EXP_ESTADO_CLASS.abierto}>
                         {EXP_ESTADO_LABEL[e.estado] ?? e.estado}

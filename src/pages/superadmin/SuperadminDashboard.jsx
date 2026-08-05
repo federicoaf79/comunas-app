@@ -53,18 +53,19 @@ function useGlobalMetrics() {
   useEffect(() => {
     async function fetch() {
       try {
+        // mensajes_whatsapp no existe en prod (la mensajería real vive en
+        // sms_log) -- no se consulta acá; el KPI de "Mensajes WhatsApp"
+        // queda sin dato (metrics.mensajes undefined -> se renderiza "—").
         const [
           { count: municipios },
           { count: usuarios },
           { count: turnos },
-          { count: mensajes },
         ] = await Promise.all([
           supabase.from('municipios').select('id', { count: 'exact', head: true }),
           supabase.from('usuarios').select('id', { count: 'exact', head: true }),
           supabase.from('turnos_agenda').select('id', { count: 'exact', head: true }),
-          supabase.from('mensajes_whatsapp').select('id', { count: 'exact', head: true }),
         ])
-        setMetrics({ municipios, usuarios, turnos, mensajes })
+        setMetrics({ municipios, usuarios, turnos })
       } catch (e) {
         console.warn('metrics error', e.message)
       } finally {
@@ -93,18 +94,17 @@ function useTenantMetrics() {
 
         const results = await Promise.all(
           munis.map(async (m) => {
+            // mensajes_whatsapp no existe en prod -- ver nota en useGlobalMetrics.
             const [
               { count: vecinos },
               { count: turnos },
-              { count: mensajes },
               { count: usuarios },
             ] = await Promise.all([
               supabase.from('vecinos').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
               supabase.from('turnos_agenda').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
-              supabase.from('mensajes_whatsapp').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
               supabase.from('usuarios').select('id', { count: 'exact', head: true }).eq('municipio_id', m.id),
             ])
-            return { ...m, vecinos: vecinos ?? 0, turnos: turnos ?? 0, mensajes: mensajes ?? 0, usuarios: usuarios ?? 0 }
+            return { ...m, vecinos: vecinos ?? 0, turnos: turnos ?? 0, usuarios: usuarios ?? 0 }
           })
         )
         setTenants(results)
@@ -228,7 +228,7 @@ export default function SuperadminDashboard() {
                     </td>
                     <td className="px-4 py-3 text-center text-primary">{t.vecinos.toLocaleString('es-AR')}</td>
                     <td className="px-4 py-3 text-center text-primary">{t.turnos.toLocaleString('es-AR')}</td>
-                    <td className="px-4 py-3 text-center text-primary">{t.mensajes.toLocaleString('es-AR')}</td>
+                    <td className="px-4 py-3 text-center text-primary">—</td>
                     <td className="px-4 py-3 text-center text-primary">{t.usuarios.toLocaleString('es-AR')}</td>
                   </tr>
                 ))}
