@@ -132,6 +132,10 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [showRecovery, setShowRecovery] = useState(false)
+  // Municipio del SUBDOMINIO -- mismo hook y mismo criterio que
+  // RegistroTab más abajo, para el mismo problema (un vecino puro no
+  // tiene fila en `usuarios` de la que inferir esto).
+  const { data: municipioId } = usePortalMunicipioId()
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -153,7 +157,7 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
       // Se autenticó: el acceso queda registrado acá. Antes esta página
       // no escribía nada en audit_log -- cualquiera (staff incluido, ver
       // CLAUDE.md) que entrara por esta puerta quedaba sin rastro.
-      await registrarAcceso({ resultado: 'exito', via: 'portal_acceso', userId: data.user.id, email: data.user.email })
+      await registrarAcceso({ resultado: 'exito', via: 'portal_acceso', userId: data.user.id, email: data.user.email, municipioId })
 
       // VecinoContext.onAuthStateChange se encarga de cargar el vecino
       // vinculado y popular vecinoSession cuando detecta el evento SIGNED_IN.

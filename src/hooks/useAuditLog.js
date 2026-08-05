@@ -267,60 +267,52 @@ export async function createAuditLogVecino({
 // llamar a esto (ver AuthContext.signIn de versiones anteriores, que
 // sí lo hacía y por eso perdía logins reales sin dejar rastro).
 //
-// usuario_id es FK a usuarios.id, que para cuentas de staff coincide
-// con el auth uid pero un vecino puro no tiene fila ahí — insertar su
-// auth uid como usuario_id rompería con violación de FK (mismo motivo
-// que createAuditLogVecino más arriba). Por eso se confirma antes: si
-// no hay fila en `usuarios`, usuario_id queda null y la identidad real
-// vive en datos_despues.auth_user_id.
+// SIN SELECTs propios a propósito (versión anterior consultaba
+// `usuarios` acá adentro para resolver municipio_id/usuario_id — un
+// vecino puro no tiene fila ahí, así que esa consulta devolvía null y
+// la fila quedaba con municipio_id NULL, invisible para cualquier
+// admin_comuna porque Auditoria.jsx filtra con .eq('municipio_id', ...).
+// Una query más que puede fallar/devolver vacío en silencio es
+// exactamente el tipo de pieza que este sprint vino a sacar, no a
+// sumar). Los dos valores son responsabilidad del caller:
 //
-// `usuarioId`/`municipioId` son overrides opcionales: si el caller ya
-// los tiene resueltos (ej. AuthContext.signOut, con `perfil` ya
-// cargado) se los pasa directo y esta función se salta el SELECT a
-// `usuarios` por completo. Pasar `usuarioId: null` explícito es válido
-// (equivale a "ya confirmé que no tiene fila ahí") — solo se dispara
-// el SELECT cuando `usuarioId` es `undefined`.
+//   municipioId — sale del SUBDOMINIO por el que la persona entró, no
+//   de si tiene fila en `usuarios` o en `vecinos`. Quien se loguea en
+//   realsayana.comunas.lat está entrando al tenant de Real Sayana
+//   siempre, tenga o no perfil de staff. Cada página ya tiene una
+//   fuente para esto (usePortalMunicipioId en las tres, o
+//   perfil.municipio_id ya cargado en los dos logout).
 //
-// Si el INSERT falla, NUNCA queda en un catch mudo — se ve en consola
-// con un tag identificable. Tampoco se relanza: un fallo de auditoría
-// no puede tumbar un login o un logout que ya ocurrió de verdad.
+//   usuarioId — FK a usuarios.id (coincide con el auth uid para
+//   staff). Si el caller no lo pasa, queda `null` y la identidad real
+//   vive en datos_despues.auth_user_id/email — ESO ya funciona bien,
+//   no se toca.
+//
+// Si municipioId llega null/undefined, es un bug de armado en el
+// caller (no un caso válido) — se grita por consola en vez de dejar
+// que la fila desaparezca sola detrás de un filtro, pero el insert
+// sigue adelante igual: un fallo de auditoría no puede tumbar un
+// login o un logout que ya ocurrió de verdad.
+//
+// Si el INSERT en sí falla, NUNCA queda en un catch mudo — se ve en
+// consola con un tag identificable. Tampoco se relanza.
 // =============================================================
-export async function registrarAcceso({ resultado, via, userId, email, usuarioId, municipioId } = {}) {
+export async function registrarAcceso({ resultado, via, userId, email, municipioId, usuarioId } = {}) {
   if (!resultado) throw new Error('registrarAcceso: resultado es requerido.')
   if (!via) throw new Error('registrarAcceso: via es requerida.')
   if (!userId) throw new Error('registrarAcceso: userId es requerido.')
 
-  const accion = resultado === 'logout' ? 'LOGOUT' : 'LOGIN'
-
-  let municipio_id = null
-  let usuarioIdFk = null
-  if (usuarioId !== undefined) {
-    // El caller ya resolvió esto (ej. AuthContext.signOut, que tiene
-    // `perfil` cargado en memoria) -- nos ahorramos el roundtrip a
-    // `usuarios`. Cada query de más acá ensancha una ventana real
-    // documentada en CLAUDE.md entre signOut() y que el próximo
-    // componente termine de montarse limpio.
-    usuarioIdFk = usuarioId
-    municipio_id = municipioId ?? null
-  } else {
-    try {
-      const { data: row } = await supabase
-        .from('usuarios')
-        .select('id, municipio_id')
-        .eq('id', userId)
-        .maybeSingle()
-      if (row) {
-        usuarioIdFk = row.id
-        municipio_id = row.municipio_id ?? null
-      }
-    } catch { /* seguimos con usuario_id/municipio_id en null -- la identidad real queda en datos_despues */ }
+  if (municipioId == null) {
+    console.error('[useAuditLog] registrarAcceso: municipioId llegó null/undefined -- revisar el caller', { via, userId })
   }
+
+  const accion = resultado === 'logout' ? 'LOGOUT' : 'LOGIN'
 
   const { error } = await supabase
     .from('audit_log')
     .insert({
-      municipio_id,
-      usuario_id: usuarioIdFk,
+      municipio_id: municipioId ?? null,
+      usuario_id: usuarioId ?? null,
       accion,
       entidad: 'auth',
       entidad_id: userId,

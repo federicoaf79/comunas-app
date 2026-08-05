@@ -4,6 +4,7 @@ import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
 import { registrarAcceso } from '../../hooks/useAuditLog'
+import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -428,6 +429,10 @@ export default function Acceso() {
   const location = useLocation()
   const { signIn, perfil, loading: authLoading, signOut } = useAuth()
   const { setVecinoSession, isVecinoLogued } = useVecino()
+  // Municipio del SUBDOMINIO, no del perfil (todavía no existe en el
+  // momento de registrar el acceso) -- mismo hook que usa el portal
+  // público para lo mismo.
+  const { data: municipioId } = usePortalMunicipioId()
 
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
@@ -532,7 +537,7 @@ export default function Acceso() {
       // Se autenticó: el acceso queda registrado acá, antes de saber si
       // termina en la rama vecino o empleado — las dos son la misma
       // página/puerta (`via: 'acceso'`).
-      await registrarAcceso({ resultado: 'exito', via: 'acceso', userId, email: data.user.email })
+      await registrarAcceso({ resultado: 'exito', via: 'acceso', userId, email: data.user.email, municipioId })
 
       // RAMA VECINO — la cuenta autenticada (auth.uid()) puede ser a
       // la vez empleado y vecino del pueblo. Buscamos su propio

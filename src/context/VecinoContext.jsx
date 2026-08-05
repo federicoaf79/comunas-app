@@ -113,6 +113,11 @@ export function VecinoProvider({ children }) {
         via: 'portal_acceso',
         userId: vecinoSession.user_id,
         email: vecinoSession.user_email ?? null,
+        // vecinoSession es la fila de `vecinos` (que sí tiene
+        // municipio_id) más auth_mode/user_email -- ya está en memoria,
+        // sin query nueva. Mismo campo que ya se expone como alias en
+        // el value del contexto (ver `municipioId` más abajo).
+        municipioId: vecinoSession.municipio_id ?? null,
       })
     }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
-import { useDatosMunicipio } from '../../hooks/useConfigPortal'
+import { useDatosMunicipio, usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
 import { registrarAcceso } from '../../hooks/useAuditLog'
 import { traducirErrorAuth } from '../../lib/authErrors'
@@ -13,6 +13,9 @@ export default function Login() {
   const { signIn, signOut } = useAuth()
   const { identidad } = useDatosMunicipio()
   const logoUrl = identidad?.logo_url || null
+  // Municipio del SUBDOMINIO, no del perfil (que todavía no existe acá) --
+  // mismo hook que usa todo el portal público para lo mismo.
+  const { data: municipioId } = usePortalMunicipioId()
   const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
@@ -47,7 +50,7 @@ export default function Login() {
     // Se autenticó: el acceso queda registrado acá, sin esperar a los
     // chequeos de abajo (usuarios, activo, rol). Si alguno de esos
     // rechaza el ingreso, el LOGIN igual ocurrió de verdad.
-    await registrarAcceso({ resultado: 'exito', via: 'login_staff', userId, email: data.user.email })
+    await registrarAcceso({ resultado: 'exito', via: 'login_staff', userId, email: data.user.email, municipioId })
 
     const { data: u, error: perfilError } = await supabase
       .from('usuarios')
