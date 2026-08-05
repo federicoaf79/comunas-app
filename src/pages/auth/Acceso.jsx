@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
-import { registrarAcceso } from '../../hooks/useAuditLog'
+import { registrarAcceso, registrarIntentoFallido } from '../../hooks/useAuditLog'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
@@ -525,6 +525,8 @@ export default function Acceso() {
         password: form.password,
       })
       if (signInError) {
+        // Sin await -- el usuario tiene que ver el error al instante.
+        registrarIntentoFallido({ email: form.email, via: 'acceso' })
         setError('Usuario o contraseña incorrectos.')
         return
       }

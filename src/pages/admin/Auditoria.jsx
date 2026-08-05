@@ -14,13 +14,14 @@ import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 //   Cambios  → todo lo demás (alta/edición/aprobación/etc.)
 //   Resumen  → métricas de los últimos 30 días (procesado en JS)
 //
-// El acceso se registra vía registrarAcceso() (useAuditLog.js), llamado
-// desde las tres páginas de login (Login.jsx, Acceso.jsx,
+// El acceso exitoso/logout se registra vía registrarAcceso() (useAuditLog.js),
+// llamado desde las tres páginas de login (Login.jsx, Acceso.jsx,
 // VecinoAcceso.jsx) y desde los dos puntos de logout (AuthContext.signOut,
-// VecinoContext.clearVecinoSession) — nunca desde acá. LOGIN_FALLIDO
-// todavía no tiene escritor (llega en una función de Vercel aparte); el
-// filtro de abajo ya lo contempla para no tener que tocar esta pantalla
-// de nuevo cuando se sume.
+// VecinoContext.clearVecinoSession). LOGIN_FALLIDO se registra distinto:
+// api/registrar-intento-fallido.js (función de Vercel con service_role,
+// porque un login sin sesión escribe como anon y a anon se le revocó
+// INSERT en toda public) — las tres páginas la llaman fire-and-forget
+// en su rama de error. Nunca desde acá.
 //
 // Restringido a admin_comuna / superadmin (guard a nivel ruta +
 // mensaje suave acá). Para superadmin (municipio_id null) NO se

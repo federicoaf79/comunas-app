@@ -323,10 +323,41 @@ export async function registrarAcceso({ resultado, via, userId, email, municipio
         via,
         email: email ?? null,
         auth_user_id: userId,
+        // Red de contención de la carrera con usePortalMunicipioId: si
+        // esta fila termina con municipio_id null (query de municipio
+        // sin resolver todavía en el momento del submit), el hostname
+        // sigue siendo atribuible a un tenant a simple vista. Síncrono
+        // y sin ninguna carrera propia -- window.location.hostname ya
+        // está resuelto en el momento en que el componente ejecuta esto.
+        hostname: typeof window !== 'undefined' ? window.location.hostname : null,
         timestamp: new Date().toISOString(),
       },
     })
   if (error) {
     console.error('[useAuditLog] registrarAcceso falló:', { accion, via, userId, error: error.message })
   }
+}
+
+// =============================================================
+// registrarIntentoFallido — dispara la función de Vercel que anota un
+// LOGIN_FALLIDO (api/registrar-intento-fallido.js). Nunca se llama con
+// `await` desde las páginas: el usuario tiene que ver "Email o
+// contraseña incorrectos" al instante, no esperar a que esto termine.
+//
+// Por qué es una función de Vercel y no un insert directo de acá: un
+// login fallido no genera sesión, así que el insert saldría con la
+// anon key sin token -- es decir, como el rol `anon`. Y a `anon` se le
+// revocó INSERT en todas las tablas de public (sprint de cierre de
+// escritura anónima), audit_log incluida. Además esa función es la
+// única pieza que ve la IP real y el Host, que le dan sentido a la fila.
+//
+// Nunca manda la contraseña -- ni falta que hace, el servidor no la
+// necesita para registrar que el intento falló.
+// =============================================================
+export function registrarIntentoFallido({ email, via }) {
+  fetch('/api/registrar-intento-fallido', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, via }),
+  }).catch(e => console.warn('[useAuditLog] registrarIntentoFallido:', e.message))
 }

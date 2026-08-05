@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useDatosMunicipio, usePortalMunicipioId } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
-import { registrarAcceso } from '../../hooks/useAuditLog'
+import { registrarAcceso, registrarIntentoFallido } from '../../hooks/useAuditLog'
 import { traducirErrorAuth } from '../../lib/authErrors'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -32,6 +32,8 @@ export default function Login() {
 
     const { data, error: signInError } = await signIn({ email, password })
     if (signInError) {
+      // Sin await -- el usuario tiene que ver el error al instante.
+      registrarIntentoFallido({ email, via: 'login_staff' })
       setLoading(false)
       setError(traducirErrorAuth(signInError.message))
       return

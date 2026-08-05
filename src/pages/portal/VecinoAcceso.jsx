@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
-import { registrarAcceso } from '../../hooks/useAuditLog'
+import { registrarAcceso, registrarIntentoFallido } from '../../hooks/useAuditLog'
 import { traducirErrorAuth } from '../../lib/authErrors'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
@@ -148,7 +148,11 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
         password,
       })
 
-      if (signInError) throw signInError
+      if (signInError) {
+        // Sin await -- el usuario tiene que ver el error al instante.
+        registrarIntentoFallido({ email: email.trim(), via: 'portal_acceso' })
+        throw signInError
+      }
 
       if (!data.user) {
         throw new Error('No se pudo iniciar sesión')
