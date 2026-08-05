@@ -150,7 +150,7 @@ export function useAccesosMes() {
 }
 
 export async function createAuditLog({
-  accion, entidad, entidadId, descripcion, metadata, municipioId,
+  accion, entidad, entidadId, descripcion, metadata, datosAntes, municipioId,
 } = {}) {
   if (!accion) throw new Error('createAuditLog: accion es requerida.')
   const { data: { user } = {} } = await supabase.auth.getUser()
@@ -182,6 +182,10 @@ export async function createAuditLog({
       entidad:     entidad ?? null,
       entidad_id:  entidadId == null ? null : String(entidadId),
       descripcion: descripcion ?? null,
+      // `datosAntes` es opcional a propósito — la mayoría de las
+      // acciones (create, por ejemplo) no tienen un "antes" real.
+      // `null` distingue "no se capturó" de "el antes era {}".
+      datos_antes:   datosAntes ?? null,
       // El payload libre que antes iba a `metadata` (columna
       // inexistente) ahora se persiste en `datos_despues` (jsonb).
       datos_despues: metadata ?? {},

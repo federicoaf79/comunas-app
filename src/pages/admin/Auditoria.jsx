@@ -385,7 +385,7 @@ export default function Auditoria() {
     return (
       <div className="space-y-5">
         <header>
-          <h1 className="font-sora text-2xl font-bold text-primary">Auditoría</h1>
+          <h1 className="font-sora text-2xl font-bold text-primary">Registro del Sistema</h1>
         </header>
         <div className="card p-10 text-center">
           <p className="font-sora text-lg font-semibold text-primary">Acceso restringido</p>
@@ -400,7 +400,7 @@ export default function Auditoria() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="font-sora text-2xl font-bold text-primary">Auditoría</h1>
+        <h1 className="font-sora text-2xl font-bold text-primary">Registro del Sistema</h1>
         <p className="mt-1 text-sm text-primary-500">
           Accesos al sistema y registro de cambios.
         </p>

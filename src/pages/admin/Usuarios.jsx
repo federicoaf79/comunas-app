@@ -157,7 +157,7 @@ async function toggleUsuarioActivo(id, activo, aprobadoEnActual) {
 // que toggleUsuarioActivo() de arriba (no el mecanismo de
 // dependencias_acceso, que es específico de permisos por dependencia
 // y Vales no es una dependencia).
-async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
+async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir, valorAnterior, actorNombre) {
   const { data: row, error } = await supabase
     .from('usuarios')
     .update({ puede_emitir_vales: puedeEmitir })
@@ -165,9 +165,12 @@ async function toggleUsuarioPuedeEmitirVales(id, puedeEmitir) {
     .select('nombre, email')
     .single()
   if (error) throw error
+  const nombreDestino = row?.nombre ?? row?.email ?? id
   logAudit({
     accion: 'update', entidad: 'usuarios', entidadId: id,
-    descripcion: `${puedeEmitir ? 'Habilitado' : 'Revocado'} permiso de emisión de vales — ${row?.nombre ?? row?.email ?? id}`,
+    descripcion: `${actorNombre ?? 'Un administrador'} le ${puedeEmitir ? 'habilitó' : 'sacó'} a ${nombreDestino} el permiso para emitir vales`,
+    datosAntes: { puede_emitir_vales: !!valorAnterior },
+    metadata:   { puede_emitir_vales: puedeEmitir },
   })
 }
 
@@ -370,7 +373,8 @@ export default function Usuarios() {
   })
 
   const toggleEmitirValesMut = useMutation({
-    mutationFn: ({ id, puedeEmitir }) => toggleUsuarioPuedeEmitirVales(id, puedeEmitir),
+    mutationFn: ({ id, puedeEmitir, valorAnterior, actorNombre }) =>
+      toggleUsuarioPuedeEmitirVales(id, puedeEmitir, valorAnterior, actorNombre),
     onMutate:   ({ id }) => setBusyId(id),
     onSettled:  () => setBusyId(null),
     onSuccess:  () => qc.invalidateQueries({ queryKey: ['admin-usuarios'] }),
@@ -421,7 +425,21 @@ export default function Usuarios() {
     [dependencias],
   )
 
-  function puedeEditarUsuario(u) {
+  // DECISIÓN DE PRODUCTO: admin_comuna es la autoridad máxima del
+  // municipio — la policy de UPDATE en prod ya le permite tocar
+  // cualquier fila de su comuna, propia incluida, sin restricción de
+  // columna. El control acá es de registro (audit_log), no de
+  // prevención. Gobierna permisos operativos: dependencias/módulos
+  // (PermisosPorPersona) y el botón "Emite vales".
+  function puedeEditarPermisos(u) {
+    return canManageUsers
+  }
+
+  // El ROL sigue restringido — asimetría a propósito, no un olvido:
+  // la policy no distingue la columna `roles` de las demás, así que
+  // abrir el rol propio (o el de otro admin_comuna) habilitaría
+  // escalar a superadmin, que está fuera del portal.
+  function puedeEditarRol(u) {
     if (!canManageUsers) return false
     if (u.id === perfil?.id) return false
     const rolActual = rolPrincipal(u.roles)
@@ -442,7 +460,12 @@ export default function Usuarios() {
   }
   function handleToggleEmitirVales(u) {
     setError('')
-    toggleEmitirValesMut.mutate({ id: u.id, puedeEmitir: !u.puede_emitir_vales })
+    toggleEmitirValesMut.mutate({
+      id: u.id,
+      puedeEmitir: !u.puede_emitir_vales,
+      valorAnterior: u.puede_emitir_vales,
+      actorNombre: perfil?.nombre ?? null,
+    })
   }
   function handleReenviarInvitacion(u) {
     reenviarMut.mutate({ id: u.id, nombre: u.nombre, email: u.email })
@@ -534,7 +557,7 @@ export default function Usuarios() {
           dependencias={depsActivas}
           modulosGestion={modulosGestionDisponibles}
           isLoading={usuariosQ.isLoading}
-          puedeEditarUsuario={puedeEditarUsuario}
+          puedeEditarUsuario={puedeEditarPermisos}
           onInvitar={() => { setError(''); setModalOpen(true) }}
           onError={setError}
         />
@@ -589,7 +612,8 @@ export default function Usuarios() {
           </THead>
           <tbody>
             {filtrados.map(u => {
-              const editable = puedeEditarUsuario(u)
+              const editableRol = puedeEditarRol(u)
+              const editablePermisos = puedeEditarPermisos(u)
               const rolActual = rolPrincipal(u.roles)
               const opcionesRol = rolesAsignables.map(r => ({ value: r.value, label: r.label }))
               const esYo = u.id === perfil?.id
@@ -603,7 +627,7 @@ export default function Usuarios() {
                   </Td>
                   <Td className="text-primary-500">{u.email || '—'}</Td>
                   <Td>
-                    {editable ? (
+                    {editableRol ? (
                       <Select
                         value={rolActual ?? ''}
                         onChange={v => handleCambiarRol(u, v)}
@@ -623,7 +647,7 @@ export default function Usuarios() {
                   <Td><EstadoBadge activo={!!u.activo} /></Td>
                   {tieneVales && (
                     <Td>
-                      {editable ? (
+                      {editablePermisos ? (
                         <button
                           type="button"
                           onClick={() => handleToggleEmitirVales(u)}
@@ -644,7 +668,7 @@ export default function Usuarios() {
                     {u.created_at ? dateOf(u.created_at) : '—'}
                   </Td>
                   <Td className="whitespace-nowrap text-right">
-                    {editable ? (
+                    {editableRol ? (
                       <div className="flex items-center justify-end gap-3">
                         {!u.activo && (
                           <button
