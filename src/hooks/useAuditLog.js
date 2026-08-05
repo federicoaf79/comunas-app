@@ -104,7 +104,7 @@ export function useAccesosHoy() {
       let q = supabase
         .from('audit_log')
         .select('usuario_id, created_at')
-        .eq('accion', 'login')
+        .eq('accion', 'LOGIN')
         .gte('created_at', `${ymd}T00:00:00-03:00`)
         .lte('created_at', `${ymd}T23:59:59.999-03:00`)
       if (municipioId) q = q.eq('municipio_id', municipioId)
@@ -139,7 +139,7 @@ export function useAccesosMes() {
       let q = supabase
         .from('audit_log')
         .select('id, created_at', { count: 'exact', head: true })
-        .eq('accion', 'login')
+        .eq('accion', 'LOGIN')
         .gte('created_at', `${first}T00:00:00-03:00`)
       if (municipioId) q = q.eq('municipio_id', municipioId)
       const { count, error } = await q
@@ -274,11 +274,18 @@ export async function createAuditLogVecino({
 // no hay fila en `usuarios`, usuario_id queda null y la identidad real
 // vive en datos_despues.auth_user_id.
 //
+// `usuarioId`/`municipioId` son overrides opcionales: si el caller ya
+// los tiene resueltos (ej. AuthContext.signOut, con `perfil` ya
+// cargado) se los pasa directo y esta función se salta el SELECT a
+// `usuarios` por completo. Pasar `usuarioId: null` explícito es válido
+// (equivale a "ya confirmé que no tiene fila ahí") — solo se dispara
+// el SELECT cuando `usuarioId` es `undefined`.
+//
 // Si el INSERT falla, NUNCA queda en un catch mudo — se ve en consola
 // con un tag identificable. Tampoco se relanza: un fallo de auditoría
 // no puede tumbar un login o un logout que ya ocurrió de verdad.
 // =============================================================
-export async function registrarAcceso({ resultado, via, userId, email } = {}) {
+export async function registrarAcceso({ resultado, via, userId, email, usuarioId, municipioId } = {}) {
   if (!resultado) throw new Error('registrarAcceso: resultado es requerido.')
   if (!via) throw new Error('registrarAcceso: via es requerida.')
   if (!userId) throw new Error('registrarAcceso: userId es requerido.')
@@ -287,17 +294,27 @@ export async function registrarAcceso({ resultado, via, userId, email } = {}) {
 
   let municipio_id = null
   let usuarioIdFk = null
-  try {
-    const { data: row } = await supabase
-      .from('usuarios')
-      .select('id, municipio_id')
-      .eq('id', userId)
-      .maybeSingle()
-    if (row) {
-      usuarioIdFk = row.id
-      municipio_id = row.municipio_id ?? null
-    }
-  } catch { /* seguimos con usuario_id/municipio_id en null -- la identidad real queda en datos_despues */ }
+  if (usuarioId !== undefined) {
+    // El caller ya resolvió esto (ej. AuthContext.signOut, que tiene
+    // `perfil` cargado en memoria) -- nos ahorramos el roundtrip a
+    // `usuarios`. Cada query de más acá ensancha una ventana real
+    // documentada en CLAUDE.md entre signOut() y que el próximo
+    // componente termine de montarse limpio.
+    usuarioIdFk = usuarioId
+    municipio_id = municipioId ?? null
+  } else {
+    try {
+      const { data: row } = await supabase
+        .from('usuarios')
+        .select('id, municipio_id')
+        .eq('id', userId)
+        .maybeSingle()
+      if (row) {
+        usuarioIdFk = row.id
+        municipio_id = row.municipio_id ?? null
+      }
+    } catch { /* seguimos con usuario_id/municipio_id en null -- la identidad real queda en datos_despues */ }
+  }
 
   const { error } = await supabase
     .from('audit_log')

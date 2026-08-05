@@ -279,8 +279,20 @@ export function AuthProvider({ children }) {
     // audit_log lo rechaza. signOut() es una acción directa del usuario
     // (botón "Salir"), no el callback de onAuthStateChange, así que este
     // await es seguro -- no es la zona frágil del deadlock.
+    // `perfil` ya está cargado acá -- le pasamos su id/municipio_id
+    // directo a registrarAcceso() para que se salte el SELECT a
+    // `usuarios` (dos round trips menos justo en la ventana que
+    // CLAUDE.md documenta como frágil entre este signOut() y que el
+    // próximo componente termine de montarse limpio).
     if (user?.id) {
-      await registrarAcceso({ resultado: 'logout', via: 'login_staff', userId: user.id, email: user.email })
+      await registrarAcceso({
+        resultado: 'logout',
+        via: 'login_staff',
+        userId: user.id,
+        email: user.email,
+        usuarioId: perfil?.id ?? null,
+        municipioId: perfil?.municipio_id ?? null,
+      })
     }
     clearCachedPerfil()
     // Limpiar cache de "usuarios sin perfil" al hacer signOut
@@ -295,7 +307,7 @@ export function AuthProvider({ children }) {
     // posibilidad de que otro usuario lo lea.
     qc.clear()
     await supabase.auth.signOut()
-  }, [qc, user])
+  }, [qc, user, perfil])
 
   const refreshPerfil = useCallback(async () => {
     if (user?.id) {
