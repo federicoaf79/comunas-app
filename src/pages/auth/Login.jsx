@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useDatosMunicipio } from '../../hooks/useConfigPortal'
 import { supabase } from '../../lib/supabase'
+import { registrarAcceso } from '../../hooks/useAuditLog'
 import { traducirErrorAuth } from '../../lib/authErrors'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -42,6 +43,11 @@ export default function Login() {
       setError('No se pudo iniciar sesión.')
       return
     }
+
+    // Se autenticó: el acceso queda registrado acá, sin esperar a los
+    // chequeos de abajo (usuarios, activo, rol). Si alguno de esos
+    // rechaza el ingreso, el LOGIN igual ocurrió de verdad.
+    await registrarAcceso({ resultado: 'exito', via: 'login_staff', userId, email: data.user.email })
 
     const { data: u, error: perfilError } = await supabase
       .from('usuarios')

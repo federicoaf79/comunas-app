@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { registrarAcceso } from '../hooks/useAuditLog'
 
 const AuthContext = createContext(null)
 
@@ -251,38 +252,17 @@ export function AuthProvider({ children }) {
     }
   }, [fetchPerfil, qc])
 
+  // La auditoría de login YA NO se registra acá. Antes dependía de
+  // fetchPerfil(uid) para tener nombre/municipio antes de escribir, y
+  // eso perdía el registro de cualquier login real cuyo fetch fallara
+  // (o cuyo usuario no tuviera fila en `usuarios` todavía) sin dejar
+  // rastro ni error visible. Ahora cada página que llama a signIn()
+  // (Login.jsx, Acceso.jsx) registra el acceso ella misma con su
+  // propio `via`, vía registrarAcceso() en useAuditLog.js — apenas
+  // confirma que hay un user.id, sin esperar nada más.
   const signIn = useCallback(async ({ email, password }) => {
-    const result = await supabase.auth.signInWithPassword({ email, password })
-
-    // Auditoría de acceso. Se registra acá —en el login interactivo
-    // exitoso— y NO en onAuthStateChange: SIGNED_IN también dispara
-    // en session-restore y token-refresh; signIn solo lo llama el
-    // usuario al enviar credenciales, así que es "el primer login
-    // de la sesión" por construcción. try/catch silencioso: si la
-    // auditoría falla (RLS, red), el login no se bloquea.
-    const uid = result?.data?.user?.id
-    if (uid && !result.error) {
-      try {
-        const u = await fetchPerfil(uid)
-        if (u) {
-          await supabase.from('audit_log').insert({
-            municipio_id:  u.municipio_id ?? null,
-            usuario_id:    u.id,
-            accion:        'LOGIN',
-            entidad:       'auth',
-            entidad_id:    u.id,
-            descripcion:   `Inicio de sesión — ${u.nombre} (${u.email})`,
-            datos_despues: {
-              roles:     u.roles ?? [],
-              timestamp: new Date().toISOString(),
-            },
-          })
-        }
-      } catch { /* no bloquear el login si falla la auditoría */ }
-    }
-
-    return result
-  }, [fetchPerfil])
+    return supabase.auth.signInWithPassword({ email, password })
+  }, [])
 
   const signUp = useCallback(async ({ email, password, nombre }) => {
     return supabase.auth.signUp({
@@ -294,6 +274,14 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     intentionalSignOut.current = true
+    // El registro de logout tiene que salir ANTES de supabase.auth.signOut():
+    // una vez cerrada la sesión el insert sale como anon y la policy de
+    // audit_log lo rechaza. signOut() es una acción directa del usuario
+    // (botón "Salir"), no el callback de onAuthStateChange, así que este
+    // await es seguro -- no es la zona frágil del deadlock.
+    if (user?.id) {
+      await registrarAcceso({ resultado: 'logout', via: 'login_staff', userId: user.id, email: user.email })
+    }
     clearCachedPerfil()
     // Limpiar cache de "usuarios sin perfil" al hacer signOut
     // (podría ser un usuario diferente en el próximo login)
@@ -307,7 +295,7 @@ export function AuthProvider({ children }) {
     // posibilidad de que otro usuario lo lea.
     qc.clear()
     await supabase.auth.signOut()
-  }, [qc])
+  }, [qc, user])
 
   const refreshPerfil = useCallback(async () => {
     if (user?.id) {

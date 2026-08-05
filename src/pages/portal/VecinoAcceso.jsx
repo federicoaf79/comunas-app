@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-do
 import { useVecino } from '../../context/VecinoContext'
 import { supabase } from '../../lib/supabase'
 import { usePortalMunicipioId } from '../../hooks/useConfigPortal'
+import { registrarAcceso } from '../../hooks/useAuditLog'
 import { traducirErrorAuth } from '../../lib/authErrors'
 import PortalFormPage from '../../components/portal/PortalFormPage'
 import Input from '../../components/ui/Input'
@@ -148,6 +149,11 @@ function LoginTab({ setVecinoSession, navigate, redirectTo }) {
       if (!data.user) {
         throw new Error('No se pudo iniciar sesión')
       }
+
+      // Se autenticó: el acceso queda registrado acá. Antes esta página
+      // no escribía nada en audit_log -- cualquiera (staff incluido, ver
+      // CLAUDE.md) que entrara por esta puerta quedaba sin rastro.
+      await registrarAcceso({ resultado: 'exito', via: 'portal_acceso', userId: data.user.id, email: data.user.email })
 
       // VecinoContext.onAuthStateChange se encarga de cargar el vecino
       // vinculado y popular vecinoSession cuando detecta el evento SIGNED_IN.

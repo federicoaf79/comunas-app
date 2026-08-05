@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { registrarAcceso } from '../hooks/useAuditLog'
 
 // =============================================================
 // VecinoContext — Sesión del Portal del Vecino
@@ -100,6 +101,21 @@ export function VecinoProvider({ children }) {
   }, [])
 
   const clearVecinoSession = useCallback(async () => {
+    // El registro de logout sale ANTES de limpiar nada: necesita el
+    // user_id/email de la sesión que se está por cerrar, y una vez que
+    // supabase.auth.signOut() invalida el token el insert saldría como
+    // anon (la policy de audit_log lo rechaza). clearVecinoSession() es
+    // una acción directa del usuario, no el callback de
+    // onAuthStateChange, así que este await es seguro.
+    if (vecinoSession?.auth_mode === 'supabase' && vecinoSession.user_id) {
+      await registrarAcceso({
+        resultado: 'logout',
+        via: 'portal_acceso',
+        userId: vecinoSession.user_id,
+        email: vecinoSession.user_email ?? null,
+      })
+    }
+
     // Limpiar estado local primero (síncrono)
     saveSession(null)
     setSessionState(null)

@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth, homeRouteFor } from '../../context/AuthContext'
 import { useVecino } from '../../context/VecinoContext'
 import { findVecinoByDniTelefono } from '../../hooks/useVecinoData'
+import { registrarAcceso } from '../../hooks/useAuditLog'
 import { supabase } from '../../lib/supabase'
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
@@ -527,6 +528,11 @@ export default function Acceso() {
         setError('No se pudo iniciar sesión.')
         return
       }
+
+      // Se autenticó: el acceso queda registrado acá, antes de saber si
+      // termina en la rama vecino o empleado — las dos son la misma
+      // página/puerta (`via: 'acceso'`).
+      await registrarAcceso({ resultado: 'exito', via: 'acceso', userId, email: data.user.email })
 
       // RAMA VECINO — la cuenta autenticada (auth.uid()) puede ser a
       // la vez empleado y vecino del pueblo. Buscamos su propio

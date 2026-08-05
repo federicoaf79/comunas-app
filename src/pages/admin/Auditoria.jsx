@@ -10,18 +10,39 @@ import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 
 // =============================================================
 // /admin/auditoria — auditoría del sistema en 3 tabs:
-//   Accesos  → eventos LOGIN
+//   Accesos  → eventos LOGIN / LOGIN_FALLIDO / LOGOUT
 //   Cambios  → todo lo demás (alta/edición/aprobación/etc.)
 //   Resumen  → métricas de los últimos 30 días (procesado en JS)
 //
-// El LOGIN se registra desde AuthContext.signIn (ver PASO 1).
+// El acceso se registra vía registrarAcceso() (useAuditLog.js), llamado
+// desde las tres páginas de login (Login.jsx, Acceso.jsx,
+// VecinoAcceso.jsx) y desde los dos puntos de logout (AuthContext.signOut,
+// VecinoContext.clearVecinoSession) — nunca desde acá. LOGIN_FALLIDO
+// todavía no tiene escritor (llega en una función de Vercel aparte); el
+// filtro de abajo ya lo contempla para no tener que tocar esta pantalla
+// de nuevo cuando se sume.
+//
 // Restringido a admin_comuna / superadmin (guard a nivel ruta +
 // mensaje suave acá). Para superadmin (municipio_id null) NO se
 // filtra por municipio → ve la auditoría de todo el sistema.
 // =============================================================
 
+// Puerta por la que se autenticó, guardada en datos_despues.via por
+// registrarAcceso(). En criollo porque es lo que hubiera explicado en
+// dos segundos el caso real de un login sin rastro por /portal/acceso.
+const VIA_LABEL = {
+  login_staff:   'Panel',
+  acceso:        'Acceso unificado',
+  portal_acceso: 'Portal vecino',
+}
+function viaLabel(via) {
+  return VIA_LABEL[via] ?? (via || '—')
+}
+
 const ACCION_BADGE = {
-  LOGIN:   { label: 'Acceso',       cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
+  LOGIN:          { label: 'Acceso',       cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
+  LOGIN_FALLIDO:  { label: 'Login fallido', cls: 'bg-red-50 text-danger ring-red-100' },
+  LOGOUT:         { label: 'Salida',       cls: 'bg-gray-100 text-gray-700 ring-gray-200' },
   login:   { label: 'Acceso',       cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
   logout:  { label: 'Salida',       cls: 'bg-gray-100 text-gray-700 ring-gray-200' },
   create:  { label: 'Alta',         cls: 'bg-primary-100 text-primary-700 ring-primary-200' },
@@ -50,7 +71,11 @@ function fmtDateTime(iso) {
 function actorLabel(row) {
   const u = row?.usuarios
   if (u?.nombre) return u.nombre
-  return u?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
+  // Sin fila en `usuarios` (vecino puro, ver registrarAcceso en
+  // useAuditLog.js) el nombre no existe en ningún lado -- el email que
+  // sí quedó en datos_despues es mejor que "Sistema", que sonaría a
+  // evento sin autor cuando en realidad sí hay una persona identificada.
+  return u?.email || row?.datos_despues?.email || row?.usuario_id?.slice(0, 8) || 'Sistema'
 }
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
@@ -111,7 +136,7 @@ function scoped(q, municipioId) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 1 · Accesos (LOGIN)
+// TAB 1 · Accesos (LOGIN / LOGIN_FALLIDO / LOGOUT)
 // ─────────────────────────────────────────────────────────────────
 
 function AccesosTab({ municipioId }) {
@@ -120,8 +145,8 @@ function AccesosTab({ municipioId }) {
     queryFn:  async () => {
       let q = supabase
         .from('audit_log')
-        .select('id, descripcion, created_at, usuarios:usuario_id ( nombre, email, roles )')
-        .eq('accion', 'LOGIN')
+        .select('id, accion, descripcion, created_at, datos_despues, usuarios:usuario_id ( nombre, email, roles )')
+        .in('accion', ['LOGIN', 'LOGIN_FALLIDO', 'LOGOUT'])
         .order('created_at', { ascending: false })
         .limit(100)
       q = scoped(q, municipioId)
@@ -148,6 +173,7 @@ function AccesosTab({ municipioId }) {
               { label: 'Usuario', key: 'usuarios.nombre' },
               { label: 'Email', key: 'usuarios.email' },
               { label: 'Acción', key: 'accion' },
+              { label: 'Vía', key: 'datos_despues.via' },
               { label: 'Descripción', key: 'descripcion' },
             ])
             logAudit({
@@ -171,6 +197,8 @@ function AccesosTab({ municipioId }) {
           <Th>Usuario</Th>
           <Th>Email</Th>
           <Th>Roles</Th>
+          <Th>Acción</Th>
+          <Th>Vía</Th>
         </Tr>
       </THead>
       <tbody>
@@ -178,8 +206,10 @@ function AccesosTab({ municipioId }) {
           <Tr key={r.id}>
             <Td className="whitespace-nowrap font-mono text-xs text-primary-700">{fmtDateTime(r.created_at)}</Td>
             <Td className="font-medium text-primary">{actorLabel(r)}</Td>
-            <Td className="text-xs text-primary-500">{r.usuarios?.email || '—'}</Td>
+            <Td className="text-xs text-primary-500">{r.usuarios?.email || r.datos_despues?.email || '—'}</Td>
             <Td><RolesBadges roles={r.usuarios?.roles} /></Td>
+            <Td><AccionBadge accion={r.accion} /></Td>
+            <Td className="text-xs text-primary-500">{viaLabel(r.datos_despues?.via)}</Td>
           </Tr>
         ))}
       </tbody>
@@ -189,7 +219,7 @@ function AccesosTab({ municipioId }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 2 · Cambios (todo menos LOGIN)
+// TAB 2 · Cambios (todo menos accesos)
 // ─────────────────────────────────────────────────────────────────
 
 function CambiosTab({ municipioId }) {
@@ -199,7 +229,7 @@ function CambiosTab({ municipioId }) {
       let q = supabase
         .from('audit_log')
         .select('id, accion, entidad, descripcion, created_at, usuarios:usuario_id ( nombre, email )')
-        .neq('accion', 'LOGIN')
+        .not('accion', 'in', '(LOGIN,LOGIN_FALLIDO,LOGOUT)')
         .order('created_at', { ascending: false })
         .limit(100)
       q = scoped(q, municipioId)
@@ -303,8 +333,8 @@ function ResumenTab({ municipioId }) {
     const porUsuario = new Map()
     const porAccion  = new Map()
     for (const r of rows) {
-      const esLogin = r.accion === 'LOGIN'
-      if (esLogin) accesos++
+      const esAcceso = r.accion === 'LOGIN' || r.accion === 'LOGIN_FALLIDO' || r.accion === 'LOGOUT'
+      if (esAcceso) accesos++
       else cambios++
       const userKey = r.usuarios?.nombre || r.usuarios?.email || 'Desconocido'
       porUsuario.set(userKey, (porUsuario.get(userKey) ?? 0) + 1)
@@ -328,7 +358,7 @@ function ResumenTab({ municipioId }) {
       <p className="text-xs text-primary-400">Métricas de los últimos 30 días.</p>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <StatCard label="Accesos (LOGIN)" value={stats.accesos} accent="ok" />
+        <StatCard label="Accesos" value={stats.accesos} accent="ok" />
         <StatCard label="Cambios registrados" value={stats.cambios} accent="primary" />
         <StatCard label="Usuarios activos" value={stats.topUsuarios.length} accent="accent" />
         <StatCard label="Total eventos" value={stats.accesos + stats.cambios} accent="primary" />
