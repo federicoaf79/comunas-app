@@ -91,12 +91,6 @@ function ymdLocal(d) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function vecinoNombre(v) {
-  if (!v) return 'Solicitante'
-  if (v.apellido && v.nombre) return `${v.apellido}, ${v.nombre}`
-  return v.nombre_completo || v.apellido || v.nombre || 'Solicitante'
-}
-
 // sum_reservas no tiene hora_inicio/hora_fin — la franja horaria vive
 // entera en la columna `horario` (manana/tarde/noche/dia_completo).
 // Antes se llamaba horarioLabel(r.hora_inicio, r.hora_fin), que siempre
@@ -111,6 +105,16 @@ const HORARIO_RANGO = {
 }
 function horarioLabel(horario) {
   return HORARIO_RANGO[(horario ?? '').toLowerCase()] ?? '—'
+}
+
+// "2026-08" → "agosto 2026" — para que el estado vacío diga en qué mes
+// no hay reservas en vez de un genérico "no hay reservas registradas"
+// que hace pensar que el módulo está roto cuando en realidad hay datos
+// en otro mes.
+function mesLabel(yyyyMm) {
+  if (!yyyyMm) return ''
+  const [y, m] = yyyyMm.split('-').map(Number)
+  return new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1))
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -178,7 +182,8 @@ function ReservasTab({ depSum, canApprove }) {
         <div className="card flex items-center justify-center p-12"><Spinner size="lg" /></div>
       ) : reservas.length === 0 ? (
         <div className="card p-10 text-center text-sm text-primary-400">
-          No hay reservas con esos filtros.
+          No hay reservas en {mesLabel(mes)}
+          {estado ? ` con estado "${ESTADO_LABEL[estado] ?? estado}"` : ''}.
         </div>
       ) : (
         <Table>
@@ -199,10 +204,7 @@ function ReservasTab({ depSum, canApprove }) {
                 <Td className="whitespace-nowrap">{dateOf(r.fecha)}</Td>
                 <Td className="whitespace-nowrap">{horarioLabel(r.horario)}</Td>
                 <Td>
-                  <p className="font-medium text-primary">{vecinoNombre(r.vecino)}</p>
-                  {r.vecino?.dni && (
-                    <p className="text-xs text-primary-400">DNI {r.vecino.dni}</p>
-                  )}
+                  <p className="font-medium text-primary">{r.solicitante || 'Solicitante'}</p>
                 </Td>
                 <Td className="max-w-xs">
                   <span className="line-clamp-2">{r.motivo || '—'}</span>
@@ -301,7 +303,7 @@ function MonthCalendar({ year, month, reservasByDate }) {
           const occupants = d != null ? (reservasByDate.get(ymd(d)) ?? []) : []
           const ocupado = occupants.length > 0
           const tooltip = occupants
-            .map(r => `${vecinoNombre(r.vecino)} · ${horarioLabel(r.horario)} · ${r.motivo || ''}`)
+            .map(r => `${r.solicitante || 'Solicitante'} · ${horarioLabel(r.horario)} · ${r.motivo || ''}`)
             .join('\n')
           return (
             <div
@@ -328,7 +330,7 @@ function MonthCalendar({ year, month, reservasByDate }) {
                     <ul className="mt-1 space-y-0.5">
                       {occupants.slice(0, 2).map(r => (
                         <li key={r.id} className="truncate text-[10px] font-medium text-primary-700">
-                          {(r.hora_inicio ?? '').slice(0, 5)} · {vecinoNombre(r.vecino).split(',')[0]}
+                          {slotDe(r).hi} · {(r.solicitante || 'Solicitante').split(',')[0]}
                         </li>
                       ))}
                       {occupants.length > 2 && (
