@@ -89,38 +89,21 @@ export default function Odontologia() {
     [dependencias]
   )
 
-  // Early returns para tabs especiales
-  if (tabRequested === 'landing' && depOdonto) {
-    return <DepLandingTab dependenciaId={depOdonto.id} />
-  }
-  if (tabRequested === 'bot_ia' && depOdonto) {
-    return <DepBotIATab dependenciaId={depOdonto.id} />
-  }
-  if (tabRequested === 'profesionales' && depOdonto) {
-    return (
-      <div className="space-y-5">
-        <header>
-          <h1 className="font-sora text-2xl font-bold text-primary">
-            Profesionales · Consultorio Odontológico
-          </h1>
-          <p className="mt-1 text-sm text-primary-500">
-            Configurá los odontólogos que atienden, sus horarios y especialidades.
-          </p>
-        </header>
-        <ProfesionalesTab
-          municipioId={municipioId}
-          dependenciaId={depOdonto.id}
-          defaultEspecialidad="odontologia"
-        />
-      </div>
-    )
-  }
-
-  // Gestionar qué sección se muestra: agenda o administración
-  const seccion = tabRequested === 'admin' || tabRequested === 'administracion'
-    ? 'administracion'
-    : 'agenda'
-
+  // TODOS los hooks del componente se llaman acá, sin excepción, antes
+  // de cualquier `return` condicionado por `tabRequested` o por si
+  // `depOdonto` ya resolvió — nunca al revés. Antes, los 3 returns
+  // anticipados de tabs especiales (landing/bot_ia/profesionales) vivían
+  // ARRIBA de estos hooks: mientras `depOdonto` es `undefined` (primer
+  // render, con `useDependencias` todavía resolviendo) ninguno de esos
+  // returns se cumplía y el render de abajo corría con todos los hooks;
+  // en cuanto `depOdonto` resolvía, el MISMO montaje volvía a renderizar
+  // y esta vez sí tomaba el return temprano, saltándose los hooks de
+  // más abajo — menos hooks que en el render anterior, React tira
+  // "Rendered fewer hooks than during the previous render" (error #300)
+  // y la pantalla completa queda en blanco. No alcanza con probar "esta
+  // pestaña no truena hoy": el bug depende de la secuencia de renders
+  // (con qué tab se llega, si `depOdonto` ya estaba en caché o no), no
+  // de qué rama se mira en un screenshot aislado.
   const [semanaInicio, setSemanaInicio] = useState(() => startOfWeekMonday(new Date()))
   const [modalTurno, setModalTurno]     = useState(false)
   const qc = useQueryClient()
@@ -176,6 +159,39 @@ export default function Odontologia() {
       }
     })
   }, [turnos])
+
+  // Gestionar qué sección se muestra: agenda o administración
+  const seccion = tabRequested === 'admin' || tabRequested === 'administracion'
+    ? 'administracion'
+    : 'agenda'
+
+  // A partir de acá, ningún hook nuevo — solo returns condicionados por
+  // datos ya resueltos arriba.
+  if (tabRequested === 'landing' && depOdonto) {
+    return <DepLandingTab dependenciaId={depOdonto.id} />
+  }
+  if (tabRequested === 'bot_ia' && depOdonto) {
+    return <DepBotIATab dependenciaId={depOdonto.id} />
+  }
+  if (tabRequested === 'profesionales' && depOdonto) {
+    return (
+      <div className="space-y-5">
+        <header>
+          <h1 className="font-sora text-2xl font-bold text-primary">
+            Profesionales · Consultorio Odontológico
+          </h1>
+          <p className="mt-1 text-sm text-primary-500">
+            Configurá los odontólogos que atienden, sus horarios y especialidades.
+          </p>
+        </header>
+        <ProfesionalesTab
+          municipioId={municipioId}
+          dependenciaId={depOdonto.id}
+          defaultEspecialidad="odontologia"
+        />
+      </div>
+    )
+  }
 
   if (loadingDeps) {
     return (
