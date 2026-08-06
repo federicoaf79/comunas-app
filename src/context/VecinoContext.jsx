@@ -107,16 +107,25 @@ export function VecinoProvider({ children }) {
     // anon (la policy de audit_log lo rechaza). clearVecinoSession() es
     // una acción directa del usuario, no el callback de
     // onAuthStateChange, así que este await es seguro.
-    if (vecinoSession?.auth_mode === 'supabase' && vecinoSession.user_id) {
+    //
+    // La identidad (userId/email) sale de la sesión VIVA
+    // (supabase.auth.getSession(), sin viaje de red), NUNCA de
+    // `vecinoSession` en React state -- mismo motivo real que
+    // AuthContext.signOut: `vecinoSession` se actualiza recién en el
+    // setTimeout(0) de onAuthStateChange, así que entre un
+    // signInWithPassword() de OTRA persona en la misma pestaña y que
+    // ese setTimeout corra, `vecinoSession` puede seguir siendo el de
+    // la sesión anterior. `municipio_id` sigue viniendo de
+    // `vecinoSession` (no hay equivalente de sesión viva para eso) --
+    // ver el guardrail de usuarioId en registrarAcceso() para por qué
+    // eso no alcanza a producir una fila mal atribuida.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (vecinoSession?.auth_mode === 'supabase' && session?.user?.id) {
       await registrarAcceso({
         resultado: 'logout',
         via: 'portal_acceso',
-        userId: vecinoSession.user_id,
-        email: vecinoSession.user_email ?? null,
-        // vecinoSession es la fila de `vecinos` (que sí tiene
-        // municipio_id) más auth_mode/user_email -- ya está en memoria,
-        // sin query nueva. Mismo campo que ya se expone como alias en
-        // el value del contexto (ver `municipioId` más abajo).
+        userId: session.user.id,
+        email: session.user.email ?? null,
         municipioId: vecinoSession.municipio_id ?? null,
       })
     }

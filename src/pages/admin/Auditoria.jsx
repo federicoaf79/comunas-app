@@ -10,18 +10,22 @@ import { Table, THead, Th, Tr, Td } from '../../components/ui/Table'
 
 // =============================================================
 // /admin/auditoria — auditoría del sistema en 3 tabs:
-//   Accesos  → eventos LOGIN / LOGIN_FALLIDO / LOGOUT
+//   Accesos  → eventos LOGIN / LOGIN_RECHAZADO / LOGIN_FALLIDO / LOGOUT
 //   Cambios  → todo lo demás (alta/edición/aprobación/etc.)
 //   Resumen  → métricas de los últimos 30 días (procesado en JS)
 //
-// El acceso exitoso/logout se registra vía registrarAcceso() (useAuditLog.js),
-// llamado desde las tres páginas de login (Login.jsx, Acceso.jsx,
-// VecinoAcceso.jsx) y desde los dos puntos de logout (AuthContext.signOut,
-// VecinoContext.clearVecinoSession). LOGIN_FALLIDO se registra distinto:
-// api/registrar-intento-fallido.js (función de Vercel con service_role,
-// porque un login sin sesión escribe como anon y a anon se le revocó
-// INSERT en toda public) — las tres páginas la llaman fire-and-forget
-// en su rama de error. Nunca desde acá.
+// El acceso exitoso/rechazado/logout se registra vía registrarAcceso()
+// (useAuditLog.js), llamado desde las tres páginas de login (Login.jsx,
+// Acceso.jsx, VecinoAcceso.jsx) y desde los dos puntos de logout
+// (AuthContext.signOut, VecinoContext.clearVecinoSession).
+// LOGIN_RECHAZADO es autenticación válida que igual no entra (cuenta sin
+// habilitar, rol sin asignar, etc.) — sin esto, ver un LOGIN seguido de
+// un LOGOUT no explica por qué la persona nunca llegó a usar nada.
+// LOGIN_FALLIDO se registra distinto: api/registrar-intento-fallido.js
+// (función de Vercel con service_role, porque un login sin sesión
+// escribe como anon y a anon se le revocó INSERT en toda public) — las
+// tres páginas la llaman fire-and-forget en su rama de error. Nunca
+// desde acá.
 //
 // Restringido a admin_comuna / superadmin (guard a nivel ruta +
 // mensaje suave acá). Para superadmin (municipio_id null) NO se
@@ -41,9 +45,10 @@ function viaLabel(via) {
 }
 
 const ACCION_BADGE = {
-  LOGIN:          { label: 'Acceso',       cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
-  LOGIN_FALLIDO:  { label: 'Login fallido', cls: 'bg-red-50 text-danger ring-red-100' },
-  LOGOUT:         { label: 'Salida',       cls: 'bg-gray-100 text-gray-700 ring-gray-200' },
+  LOGIN:            { label: 'Acceso',           cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
+  LOGIN_RECHAZADO:  { label: 'Login rechazado',  cls: 'bg-accent-50 text-accent-700 ring-accent-100' },
+  LOGIN_FALLIDO:    { label: 'Login fallido',    cls: 'bg-red-50 text-danger ring-red-100' },
+  LOGOUT:           { label: 'Salida',           cls: 'bg-gray-100 text-gray-700 ring-gray-200' },
   login:   { label: 'Acceso',       cls: 'bg-ok-50 text-ok-700 ring-ok-100' },
   logout:  { label: 'Salida',       cls: 'bg-gray-100 text-gray-700 ring-gray-200' },
   create:  { label: 'Alta',         cls: 'bg-primary-100 text-primary-700 ring-primary-200' },
@@ -137,7 +142,7 @@ function scoped(q, municipioId) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TAB 1 · Accesos (LOGIN / LOGIN_FALLIDO / LOGOUT)
+// TAB 1 · Accesos (LOGIN / LOGIN_RECHAZADO / LOGIN_FALLIDO / LOGOUT)
 // ─────────────────────────────────────────────────────────────────
 
 function AccesosTab({ municipioId }) {
@@ -147,7 +152,7 @@ function AccesosTab({ municipioId }) {
       let q = supabase
         .from('audit_log')
         .select('id, accion, descripcion, created_at, datos_despues, usuarios:usuario_id ( nombre, email, roles )')
-        .in('accion', ['LOGIN', 'LOGIN_FALLIDO', 'LOGOUT'])
+        .in('accion', ['LOGIN', 'LOGIN_RECHAZADO', 'LOGIN_FALLIDO', 'LOGOUT'])
         .order('created_at', { ascending: false })
         .limit(100)
       q = scoped(q, municipioId)
@@ -230,7 +235,7 @@ function CambiosTab({ municipioId }) {
       let q = supabase
         .from('audit_log')
         .select('id, accion, entidad, descripcion, created_at, usuarios:usuario_id ( nombre, email )')
-        .not('accion', 'in', '(LOGIN,LOGIN_FALLIDO,LOGOUT)')
+        .not('accion', 'in', '(LOGIN,LOGIN_RECHAZADO,LOGIN_FALLIDO,LOGOUT)')
         .order('created_at', { ascending: false })
         .limit(100)
       q = scoped(q, municipioId)
@@ -334,7 +339,7 @@ function ResumenTab({ municipioId }) {
     const porUsuario = new Map()
     const porAccion  = new Map()
     for (const r of rows) {
-      const esAcceso = r.accion === 'LOGIN' || r.accion === 'LOGIN_FALLIDO' || r.accion === 'LOGOUT'
+      const esAcceso = r.accion === 'LOGIN' || r.accion === 'LOGIN_RECHAZADO' || r.accion === 'LOGIN_FALLIDO' || r.accion === 'LOGOUT'
       if (esAcceso) accesos++
       else cambios++
       const userKey = r.usuarios?.nombre || r.usuarios?.email || 'Desconocido'

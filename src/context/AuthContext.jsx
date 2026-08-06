@@ -279,17 +279,30 @@ export function AuthProvider({ children }) {
     // audit_log lo rechaza. signOut() es una acción directa del usuario
     // (botón "Salir"), no el callback de onAuthStateChange, así que este
     // await es seguro -- no es la zona frágil del deadlock.
-    // `perfil` ya está cargado acá -- le pasamos su id/municipio_id
-    // directo a registrarAcceso() para que se salte el SELECT a
-    // `usuarios` (dos round trips menos justo en la ventana que
-    // CLAUDE.md documenta como frágil entre este signOut() y que el
-    // próximo componente termine de montarse limpio).
-    if (user?.id) {
+    //
+    // La identidad (userId/email) sale de la sesión VIVA
+    // (supabase.auth.getSession(), sin viaje de red -- lee el token ya
+    // en memoria), NUNCA de `user` en React state. Motivo real
+    // (2026-08-06): `user`/`perfil` se actualizan recién en el
+    // setTimeout(0) de onAuthStateChange (ver esa zona frágil más
+    // abajo) -- entre un signInWithPassword() de OTRA persona en la
+    // misma pestaña y que ese setTimeout corra, hay una ventana donde
+    // este estado todavía es el de la sesión ANTERIOR mientras la
+    // sesión de Supabase Auth ya cambió. Caso real: Login.jsx llama a
+    // este signOut() cuando rechaza una cuenta recién autenticada (sin
+    // fila en `usuarios`) -- si `user` seguía siendo el de un login
+    // previo en la misma pestaña, el insert intentaba escribir con la
+    // identidad de la persona EQUIVOCADA. `perfil?.id` (más abajo) sí
+    // sigue viniendo de React state -- registrarAcceso() lo valida
+    // contra la sesión viva antes de usarlo, así que una versión vieja
+    // de `perfil` ya no puede producir una fila mal atribuida.
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.id) {
       await registrarAcceso({
         resultado: 'logout',
         via: 'login_staff',
-        userId: user.id,
-        email: user.email,
+        userId: session.user.id,
+        email: session.user.email,
         usuarioId: perfil?.id ?? null,
         municipioId: perfil?.municipio_id ?? null,
       })
@@ -307,7 +320,7 @@ export function AuthProvider({ children }) {
     // posibilidad de que otro usuario lo lea.
     qc.clear()
     await supabase.auth.signOut()
-  }, [qc, user, perfil])
+  }, [qc, perfil])
 
   const refreshPerfil = useCallback(async () => {
     if (user?.id) {

@@ -556,6 +556,10 @@ export default function Acceso() {
           return
         }
         if (!vecinoRow) {
+          await registrarAcceso({
+            resultado: 'rechazado', via: 'acceso', userId, email: data.user.email, municipioId,
+            motivo: 'Sin perfil de vecino vinculado',
+          })
           setSinPerfilVecino(true)
           return
         }
@@ -580,17 +584,29 @@ export default function Acceso() {
         return
       }
       if (!u) {
+        await registrarAcceso({
+          resultado: 'rechazado', via: 'acceso', userId, email: data.user.email, municipioId,
+          motivo: 'Cuenta sin habilitar — sin fila de staff en usuarios',
+        })
         await signOut()
         setError('Tu cuenta aún no fue habilitada en el sistema.')
         return
       }
       if (u.activo === false) {
+        await registrarAcceso({
+          resultado: 'rechazado', via: 'acceso', userId, email: data.user.email, municipioId,
+          motivo: 'Cuenta deshabilitada',
+        })
         await signOut()
         setError('Tu cuenta está deshabilitada. Contactá al administrador.')
         return
       }
       const route = homeRouteFor(u.roles)
       if (!route) {
+        await registrarAcceso({
+          resultado: 'rechazado', via: 'acceso', userId, email: data.user.email, municipioId,
+          motivo: 'Sin rol asignado',
+        })
         await signOut()
         setError('Tu cuenta no tiene un rol asignado.')
         return

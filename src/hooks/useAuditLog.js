@@ -267,26 +267,25 @@ export async function createAuditLogVecino({
 // llamar a esto (ver AuthContext.signIn de versiones anteriores, que
 // sí lo hacía y por eso perdía logins reales sin dejar rastro).
 //
-// SIN SELECTs propios a propósito (versión anterior consultaba
-// `usuarios` acá adentro para resolver municipio_id/usuario_id — un
-// vecino puro no tiene fila ahí, así que esa consulta devolvía null y
-// la fila quedaba con municipio_id NULL, invisible para cualquier
-// admin_comuna porque Auditoria.jsx filtra con .eq('municipio_id', ...).
-// Una query más que puede fallar/devolver vacío en silencio es
-// exactamente el tipo de pieza que este sprint vino a sacar, no a
-// sumar). Los dos valores son responsabilidad del caller:
+// SIN SELECTs propios para resolver municipio_id (versión anterior
+// consultaba `usuarios` acá adentro — un vecino puro no tiene fila
+// ahí, así que esa consulta devolvía null y la fila quedaba con
+// municipio_id NULL, invisible para cualquier admin_comuna porque
+// Auditoria.jsx filtra con .eq('municipio_id', ...). Una query más que
+// puede fallar/devolver vacío en silencio es exactamente el tipo de
+// pieza que este sprint vino a sacar, no a sumar).
 //
-//   municipioId — sale del SUBDOMINIO por el que la persona entró, no
-//   de si tiene fila en `usuarios` o en `vecinos`. Quien se loguea en
-//   realsayana.comunas.lat está entrando al tenant de Real Sayana
-//   siempre, tenga o no perfil de staff. Cada página ya tiene una
-//   fuente para esto (usePortalMunicipioId en las tres, o
-//   perfil.municipio_id ya cargado en los dos logout).
+//   municipioId — responsabilidad del caller. Sale del SUBDOMINIO por
+//   el que la persona entró, no de si tiene fila en `usuarios` o en
+//   `vecinos`. Quien se loguea en realsayana.comunas.lat está entrando
+//   al tenant de Real Sayana siempre, tenga o no perfil de staff. Cada
+//   página ya tiene una fuente para esto (usePortalMunicipioId en las
+//   tres, o perfil.municipio_id ya cargado en los dos logout).
 //
 //   usuarioId — FK a usuarios.id (coincide con el auth uid para
-//   staff). Si el caller no lo pasa, queda `null` y la identidad real
-//   vive en datos_despues.auth_user_id/email — ESO ya funciona bien,
-//   no se toca.
+//   staff). A DIFERENCIA de municipioId, ESTE si se valida acá adentro
+//   contra la sesión viva (ver más abajo) — no es responsabilidad del
+//   caller acertarlo, es un guardrail estructural.
 //
 // Si municipioId llega null/undefined, es un bug de armado en el
 // caller (no un caso válido) — se grita por consola en vez de dejar
@@ -294,10 +293,34 @@ export async function createAuditLogVecino({
 // sigue adelante igual: un fallo de auditoría no puede tumbar un
 // login o un logout que ya ocurrió de verdad.
 //
+// GUARDRAIL DE usuarioId CONTRA LA SESIÓN VIVA (caso real, 2026-08-06):
+// AuthContext.signOut() armaba `usuarioId: perfil?.id` desde React
+// state. Ese estado se actualiza en un setTimeout(0) disparado por
+// onAuthStateChange (ver el comentario de la zona frágil en
+// AuthContext.jsx) — hay una ventana real, entre un signInWithPassword()
+// de OTRA persona y que ese setTimeout corra, donde `perfil` sigue
+// siendo el de la sesión ANTERIOR mientras la sesión de Supabase Auth
+// ya cambió. Caso real: vecino.demo entra por /login, la app lo
+// rechaza (sin fila en `usuarios`) y llama signOut() — pero `perfil`
+// todavía era el de Enrique (login previo en la misma pestaña). El
+// insert intentó usuario_id = Enrique con la sesión de vecino.demo ya
+// activa, y la policy audit_insert_staff (usuario_id = auth.uid())
+// lo rechazó con 42501 -- la RLS hizo bien su trabajo, pero significa
+// que ningún caller puede confiar en su propio estado para esto.
+//
+// Por eso acá adentro, si viene `usuarioId`, se confirma contra
+// supabase.auth.getSession() (lee la sesión ya en memoria, sin viaje de
+// red) ANTES de usarlo. Si no coincide con el uid de la sesión viva,
+// se descarta -- la fila sigue escribiéndose (con `usuario_id: null`),
+// nunca se pierde el evento por esto. El resultado: una identidad
+// desactualizada no puede producir una fila con la persona equivocada,
+// ni con la correcta tampoco -- directamente no puede escribir nada en
+// usuario_id salvo que coincida.
+//
 // Si el INSERT en sí falla, NUNCA queda en un catch mudo — se ve en
 // consola con un tag identificable. Tampoco se relanza.
 // =============================================================
-export async function registrarAcceso({ resultado, via, userId, email, municipioId, usuarioId } = {}) {
+export async function registrarAcceso({ resultado, via, userId, email, municipioId, usuarioId, motivo } = {}) {
   if (!resultado) throw new Error('registrarAcceso: resultado es requerido.')
   if (!via) throw new Error('registrarAcceso: via es requerida.')
   if (!userId) throw new Error('registrarAcceso: userId es requerido.')
@@ -306,23 +329,44 @@ export async function registrarAcceso({ resultado, via, userId, email, municipio
     console.error('[useAuditLog] registrarAcceso: municipioId llegó null/undefined -- revisar el caller', { via, userId })
   }
 
-  const accion = resultado === 'logout' ? 'LOGOUT' : 'LOGIN'
+  const accion = resultado === 'logout' ? 'LOGOUT'
+    : resultado === 'rechazado' ? 'LOGIN_RECHAZADO'
+    : 'LOGIN'
+
+  let usuarioIdFinal = null
+  if (usuarioId != null) {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.id === usuarioId) {
+      usuarioIdFinal = usuarioId
+    } else {
+      console.error('[useAuditLog] registrarAcceso: usuarioId no coincide con la sesión viva -- se descarta para no atribuir la fila a la persona equivocada', {
+        usuarioIdPasado: usuarioId,
+        sesionViva: session?.user?.id ?? null,
+        via,
+      })
+    }
+  }
+
+  const descripcion = accion === 'LOGOUT'
+    ? `Cierre de sesión — ${email ?? userId}`
+    : accion === 'LOGIN_RECHAZADO'
+    ? `Login rechazado — ${email ?? userId}${motivo ? ` (${motivo})` : ''}`
+    : `Inicio de sesión — ${email ?? userId}`
 
   const { error } = await supabase
     .from('audit_log')
     .insert({
       municipio_id: municipioId ?? null,
-      usuario_id: usuarioId ?? null,
+      usuario_id: usuarioIdFinal,
       accion,
       entidad: 'auth',
       entidad_id: userId,
-      descripcion: accion === 'LOGOUT'
-        ? `Cierre de sesión — ${email ?? userId}`
-        : `Inicio de sesión — ${email ?? userId}`,
+      descripcion,
       datos_despues: {
         via,
         email: email ?? null,
         auth_user_id: userId,
+        ...(motivo ? { motivo } : {}),
         // Red de contención de la carrera con usePortalMunicipioId: si
         // esta fila termina con municipio_id null (query de municipio
         // sin resolver todavía en el momento del submit), el hostname

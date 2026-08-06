@@ -67,6 +67,10 @@ export default function Login() {
     }
 
     if (!u) {
+      await registrarAcceso({
+        resultado: 'rechazado', via: 'login_staff', userId, email: data.user.email, municipioId,
+        motivo: 'Cuenta sin habilitar — sin fila de staff en usuarios',
+      })
       await signOut()
       setLoading(false)
       setError('Tu cuenta aún no fue habilitada en el sistema. Contactá al administrador de tu comuna.')
@@ -81,6 +85,10 @@ export default function Login() {
     // prometió ("tu cuenta va a quedar en revisión hasta que un
     // administrador la habilite").
     if (u.activo === false) {
+      await registrarAcceso({
+        resultado: 'rechazado', via: 'login_staff', userId, email: data.user.email, municipioId,
+        motivo: u.aprobado_en ? 'Cuenta deshabilitada' : 'Cuenta pendiente de aprobación',
+      })
       await signOut()
       setLoading(false)
       setError(u.aprobado_en
@@ -91,6 +99,10 @@ export default function Login() {
 
     const route = homeRouteFor(u.roles)
     if (!route) {
+      await registrarAcceso({
+        resultado: 'rechazado', via: 'login_staff', userId, email: data.user.email, municipioId,
+        motivo: 'Sin rol asignado',
+      })
       await signOut()
       setLoading(false)
       setError('Tu cuenta no tiene un rol asignado. Contactá al administrador.')
