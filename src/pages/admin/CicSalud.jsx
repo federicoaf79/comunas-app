@@ -106,7 +106,11 @@ export default function CicSalud() {
     return depCicSalud ? <DepBotIATab dependencia={depCicSalud} /> : <Spinner />
   }
   if (tabRequested === 'profesionales') {
-    return depCicSalud ? <ProfesionalesTab dependencia={depCicSalud} /> : <Spinner />
+    return depCicSalud ? (
+      <ProfesionalesTab municipioId={municipioId} dependenciaId={depCicSalud.id} />
+    ) : (
+      <Spinner />
+    )
   }
   if (tabRequested === 'admin') {
     return depCicSalud ? (

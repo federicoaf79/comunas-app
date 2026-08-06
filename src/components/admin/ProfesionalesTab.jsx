@@ -163,7 +163,7 @@ function ProfesionalForm({ initial, municipioId, dependenciaId, onClose }) {
 }
 
 export default function ProfesionalesTab({ municipioId, dependenciaId }) {
-  const { data: profesionales = [], isLoading } = useProfesionales(municipioId, dependenciaId)
+  const { data: profesionales = [], isLoading, isError } = useProfesionales(municipioId, dependenciaId)
   const deleteMut = useDeleteProfesional()
   const [modal, setModal] = useState(null) // null | 'new' | profesional
 
@@ -180,7 +180,42 @@ export default function ProfesionalesTab({ municipioId, dependenciaId }) {
     return dias.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ')
   }
 
+  // No hay que confundir "no hay profesionales cargados" (dato real,
+  // ya consultado) con "no pudimos ni preguntar" (falta municipioId/
+  // dependenciaId, o la consulta falló). Sin esta distinción, un bug
+  // de wiring que deja los props en undefined (useProfesionales tiene
+  // `enabled: !!municipioId`, así que la query ni corre) se ve
+  // idéntico a un padrón vacío real — con el mismo botón "Agregar el
+  // primero" invitando a cargar profesionales que en realidad ya
+  // existen, duplicándolos. Mismo criterio que "Sin registro" en la
+  // columna de último acceso: nunca mostrar un estado tranquilizador
+  // cuando lo que hay es una duda.
+  if (!municipioId || !dependenciaId) {
+    return (
+      <div className="card border-red-200 bg-red-50 p-8 text-center">
+        <p className="text-sm font-semibold text-red-700">No pudimos cargar los profesionales.</p>
+        <p className="mt-1 text-xs text-red-600">
+          Falta información para consultar la base ({!municipioId ? 'municipio' : 'dependencia'} sin
+          resolver). No es que no haya profesionales cargados — recargá la página o avisá a soporte
+          antes de agregar uno nuevo, para no duplicar datos que ya existen.
+        </p>
+      </div>
+    )
+  }
+
   if (isLoading) return <div className="flex justify-center py-10"><Spinner size="lg" /></div>
+
+  if (isError) {
+    return (
+      <div className="card border-red-200 bg-red-50 p-8 text-center">
+        <p className="text-sm font-semibold text-red-700">No pudimos cargar los profesionales.</p>
+        <p className="mt-1 text-xs text-red-600">
+          Hubo un error consultando la base. No es que no haya profesionales cargados — recargá la
+          página antes de agregar uno nuevo, para no duplicar datos que ya existen.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">

@@ -20,6 +20,33 @@ const TIPOS_CON_MODULO_PROPIO = new Set([
   'odontologia',
 ])
 
+// Tipos de dependencia dinámica que SÍ tienen una página propia
+// (no la genérica DependenciaGestion.jsx) — su basePath en el
+// sidebar tiene que apuntar ahí, nunca a
+// `/admin/dependencia-gestion/:id`, porque esa pantalla genérica
+// no sabe manejar tabs como `?tab=profesionales` (los declara sin
+// tener ningún branch que los renderice — la pestaña queda en
+// blanco, no da error). Encontrado 2026-08-06 con Consultorio
+// Odontológico: TIPOS_CON_MODULO_PROPIO (arriba) ya documentaba la
+// intención de excluir a `odontologia` de "Otras dependencias",
+// pero ese set nunca se conectó a ningún filtro real — quedó como
+// código muerto y `odontologia` cayó igual en el loop genérico.
+// Sala Primeros Auxilios (`salud`/`sala`/`caps`) comparte el mismo
+// bug de fondo pero hoy queda enmascarado: `entryParaDep()` la
+// resuelve como `solo_informativo` (ver más abajo) y devuelve un
+// link plano a `?tab=landing` ANTES de llegar a
+// `subitemsParaTipo()`, así que el link roto a "Profesionales"
+// nunca llega a generarse mientras ese flag siga en `true`. Se deja
+// igual acá, ya corregido de antemano, para que apagar
+// `solo_informativo` el día de mañana no reintroduzca este mismo
+// bug en silencio.
+const BASE_PATH_POR_TIPO = {
+  odontologia: '/admin/dependencia/odontologia',
+  salud:       '/admin/sala',
+  sala:        '/admin/sala',
+  caps:        '/admin/sala',
+}
+
 // Etiqueta amigable por tipo — usada en el sidebar para que tipos
 // con varias deps (ej: 'educacion' → Jardín + Escuela) aparezcan
 // agrupados con un solo nombre. Si el tipo no está acá, cae al
@@ -871,7 +898,7 @@ export default function AdminLayout() {
       if (seenTipo.has(t)) continue
       seenTipo.add(t)
       const label = LABEL_BY_TIPO[t] ?? d.nombre
-      const basePath = `/admin/dependencia-gestion/${d.id}`
+      const basePath = BASE_PATH_POR_TIPO[t] ?? `/admin/dependencia-gestion/${d.id}`
       // moduloParaTipo(t) resuelve el gate on/off para los tipos dinámicos
       // que SÍ tienen módulo propio en modulos_config (sala_pa, odontologia)
       // — antes esta llamada nunca pasaba `modulo`, así que apagar esos
