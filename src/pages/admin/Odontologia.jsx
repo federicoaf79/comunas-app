@@ -171,7 +171,7 @@ export default function Odontologia() {
     return <DepLandingTab dependenciaId={depOdonto.id} />
   }
   if (tabRequested === 'bot_ia' && depOdonto) {
-    return <DepBotIATab dependenciaId={depOdonto.id} />
+    return <DepBotIATab dep={depOdonto} />
   }
   if (tabRequested === 'profesionales' && depOdonto) {
     return (

@@ -103,7 +103,7 @@ export default function CicSalud() {
     return depCicSalud ? <DepLandingTab dependencia={depCicSalud} /> : <Spinner />
   }
   if (tabRequested === 'bot_ia') {
-    return depCicSalud ? <DepBotIATab dependencia={depCicSalud} /> : <Spinner />
+    return depCicSalud ? <DepBotIATab dep={depCicSalud} /> : <Spinner />
   }
   if (tabRequested === 'profesionales') {
     return depCicSalud ? (

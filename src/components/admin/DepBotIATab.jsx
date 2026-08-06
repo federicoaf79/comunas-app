@@ -16,8 +16,24 @@ export default function DepBotIATab({ dep }) {
 
   function set(field, value) { setForm(p => ({ ...p, [field]: value })); setOk(false) }
 
+  // Sin `dep` no hay a qué dependencia guardarle nada — mostrar el
+  // formulario igual (con handleGuardar cortando en silencio si se
+  // aprieta "Guardar") deja escribir en campos que nunca se van a
+  // persistir, sin ningún aviso. Mismo criterio que ProfesionalesTab:
+  // "no pude cargar" tiene que verse distinto de "esto ya está vacío".
+  if (!dep?.id) {
+    return (
+      <div className="card border-red-200 bg-red-50 p-8 text-center">
+        <p className="text-sm font-semibold text-red-700">No pudimos cargar la configuración del bot.</p>
+        <p className="mt-1 text-xs text-red-600">
+          Falta la dependencia para guardar esta configuración. Recargá la página o avisá a soporte
+          antes de escribir acá — ningún cambio se va a guardar mientras esto no se resuelva.
+        </p>
+      </div>
+    )
+  }
+
   async function handleGuardar() {
-    if (!dep?.id) return
     setSaving(true); setError(''); setOk(false)
     try {
       const { error: err } = await supabase.from('dependencias').update({
