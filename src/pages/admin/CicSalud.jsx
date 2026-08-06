@@ -100,7 +100,7 @@ export default function CicSalud() {
   )
 
   if (tabRequested === 'landing') {
-    return depCicSalud ? <DepLandingTab dependencia={depCicSalud} /> : <Spinner />
+    return depCicSalud ? <DepLandingTab dep={depCicSalud} /> : <Spinner />
   }
   if (tabRequested === 'bot_ia') {
     return depCicSalud ? <DepBotIATab dep={depCicSalud} /> : <Spinner />

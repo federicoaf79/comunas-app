@@ -27,8 +27,22 @@ export default function DepLandingTab({ dep }) {
 
   function set(field, value) { setForm(p => ({ ...p, [field]: value })); setOk(false) }
 
+  // Sin `dep` no hay a qué dependencia guardarle nada — mismo criterio
+  // que DepBotIATab: mostrar el formulario igual dejaría escribir en
+  // campos que nunca se van a persistir, sin ningún aviso.
+  if (!dep?.id) {
+    return (
+      <div className="card border-red-200 bg-red-50 p-8 text-center">
+        <p className="text-sm font-semibold text-red-700">No pudimos cargar la configuración de landing.</p>
+        <p className="mt-1 text-xs text-red-600">
+          Falta la dependencia para guardar esta configuración. Recargá la página o avisá a soporte
+          antes de escribir acá — ningún cambio se va a guardar mientras esto no se resuelva.
+        </p>
+      </div>
+    )
+  }
+
   async function handleGuardar() {
-    if (!dep?.id) return
     setSaving(true); setError(''); setOk(false)
     try {
       const { error: err } = await supabase.from('dependencias').update({

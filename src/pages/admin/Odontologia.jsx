@@ -168,7 +168,7 @@ export default function Odontologia() {
   // A partir de acá, ningún hook nuevo — solo returns condicionados por
   // datos ya resueltos arriba.
   if (tabRequested === 'landing' && depOdonto) {
-    return <DepLandingTab dependenciaId={depOdonto.id} />
+    return <DepLandingTab dep={depOdonto} />
   }
   if (tabRequested === 'bot_ia' && depOdonto) {
     return <DepBotIATab dep={depOdonto} />
