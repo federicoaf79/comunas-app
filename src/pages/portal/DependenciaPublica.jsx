@@ -18,6 +18,10 @@ import PortalBackLink from '../../components/portal/PortalBackLink'
 //   1) Header con ícono + nombre + descripción + horario badge
 //   2) Servicios (con CTA admin si está vacío)
 //   3) Cómo contactarnos (horario, tel, email, WhatsApp, canal)
+//   3.5) Profesionales que atienden — solo si hay activos, sin
+//        whitelist de tipos (cualquier dependencia con profesionales
+//        cargados la muestra). Sección propia a todo el ancho, no
+//        adentro del grid de Servicios/Contacto.
 //   4) Dónde encontrarnos (dirección + Google Maps embed)
 //   5) Fotos (si hay)
 //   6) Botón "Sacar turno" (volver al portal vive arriba de la página,
@@ -205,14 +209,18 @@ export default function DependenciaPublica() {
   const horario   = dep?.horario_atencion || HORARIO_FALLBACK[tipoMatch] || null
   const direccion = dep?.direccion || null
 
-  const TIPOS_CON_PROFESIONALES = new Set(['caps', 'salud', 'sala'])
+  // Sin whitelist de tipos a propósito: la sección se muestra cuando la
+  // dependencia tiene profesionales activos, punto. Una lista de tipos
+  // ('caps'/'salud'/'sala') no puede seguirle el ritmo a los tipos
+  // reales de `dependencias` (CIC quedó en 'cic_salud', Odontología en
+  // 'odontologia' — ninguno de los dos estaba en esa lista, así que sus
+  // profesionales reales se pedían a la base, llegaban, y se
+  // descartaban acá mismo antes de renderizar nada).
   const { data: profesionales = [] } = usePublicProfesionales(
     municipioId ?? null,
     dep?.id ?? null
   )
-  const profActivos = TIPOS_CON_PROFESIONALES.has(tipoMatch)
-    ? profesionales.filter(p => p.activo)
-    : []
+  const profActivos = profesionales.filter(p => p.activo)
   const telefono  = telLink(dep?.telefono)
   const waUrl     = whatsappLink(dep?.whatsapp)
   const canal     = canalLabel(dep?.canal_atencion)
@@ -360,61 +368,6 @@ export default function DependenciaPublica() {
                 )}
               </section>
 
-              {/* ===== 2.5. Profesionales ===== */}
-              {profActivos.length > 0 && (
-                <section className="mt-6 rounded-2xl border border-border bg-white p-6 shadow-card sm:p-8">
-                  <h2 className="mb-5 font-sora text-lg font-bold text-primary">
-                    Profesionales que atienden
-                  </h2>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {profActivos.map(p => {
-                      const diasLabel = Array.isArray(p.dias_atencion) && p.dias_atencion.length > 0
-                        ? p.dias_atencion.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ')
-                        : null
-                      const horarioProf = p.hora_desde && p.hora_hasta
-                        ? `${p.hora_desde} – ${p.hora_hasta}`
-                        : null
-                      const ESPEC_LABEL = {
-                        general: 'Medicina general', obstetra: 'Obstetricia',
-                        ecografia: 'Ecografía', pediatria: 'Pediatría',
-                        odontologia: 'Odontología', posta_rural: 'Posta sanitaria rural',
-                        otro: 'Otro'
-                      }
-                      return (
-                        <div key={p.id} className="flex items-start gap-4 rounded-xl border border-border p-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-                            {p.nombre.split(' ').filter(w => /^[A-ZÁÉÍÓÚÜ]/.test(w)).slice(0,2).map(w=>w[0]).join('')}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="font-sora text-sm font-bold text-primary">{p.nombre}</p>
-                            <p className="text-xs text-primary-500">
-                              {ESPEC_LABEL[p.especialidad] ?? p.especialidad}
-                              {p.matricula ? ` · ${p.matricula}` : ''}
-                            </p>
-                            {(diasLabel || horarioProf) && (
-                              <p className="mt-1.5 text-xs text-primary-600">
-                                📅 {[diasLabel, horarioProf].filter(Boolean).join(' · ')}
-                              </p>
-                            )}
-                            {p.frecuencia_nota && (
-                              <p className="mt-0.5 text-xs italic text-primary-400">{p.frecuencia_nota}</p>
-                            )}
-                            {p.telefono && (
-                              <a href={`tel:${p.telefono}`} className="mt-1 inline-flex items-center gap-1 text-xs text-[#1D4ED8] hover:underline">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 014 4.18 2 2 0 016.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L10.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>
-                                </svg>
-                                {p.telefono}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              )}
-
               {/* ===== 3. Contacto ===== */}
               <section className="rounded-xl border border-border bg-white p-6 shadow-card">
                 <h2 className="font-sora text-xl font-bold text-primary">
@@ -513,6 +466,64 @@ export default function DependenciaPublica() {
                 </dl>
               </section>
             </div>
+
+            {/* ===== 3.5. Profesionales — sección propia a todo el ancho,
+                no una columna del grid de arriba (Servicios/Contacto):
+                encajada ahí, cada tarjeta quedaba en un cuarto del ancho
+                de la página y el nombre/los días se cortaban feo. ===== */}
+            {profActivos.length > 0 && (
+              <section className="mt-6 rounded-2xl border border-border bg-white p-6 shadow-card sm:p-8">
+                <h2 className="mb-5 font-sora text-lg font-bold text-primary">
+                  Profesionales que atienden
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {profActivos.map(p => {
+                    const diasLabel = Array.isArray(p.dias_atencion) && p.dias_atencion.length > 0
+                      ? p.dias_atencion.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(' · ')
+                      : null
+                    const horarioProf = p.hora_desde && p.hora_hasta
+                      ? `${p.hora_desde} – ${p.hora_hasta}`
+                      : null
+                    const ESPEC_LABEL = {
+                      general: 'Medicina general', obstetra: 'Obstetricia',
+                      ecografia: 'Ecografía', pediatria: 'Pediatría',
+                      odontologia: 'Odontología', posta_rural: 'Posta sanitaria rural',
+                      otro: 'Otro'
+                    }
+                    return (
+                      <div key={p.id} className="flex items-start gap-4 rounded-xl border border-border p-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                          {p.nombre.split(' ').filter(w => /^[A-ZÁÉÍÓÚÜ]/.test(w)).slice(0,2).map(w=>w[0]).join('')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-sora text-sm font-bold text-primary">{p.nombre}</p>
+                          <p className="text-xs text-primary-500">
+                            {ESPEC_LABEL[p.especialidad] ?? p.especialidad}
+                            {p.matricula ? ` · ${p.matricula}` : ''}
+                          </p>
+                          {(diasLabel || horarioProf) && (
+                            <p className="mt-1.5 text-xs text-primary-600">
+                              📅 {[diasLabel, horarioProf].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                          {p.frecuencia_nota && (
+                            <p className="mt-0.5 text-xs italic text-primary-400">{p.frecuencia_nota}</p>
+                          )}
+                          {p.telefono && (
+                            <a href={`tel:${p.telefono}`} className="mt-1 inline-flex items-center gap-1 text-xs text-[#1D4ED8] hover:underline">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 014 4.18 2 2 0 016.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L10.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/>
+                              </svg>
+                              {p.telefono}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* ===== 4. Dónde encontrarnos ===== */}
             <section className="mt-6 rounded-xl border border-border bg-white p-6 shadow-card">
