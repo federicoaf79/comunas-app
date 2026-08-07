@@ -579,21 +579,9 @@ function VistaSemana({ fecha, dependenciaId, estado, municipioId, soloReservas }
   )
 
   function handleEventoClick(evento) {
-    console.log('[DEBUG VistaSemana] handleEventoClick llamado:', {
-      evento,
-      eventoTipo: evento?.tipo,
-      eventoId: evento?.id,
-      turnosDisponibles: turnos.length,
-      primerTurnoId: turnos[0]?.id,
-    })
-
     if (evento.tipo === 'turno') {
       // Buscar el turno completo en el array original usando evento.id
       const turnoCompleto = turnos.find(t => t.id === evento.id)
-      console.log('[DEBUG VistaSemana] Turno encontrado:', {
-        encontrado: !!turnoCompleto,
-        turnoCompleto,
-      })
       if (turnoCompleto) {
         setTurnoSeleccionado(turnoCompleto)
         setModalDetalleOpen(true)
