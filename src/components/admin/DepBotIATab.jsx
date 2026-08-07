@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import Spinner from '../ui/Spinner'
@@ -29,15 +29,22 @@ export default function DepBotIATab({ dep }) {
   const [form, setForm] = useState({ bot_descripcion: '', bot_faq: '', bot_restricciones: '' })
   // useDependencias() (fetchDependencias) no trae estas columnas, así
   // que `dep` nunca las tiene de entrada — el form se hidrata recién
-  // cuando esta query propia resuelve.
+  // cuando esta query propia resuelve. El ref evita que un refetch en
+  // segundo plano (React Query reconsulta al volver el foco a la
+  // pestaña por default) pise lo que el usuario ya está escribiendo:
+  // hidrata UNA sola vez por dependencia, nunca de nuevo mientras
+  // depId no cambie, sin importar cuántas veces vuelva a resolver la
+  // query de fondo.
+  const hidratadoPara = useRef(null)
   useEffect(() => {
-    if (!depData) return
+    if (!depData || hidratadoPara.current === depId) return
+    hidratadoPara.current = depId
     setForm({
       bot_descripcion:   depData.bot_descripcion   ?? '',
       bot_faq:           depData.bot_faq           ?? '',
       bot_restricciones: depData.bot_restricciones ?? '',
     })
-  }, [depData])
+  }, [depData, depId])
 
   const [saving, setSaving]   = useState(false)
   const [ok, setOk]           = useState(false)
