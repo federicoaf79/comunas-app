@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useDependencias } from '../../hooks/useTurnos'
+import { matchAyudaSocial } from '../../lib/dependenciaTipos'
 import {
   useBeneficiarios, useCreateBeneficiario, useUpdateBeneficiarioEstado,
   usePagos, useCreatePago,
@@ -108,11 +109,13 @@ export default function AyudaSocial() {
     setSearchParams(next)
   }
 
-  // Busca la dependencia de Ayuda Social
+  // Busca la dependencia de Ayuda Social. `matchAyudaSocial` es la
+  // misma función que usa DependenciaGuard (App.jsx) para esta ruta —
+  // un solo lugar para resolver la dependencia, que no puede divergir
+  // entre el chequeo de acceso y los datos que se muestran.
   const depsQ = useDependencias(municipioId)
   const depSocial = useMemo(() => {
-    const tipos = ['social', 'ayuda_social']
-    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+    return (depsQ.data ?? []).find(matchAyudaSocial) ?? null
   }, [depsQ.data])
 
   if (tab === 'landing') return <div className="p-6"><DepLandingTab dep={depSocial} /></div>

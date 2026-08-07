@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { matchJuezDePaz } from '../../lib/dependenciaTipos'
 import { useQueryClient } from '@tanstack/react-query'
 import { todayArgYMD, shortDateOf, ARG_OFFSET } from '../../lib/datetime'
 
@@ -625,13 +626,14 @@ export default function JuezDePaz() {
   // es superadmin (municipio_id = null), useDependencias cae al
   // primer municipio activo via useEffectiveMunicipioId — el override
   // se lo pasamos explícito acá.
-  // El find acepta varios `tipo` posibles para tolerar variaciones
-  // del seed inicial entre municipios (juzgado / juez_paz / juez).
+  // `matchJuezDePaz` es la misma función que usa DependenciaGuard
+  // (App.jsx) para esta ruta — un solo lugar para resolver la
+  // dependencia, que no puede divergir entre el chequeo de acceso y
+  // los datos que se muestran.
   const depsQ = useDependencias(municipioId)
   const depsLoading = depsQ.isLoading
   const depJuez = useMemo(() => {
-    const tipos = ['juzgado', 'juez_paz', 'juez']
-    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+    return (depsQ.data ?? []).find(matchJuezDePaz) ?? null
   }, [depsQ.data])
 
   // Gating de tabs por dependencias_acceso. Directores ven todo.

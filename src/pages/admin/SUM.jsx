@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { useDependencias } from '../../hooks/useTurnos'
+import { matchSum } from '../../lib/dependenciaTipos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -695,13 +696,14 @@ export default function SUM() {
                        : tabParamRaw === 'landing' || tabParamRaw === 'bot_ia'
                          ? tabParamRaw
                          : 'reservas'
-  // Busca la dependencia del SUM en el municipio efectivo. El find
-  // tolera variaciones del seed (sum / salon / salon_usos_multiples).
+  // Busca la dependencia del SUM en el municipio efectivo. `matchSum`
+  // es la misma función que usa DependenciaGuard (App.jsx) para esta
+  // ruta — un solo lugar para resolver la dependencia, que no puede
+  // divergir entre el chequeo de acceso y los datos que se muestran.
   const depsQ = useDependencias(municipioId)
   const depsLoading = depsQ.isLoading
   const depSum = useMemo(() => {
-    const tipos = ['sum', 'salon', 'salon_usos_multiples']
-    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+    return (depsQ.data ?? []).find(matchSum) ?? null
   }, [depsQ.data])
 
   // Gating por dependencias_acceso. Directores ven todo.

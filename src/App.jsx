@@ -6,7 +6,7 @@ import { VecinoProvider } from './context/VecinoContext'
 import AuthGuard   from './components/guards/AuthGuard'
 import RoleGuard   from './components/guards/RoleGuard'
 import DependenciaGuard from './components/guards/DependenciaGuard'
-import { matchSalaPA, matchCicSalud, matchOdontologia } from './lib/dependenciaTipos'
+import { matchSalaPA, matchCicSalud, matchOdontologia, matchAyudaSocial, matchJuezDePaz, matchSum } from './lib/dependenciaTipos'
 import VecinoGuard from './components/guards/VecinoGuard'
 import AdminDomainGuard from './components/guards/AdminDomainGuard'
 import AdminDomainRedirect from './components/guards/AdminDomainRedirect'
@@ -211,11 +211,11 @@ const router = createBrowserRouter([
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/reclamos', element: <Reclamos /> },
                   { path: '/admin/sala',                       element: <DependenciaGuard match={matchSalaPA}><SalaPrimerosAuxilios /></DependenciaGuard> },
-                  { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
+                  { path: '/admin/sala/atencion/:turnoId',     element: <DependenciaGuard match={matchSalaPA}><AtencionDetalle /></DependenciaGuard> },
                   { path: '/admin/cic-salud',                  element: <DependenciaGuard match={matchCicSalud}><CicSalud /></DependenciaGuard> },
-                  { path: '/admin/cic-salud/atencion/:turnoId', element: <AtencionDetalle /> },
-                  { path: '/admin/juez',       element: <JuezDePaz /> },
-                  { path: '/admin/sum',                  element: <SUM /> },
+                  { path: '/admin/cic-salud/atencion/:turnoId', element: <DependenciaGuard match={matchCicSalud}><AtencionDetalle /></DependenciaGuard> },
+                  { path: '/admin/juez',       element: <DependenciaGuard match={matchJuezDePaz}><JuezDePaz /></DependenciaGuard> },
+                  { path: '/admin/sum',                  element: <DependenciaGuard match={matchSum}><SUM /></DependenciaGuard> },
                   { path: '/admin/dependencia/odontologia', element: <DependenciaGuard match={matchOdontologia}><Odontologia /></DependenciaGuard> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
                   // Módulo genérico nuevo, keyeado por UUID de la
@@ -234,7 +234,7 @@ const router = createBrowserRouter([
                   { path: '/admin/administracion', element: <Administracion /> },
                   { path: '/admin/auditoria',      element: <Auditoria /> },
                   { path: '/admin/rendicion',      element: <Rendicion /> },
-                  { path: '/admin/ayuda-social',   element: <AyudaSocial /> },
+                  { path: '/admin/ayuda-social',   element: <DependenciaGuard match={matchAyudaSocial}><AyudaSocial /></DependenciaGuard> },
                   { path: '/admin/agenda-publica', element: <AgendaPublicaPage /> },
                   { path: '/admin/config',         element: <ConfigPortal /> },
                   { path: '/admin/config-general', element: <ConfigGeneral /> },
