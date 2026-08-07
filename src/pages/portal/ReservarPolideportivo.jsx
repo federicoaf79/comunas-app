@@ -31,39 +31,15 @@ export default function ReservarPolideportivo() {
   const navigate = useNavigate()
   const { vecinoSession, clearVecinoSession, municipioId } = useVecino()
 
-  async function handleSignOut() {
-    await clearVecinoSession()
-    navigate('/portal', { replace: true })
-  }
-
-  // AUTH GUARD: requiere cuenta supabase (email/password)
-  if (vecinoSession.auth_mode !== 'supabase') {
-    return (
-      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
-        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
-        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
-          <div className="mx-auto max-w-lg text-center">
-            <div className="mb-4 text-5xl">🔒</div>
-            <h3 className="font-sora text-lg font-bold text-primary">
-              Cuenta completa requerida
-            </h3>
-            <p className="mt-2 text-sm text-primary-600">
-              Para reservar canchas necesitás crear una cuenta completa con email y contraseña.
-              El acceso rápido (DNI + teléfono) no permite hacer reservas.
-            </p>
-            <Button
-              onClick={() => navigate('/register')}
-              className="mt-4"
-            >
-              Crear cuenta
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // QUERIES
+  // TODOS los hooks del componente se llaman acá, sin excepción, antes
+  // de cualquier return condicionado por el modo de auth o por el
+  // estado de carga — nunca al revés. El guard de "cuenta completa
+  // requerida" vivía ANTES de estos hooks: si `vecinoSession.auth_mode`
+  // pudiera diferir entre el primer render y uno posterior del mismo
+  // montaje, ese cambio de rama haría que React llame más o menos
+  // hooks que en el render anterior (error "Rendered fewer/more hooks
+  // than during the previous render") — mismo patrón que el bug real
+  // ya encontrado y corregido en Odontologia.jsx.
   const { data: depPolideportivo, isLoading: loadingDep } = useDependenciaPublica(
     'deporte',
     municipioId
@@ -72,7 +48,6 @@ export default function ReservarPolideportivo() {
   const { data: horarioConfig, isLoading: loadingHorario } = usePolideportivoHorario(municipioId)
   const { data: misReservas = [], isLoading: loadingMisReservas } = useReservasVecino(vecinoSession.id)
 
-  // STATE
   const [espacioId, setEspacioId] = useState('')
   const [fecha, setFecha] = useState(todayArgYMD())
   const [horaInicio, setHoraInicio] = useState('')
@@ -88,7 +63,6 @@ export default function ReservarPolideportivo() {
     { enabled: !!(espacioId || espacios[0]) && !!fecha }
   )
 
-  // MUTATION
   const crearReserva = useCrearReservaDeportiva()
 
   // Auto-seleccionar primer espacio disponible
@@ -124,6 +98,61 @@ export default function ReservarPolideportivo() {
     )
   }, [horaInicio, horaFin, reservasDelDia])
 
+  // A partir de acá, ningún hook nuevo — solo returns condicionados
+  // por datos ya resueltos arriba, y funciones planas.
+
+  // AUTH GUARD: requiere cuenta supabase (email/password)
+  if (vecinoSession.auth_mode !== 'supabase') {
+    return (
+      <div className="container mx-auto max-w-2xl py-6 sm:py-10">
+        <PortalBackLink to="/portal" className="mb-6 text-primary hover:bg-primary-50 hover:text-primary-700" />
+        <div className="card border-accent-100 bg-accent-50 p-6 sm:p-8">
+          <div className="mx-auto max-w-lg text-center">
+            <div className="mb-4 text-5xl">🔒</div>
+            <h3 className="font-sora text-lg font-bold text-primary">
+              Cuenta completa requerida
+            </h3>
+            <p className="mt-2 text-sm text-primary-600">
+              Para reservar canchas necesitás crear una cuenta completa con email y contraseña.
+              El acceso rápido (DNI + teléfono) no permite hacer reservas.
+            </p>
+            <Button
+              onClick={() => navigate('/register')}
+              className="mt-4"
+            >
+              Crear cuenta
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadingDep || loadingEspacios || loadingHorario) {
+    return (
+      <div className="container mx-auto max-w-2xl py-10">
+        <Spinner />
+      </div>
+    )
+  }
+
+  if (!depPolideportivo || espacios.length === 0) {
+    return (
+      <div className="container mx-auto max-w-2xl py-10">
+        <div className="card p-8 text-center">
+          <p className="text-sm text-primary-500">
+            El Polideportivo no está disponible en este momento.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  async function handleSignOut() {
+    await clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -156,26 +185,6 @@ export default function ReservarPolideportivo() {
     } catch (err) {
       alert(`❌ Error: ${err.message}`)
     }
-  }
-
-  if (loadingDep || loadingEspacios || loadingHorario) {
-    return (
-      <div className="container mx-auto max-w-2xl py-10">
-        <Spinner />
-      </div>
-    )
-  }
-
-  if (!depPolideportivo || espacios.length === 0) {
-    return (
-      <div className="container mx-auto max-w-2xl py-10">
-        <div className="card p-8 text-center">
-          <p className="text-sm text-primary-500">
-            El Polideportivo no está disponible en este momento.
-          </p>
-        </div>
-      </div>
-    )
   }
 
   return (

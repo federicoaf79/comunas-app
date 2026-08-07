@@ -23,10 +23,20 @@ export default function SolicitarServicioDesarrollo() {
   const navigate = useNavigate()
   const { vecinoSession, clearVecinoSession, municipioId } = useVecino()
 
-  async function handleSignOut() {
-    await clearVecinoSession()
-    navigate('/portal', { replace: true })
-  }
+  // TODOS los hooks del componente se llaman acá, sin excepción, antes
+  // de cualquier return condicionado por el modo de auth — nunca al
+  // revés. Mismo patrón corregido en Odontologia.jsx: un guard que
+  // corte antes de estos hooks puede hacer que un render posterior del
+  // mismo montaje llame menos hooks que el anterior.
+  const [tipoServicio, setTipoServicio] = useState('')
+  const [fechaPreferida, setFechaPreferida] = useState('')
+  const [direccion, setDireccion] = useState('')
+  const [notas, setNotas] = useState('')
+
+  const crearSolicitud = useCrearSolicitud()
+
+  // A partir de acá, ningún hook nuevo — solo returns condicionados
+  // por datos ya resueltos arriba, y funciones planas.
 
   // AUTH GUARD: requiere cuenta supabase (email/password)
   if (vecinoSession.auth_mode !== 'supabase') {
@@ -55,14 +65,10 @@ export default function SolicitarServicioDesarrollo() {
     )
   }
 
-  // STATE
-  const [tipoServicio, setTipoServicio] = useState('')
-  const [fechaPreferida, setFechaPreferida] = useState('')
-  const [direccion, setDireccion] = useState('')
-  const [notas, setNotas] = useState('')
-
-  // MUTATION
-  const crearSolicitud = useCrearSolicitud()
+  async function handleSignOut() {
+    await clearVecinoSession()
+    navigate('/portal', { replace: true })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()

@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run lint:hooks && vite build",
     "lint": "eslint .",
+    "lint:hooks": "eslint --config eslint.rules-of-hooks.config.js src",
     "preview": "vite preview"
   },
   "dependencies": {
