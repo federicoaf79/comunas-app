@@ -166,3 +166,109 @@ commit;
    turnos de su municipio" y "vecino puede insertar turno"— tienen que
    seguir ahi sin haberse movido.
    =========================================================================== */
+
+/* ===========================================================================
+   ROLLBACK — Ayuda Social (bloque aplicado el 2026-08-07)
+
+   Cubre beneficiarios, ayuda_social_pagos, ayuda_social_entregas y la
+   tabla huerfana entregas_ayuda_social.
+
+   ADVERTENCIA — DOS COSAS NO SE CAPTURARON ANTES DE APLICAR
+   1. El campo `roles` de las policies originales no quedo registrado.
+      Este rollback las recrea con `to authenticated`. Si alguna era
+      `{public}`, el rollback queda mas restrictivo que el original.
+      Es el lado seguro del error, pero conviene saberlo.
+   2. Los grants originales de entregas_ayuda_social tampoco. Se
+      restauran solo para authenticated; anon quedo cerrado en toda
+      la base el 2026-08-05 (migracion 20260805000004) y no se
+      reabre.
+   =========================================================================== */
+
+begin;
+
+/* --- 1. beneficiarios ----------------------------------------------------- */
+
+drop policy if exists beneficiarios_select on public.beneficiarios;
+drop policy if exists beneficiarios_insert on public.beneficiarios;
+drop policy if exists beneficiarios_update on public.beneficiarios;
+drop policy if exists beneficiarios_delete on public.beneficiarios;
+
+create policy "beneficiarios staff" on public.beneficiarios
+  for all to authenticated
+  using (is_superadmin()
+         or (is_staff() and municipio_id = current_usuario_municipio()));
+
+/* --- 2. ayuda_social_pagos ------------------------------------------------ */
+
+/* La original comparaba municipio contra usuarios SIN mirar activo.
+   Se transcribe tal cual estaba: un rollback restaura, no corrige. */
+
+drop policy if exists pagos_select on public.ayuda_social_pagos;
+drop policy if exists pagos_insert on public.ayuda_social_pagos;
+drop policy if exists pagos_update on public.ayuda_social_pagos;
+drop policy if exists pagos_delete on public.ayuda_social_pagos;
+
+create policy pagos_municipio on public.ayuda_social_pagos
+  for all to authenticated
+  using (exists (
+    select 1 from public.usuarios
+    where usuarios.id = auth.uid()
+      and (usuarios.municipio_id = ayuda_social_pagos.municipio_id
+           or 'superadmin' = any(usuarios.roles))));
+
+/* --- 3. ayuda_social_entregas --------------------------------------------- */
+
+drop policy if exists entregas_select on public.ayuda_social_entregas;
+drop policy if exists entregas_insert on public.ayuda_social_entregas;
+drop policy if exists entregas_update on public.ayuda_social_entregas;
+drop policy if exists entregas_delete on public.ayuda_social_entregas;
+
+create policy ayuda_social_entregas_staff on public.ayuda_social_entregas
+  for all to authenticated
+  using (is_superadmin()
+         or (is_staff() and municipio_id = current_usuario_municipio()));
+
+/* --- 4. entregas_ayuda_social (huerfana) ---------------------------------- */
+
+grant select, insert, update, delete on public.entregas_ayuda_social to authenticated;
+
+create policy entregas_ayuda_social_staff_all on public.entregas_ayuda_social
+  for all to authenticated
+  using (is_superadmin()
+         or (is_staff() and municipio_id = current_usuario_municipio()));
+
+/* --- 5. Helpers ----------------------------------------------------------- */
+
+/* ORDEN IMPORTANTE: puede_escribir_clinico() hoy es un alias de
+   puede_escribir_datos_sensibles(). Hay que devolverle su cuerpo
+   propio ANTES de dropear la otra, o las policies clinicas que la
+   referencian quedan apuntando a una funcion inexistente. */
+
+create or replace function public.puede_escribir_clinico()
+returns boolean language sql stable security definer
+set search_path = public, pg_temp as $$
+  select exists (
+    select 1 from public.usuarios
+    where id = auth.uid() and activo = true
+      and roles && array['superadmin','admin_comuna','operador',
+                         'admin_portal','subadmin','usuario_admin','usuario_sub']
+  );
+$$;
+
+drop function if exists public.puede_ver_ayuda_social();
+drop function if exists public.puede_escribir_datos_sensibles();
+
+commit;
+
+/* ===========================================================================
+   VERIFICACION DEL ROLLBACK
+
+   select tablename, policyname, cmd
+   from pg_policies
+   where schemaname = 'public'
+     and tablename in ('beneficiarios','ayuda_social_pagos',
+                       'ayuda_social_entregas','entregas_ayuda_social')
+   order by tablename, policyname;
+
+   Cuatro filas, una por tabla, las cuatro con cmd = ALL.
+   =========================================================================== */
