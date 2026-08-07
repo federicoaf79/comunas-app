@@ -127,7 +127,7 @@ export default function DepBotIATab({ dep }) {
   const inputCls = 'w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-accent'
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-24">
       <div className="card p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div>
