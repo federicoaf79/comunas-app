@@ -6,6 +6,7 @@ import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useSalaPaConfigAdmin, DEFAULT_SALA_PA_CONFIG } from '../../hooks/useConfigPortal'
 import { useAuth } from '../../context/AuthContext'
 import { useMedicoGuardia } from '../../hooks/useMedicoGuardia'
+import { matchSalaPA } from '../../lib/dependenciaTipos'
 import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
@@ -115,21 +116,27 @@ export default function SalaPrimerosAuxilios() {
   const weekEnd = useMemo(() => addDays(weekStart, 6), [weekStart])
 
   // Dependencia de salud para restringir las queries de turnos a
-  // la Sala Primeros Auxilios. Buscamos sobre varios `tipo` posibles porque las
-  // bases viejas usan 'caps' / 'sala' / 'primeros_auxilios' y las
-  // nuevas tienden a 'salud'. Resolver por listado evita falsos
-  // negativos del filtro estricto `tipo='caps'`.
+  // la Sala Primeros Auxilios. `matchSalaPA` es la misma función que
+  // usa DependenciaGuard (App.jsx) para decidir si esta persona entra
+  // a la ruta — un solo lugar para resolver "cuál es la dependencia
+  // de salud", para que las dos resoluciones no puedan divergir.
   const depsQ = useDependencias(municipioId)
   const depSalud = useMemo(() => {
-    const tipos = ['salud', 'caps', 'sala', 'primeros_auxilios']
-    return (depsQ.data ?? []).find(d => tipos.includes((d?.tipo ?? '').toLowerCase())) ?? null
+    return (depsQ.data ?? []).find(matchSalaPA) ?? null
   }, [depsQ.data])
   const dependenciaSaludId = depSalud?.id ?? null
   const depSaludNombre     = depSalud?.nombre ?? null
 
-  // Gating por dependencias_acceso. Directores ven todo; otros roles
-  // ven Agenda solo si tienen `puede_gestionar` y Administración solo
-  // si tienen `puede_administrar` para esta dep.
+  // El acceso a la dependencia en sí (¿puede entrar a esta página en
+  // absoluto?) ya lo resuelve DependenciaGuard, a nivel de ruta, antes
+  // de que este componente llegue a montarse. Lo que queda acá es más
+  // fino: DENTRO de la página, a qué sub-sección cae por default un
+  // usuario con acceso parcial (`puede_gestionar` sin
+  // `puede_administrar`, o viceversa) — un caso que el guard no
+  // necesita distinguir porque para él alcanza con "tiene alguno de
+  // los dos". Directores ven todo; otros roles ven Agenda solo si
+  // tienen `puede_gestionar` y Administración solo si tienen
+  // `puede_administrar` para esta dep.
   const miAcceso = useMemo(() => {
     if (!dependenciaSaludId) return null
     return (perfil?.dependencias_acceso ?? [])
@@ -228,12 +235,6 @@ export default function SalaPrimerosAuxilios() {
           )}
         </p>
       </header>
-
-      {!seccion && (
-        <div className="card border-accent-100 bg-accent-50 p-5 text-sm text-accent-700">
-          No tenés permisos para ver esta sección.
-        </div>
-      )}
 
       {seccion === 'administracion' && (
         !depsQ.isLoading && !dependenciaSaludId ? (

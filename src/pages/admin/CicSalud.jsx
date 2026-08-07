@@ -8,6 +8,7 @@ import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime
 import { supabase } from '../../lib/supabase'
 import { createAuditLog } from '../../hooks/useAuditLog'
 import { getDocumentoSignedUrl } from '../../hooks/useAtenciones'
+import { matchCicSalud } from '../../lib/dependenciaTipos'
 
 // Auditoría best-effort: nunca bloquea la mutación real si falla.
 function logAudit(args) {
@@ -92,10 +93,13 @@ export default function CicSalud() {
   const [searchParams] = useSearchParams()
   const tabRequested = searchParams.get('tab')
 
-  // Early returns para tabs especiales
+  // Early returns para tabs especiales. `matchCicSalud` es la misma
+  // función que usa DependenciaGuard (App.jsx) para esta ruta — un
+  // solo lugar para resolver la dependencia, que no puede divergir
+  // entre el chequeo de acceso y los datos que se muestran.
   const { data: allDeps = [] } = useDependencias(municipioId)
   const depCicSalud = useMemo(
-    () => allDeps.find(d => d.tipo === 'cic_salud' && d.activa !== false),
+    () => allDeps.find(d => matchCicSalud(d) && d.activa !== false),
     [allDeps]
   )
 

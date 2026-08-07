@@ -5,6 +5,8 @@ import { VecinoProvider } from './context/VecinoContext'
 
 import AuthGuard   from './components/guards/AuthGuard'
 import RoleGuard   from './components/guards/RoleGuard'
+import DependenciaGuard from './components/guards/DependenciaGuard'
+import { matchSalaPA, matchCicSalud, matchOdontologia } from './lib/dependenciaTipos'
 import VecinoGuard from './components/guards/VecinoGuard'
 import AdminDomainGuard from './components/guards/AdminDomainGuard'
 import AdminDomainRedirect from './components/guards/AdminDomainRedirect'
@@ -208,13 +210,13 @@ const router = createBrowserRouter([
                   { path: '/admin/tablero',    element: <TablazoCross /> },
                   { path: '/admin/mensajeria', element: <Mensajeria /> },
                   { path: '/admin/reclamos', element: <Reclamos /> },
-                  { path: '/admin/sala',                       element: <SalaPrimerosAuxilios /> },
+                  { path: '/admin/sala',                       element: <DependenciaGuard match={matchSalaPA}><SalaPrimerosAuxilios /></DependenciaGuard> },
                   { path: '/admin/sala/atencion/:turnoId',     element: <AtencionDetalle /> },
-                  { path: '/admin/cic-salud',                  element: <CicSalud /> },
+                  { path: '/admin/cic-salud',                  element: <DependenciaGuard match={matchCicSalud}><CicSalud /></DependenciaGuard> },
                   { path: '/admin/cic-salud/atencion/:turnoId', element: <AtencionDetalle /> },
                   { path: '/admin/juez',       element: <JuezDePaz /> },
                   { path: '/admin/sum',                  element: <SUM /> },
-                  { path: '/admin/dependencia/odontologia', element: <Odontologia /> },
+                  { path: '/admin/dependencia/odontologia', element: <DependenciaGuard match={matchOdontologia}><Odontologia /></DependenciaGuard> },
                   { path: '/admin/dependencia/:tipo',    element: <DependenciaGeneral /> },
                   // Módulo genérico nuevo, keyeado por UUID de la
                   // fila (no por tipo). Path distinto a propósito

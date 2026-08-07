@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useTurnos, useDependencias } from '../../hooks/useTurnos'
 import { useEffectiveMunicipioId } from '../../hooks/useEffectiveMunicipioId'
 import { useAuth } from '../../context/AuthContext'
+import { matchOdontologia } from '../../lib/dependenciaTipos'
 import { shortDateOf, todayArgYMD, timeOf, ARG_OFFSET } from '../../lib/datetime'
 import Avatar from '../../components/ui/Avatar'
 import StatCard from '../../components/ui/StatCard'
@@ -83,9 +84,13 @@ export default function Odontologia() {
   const [searchParams] = useSearchParams()
   const tabRequested = searchParams.get('tab')
 
+  // `matchOdontologia` es la misma función que usa DependenciaGuard
+  // (App.jsx) para esta ruta — un solo lugar para resolver la
+  // dependencia, que no puede divergir entre el chequeo de acceso y
+  // los datos que se muestran.
   const { data: dependencias = [], isLoading: loadingDeps } = useDependencias(municipioId)
   const depOdonto = useMemo(
-    () => dependencias.find(d => d.tipo === 'odontologia' || d.slug === 'consultorio-odontologico'),
+    () => dependencias.find(matchOdontologia),
     [dependencias]
   )
 
