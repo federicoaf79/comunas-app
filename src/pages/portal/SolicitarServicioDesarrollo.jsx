@@ -54,7 +54,7 @@ export default function SolicitarServicioDesarrollo() {
               El acceso rápido (DNI + teléfono) no permite hacer solicitudes.
             </p>
             <Button
-              onClick={() => navigate('/register')}
+              onClick={() => navigate('/portal/acceso?tab=registro')}
               className="mt-4"
             >
               Crear cuenta

@@ -172,7 +172,7 @@ export default function Login() {
         </form>
 
         <p className="mt-6 text-center text-xs text-primary-400">
-          ¿No tenés cuenta? <Link to="/register" className="font-semibold text-primary hover:underline">Registrate</Link>
+          ¿No tenés cuenta? <Link to="/portal/acceso?tab=registro" className="font-semibold text-primary hover:underline">Registrate</Link>
         </p>
         </div>
       </div>
