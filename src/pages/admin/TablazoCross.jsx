@@ -350,6 +350,7 @@ function VistaDia({
 }) {
   const [turnoSeleccionado, setTurnoSeleccionado] = useState(null)
   const [modalDetalleOpen, setModalDetalleOpen] = useState(false)
+  const [waErrorNombre, setWaErrorNombre] = useState(null)
 
   // Si el usuario eligió "SUM / Reservas" en el filtro, omitimos el
   // fetch de turnos. useTurnos sigue habilitado pero con un
@@ -433,17 +434,32 @@ function VistaDia({
           : ''
         const message = `✅ Hola ${nombre}, tu turno en *${dep}* fue *confirmado*${fechaHora ? ` para el ${fechaHora}` : ''}. Si necesitás cancelarlo, respondé este mensaje. — Comisión Municipal`
 
-        // Fire-and-forget — no bloqueamos la UI si falla
-        fetch('/api/send-whatsapp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            municipio_id: municipioId,
-            to: telefono,
-            message,
-            tipo: 'confirmacion_turno',
-          }),
-        }).catch(err => console.warn('[WA] Error enviando notificación:', err))
+        // Fire-and-forget — no bloqueamos la confirmación del turno si esto
+        // falla, pero el fallo deja rastro: console.error + banner
+        // transitorio (setWaErrorNombre). res.ok se chequea a mano porque
+        // fetch() solo rechaza la promesa ante fallo de red — un 401/500
+        // resuelve normalmente y el .catch() no lo vería.
+        supabase.auth.getSession().then(({ data: { session } }) =>
+          fetch('/api/send-whatsapp', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${session?.access_token ?? ''}`,
+            },
+            body: JSON.stringify({
+              municipio_id: municipioId,
+              to: telefono,
+              message,
+              tipo: 'confirmacion_turno',
+            }),
+          }).then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          })
+        ).catch(err => {
+          console.error('[WA] Error enviando notificación:', err)
+          setWaErrorNombre(nombre)
+          setTimeout(() => setWaErrorNombre(null), 6000)
+        })
       }
     } catch (e) {
       alert(`No se pudo confirmar: ${e.message}`)
@@ -476,6 +492,12 @@ function VistaDia({
         {isFetching && !isLoading && <span className="text-primary-300">(actualizando…)</span>}
         {isHistorico && <HistoricoBadge />}
       </div>
+
+      {waErrorNombre && (
+        <div className="card border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+          No se pudo notificar por WhatsApp a {waErrorNombre}. El turno quedó confirmado igual.
+        </div>
+      )}
 
       {error && (
         <div className="card border-red-100 bg-red-50 p-4 text-sm text-danger">
